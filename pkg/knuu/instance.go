@@ -1,3 +1,4 @@
+// Package knuu provides the core functionality of knuu.
 package knuu
 
 import (
@@ -28,6 +29,7 @@ const (
 	Destroyed
 )
 
+// String returns the string representation of the state
 func (s State) String() string {
 	if s < 0 || s > 4 {
 		return "Unknown"
@@ -76,6 +78,7 @@ func NewInstance(name string) *Instance {
 	}
 }
 
+// isInState checks if the instance is in one of the provided states
 func (i *Instance) isInState(states ...State) bool {
 	for _, s := range states {
 		if i.state == s {
@@ -134,6 +137,7 @@ func (i *Instance) SetArgs(args []string) error {
 	return nil
 }
 
+// getTempImageRegistry returns the name of the temporary image registry
 func (i *Instance) getTempImageRegistry() string {
 	return fmt.Sprintf("ttl.sh/%s:1h", i.uuid.String())
 }

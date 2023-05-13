@@ -1,3 +1,4 @@
+// Package knuu provides the core functionality of knuu.
 package knuu
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Initialize initializes knuu
 func Initialize() error {
 
 	if buildah.InitReexec() {

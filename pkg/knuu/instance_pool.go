@@ -1,3 +1,4 @@
+// Package knuu provides the core functionality of knuu.
 package knuu
 
 // InstancePool is a struct that represents a pool of instances

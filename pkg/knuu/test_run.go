@@ -1,3 +1,4 @@
+// Package knuu provides the core functionality of knuu.
 package knuu
 
 // TestRun is an interface that defines the methods that a test run should implement
