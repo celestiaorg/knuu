@@ -102,8 +102,7 @@ func (i *Instance) SetImage(image string) error {
 	switch i.state {
 	case None:
 		// Create a new build context
-		context, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		context, _ := context.WithCancel(context.Background())
 
 		i.buildContext = context
 
