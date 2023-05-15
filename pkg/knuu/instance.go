@@ -78,8 +78,8 @@ func NewInstance(name string) *Instance {
 	}
 }
 
-// isInState checks if the instance is in one of the provided states
-func (i *Instance) isInState(states ...State) bool {
+// IsInState checks if the instance is in one of the provided states
+func (i *Instance) IsInState(states ...State) bool {
 	for _, s := range states {
 		if i.state == s {
 			return true
@@ -88,39 +88,61 @@ func (i *Instance) isInState(states ...State) bool {
 	return false
 }
 
-// SetImage sets the image of the instance
-// Only allowed in state 'None' and 'Started'
-func (i *Instance) SetImage(image string) {
-	// Only allow setting the image when the instance is in the 'None' or 'Started' state
-	if !i.isInState(None, Started) {
-		logrus.Fatalf("Setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
+// SetImage sets the image of the instance.
+// It is only allowed in the 'None' and 'Started' states.
+func (i *Instance) SetImage(image string) error {
+	// Check if setting the image is allowed in the current state
+	if !i.IsInState(None, Started) {
+		return fmt.Errorf("Setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
 	}
 
-	if i.state == None {
+	var err error
+
+	// Handle each state accordingly
+	switch i.state {
+	case None:
 		// Create a new build context
-		context, _ := context.WithCancel(context.Background())
+		context, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		i.buildContext = context
 
 		// Use the builder to build a new image
 		builder, storage, err := container.NewBuilder(context, image)
 		if err != nil {
-			logrus.Fatalf("Error getting builder: %s", err.Error())
+			return fmt.Errorf("Error getting builder: %s", err.Error())
 		}
 		i.imageBuilder = builder
 		i.buildStore = storage
 		i.state = Preparing
-	} else if i.state == Started {
+	case Started:
+
+		// Generate the pod configuration
+		podConfig := k8s.PodConfig{
+			Namespace: k8s.Namespace,
+			Name:      i.name,
+			Labels:    i.kubernetesPod.Labels,
+			Image:     image,
+			Command:   i.command,
+			Args:      i.args,
+			Env:       i.env,
+			Volumes:   i.volumes,
+		}
 		// Replace the pod with a new one, using the given image
-		k8s.ReplacePod(k8s.Namespace, i.name, i.kubernetesPod.Labels, image, i.command, i.args, i.env, i.volumes)
+		_, err = k8s.ReplacePod(podConfig)
+		if err != nil {
+			return fmt.Errorf("Error replacing pod: %s", err.Error())
+		}
 		i.WaitInstanceIsRunning()
 	}
+
+	return nil
 }
 
 // SetCommand sets the command to run in the container
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (i *Instance) SetCommand(command []string) error {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Setting command is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	i.command = command
@@ -130,7 +152,7 @@ func (i *Instance) SetCommand(command []string) error {
 // SetArgs sets the arguments passed to the instance
 // This function can only be called in the states 'Preparing' or 'Committed'
 func (i *Instance) SetArgs(args []string) error {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Setting args is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	i.args = args
@@ -145,7 +167,7 @@ func (i *Instance) getTempImageRegistry() string {
 // AddPortTCP adds a TCP port to the instance
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortTCP(port int) {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	validatePort(port)
@@ -170,7 +192,7 @@ func (i *Instance) isTCPPortRegistered(port int) bool {
 // AddPortUDP adds a UDP port to the instance
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortUDP(port int) {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	validatePort(port)
@@ -195,16 +217,16 @@ func (i *Instance) isUDPPortRegistered(port int) bool {
 // ExecuteCommand executes the given command in the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) ExecuteCommand(command []string) string {
-	if !i.isInState(Preparing, Started) {
+	if !i.IsInState(Preparing, Started) {
 		logrus.Fatalf("Executing command is only allowed in state 'Preparing' or 'Started'. Current state is '%s'", i.state.String())
 	}
-	if i.isInState(Preparing) {
+	if i.IsInState(Preparing) {
 		output, err := container.ExecuteCmdInBuilder(i.imageBuilder, command)
 		if err != nil {
 			logrus.Fatalf("Error executing command '%s' in container '%s': %s", command, i.name, err)
 		}
 		return output
-	} else if i.isInState(Started) {
+	} else if i.IsInState(Started) {
 		output, err := k8s.RunCommandInPod(k8s.Namespace, i.name, i.name, command)
 		if err != nil {
 			logrus.Fatalf("Error executing command '%s' in started container '%s': %s", command, i.name, err)
@@ -220,7 +242,7 @@ func (i *Instance) ExecuteCommand(command []string) string {
 // AddFileBytes adds a file with the given content to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) {
-	if !i.isInState(Preparing) {
+	if !i.IsInState(Preparing) {
 		logrus.Fatalf("Adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 
@@ -242,7 +264,7 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) {
 // AddFile adds a file to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFile(src string, dest string, chown string) {
-	if !i.isInState(Preparing) {
+	if !i.IsInState(Preparing) {
 		logrus.Fatalf("Adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 
@@ -260,7 +282,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) {
 // GetFileBytes returns the content of the given file
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) GetFileBytes(file string) []byte {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Getting file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
@@ -274,7 +296,7 @@ func (i *Instance) GetFileBytes(file string) []byte {
 // SetEnvironmentVariable sets the given environment variable in the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetEnvironmentVariable(key string, value string) {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Setting environment variable is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Preparing {
@@ -288,7 +310,7 @@ func (i *Instance) SetEnvironmentVariable(key string, value string) {
 // AddVolume adds a volume to the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddVolume(name string, size string) {
-	if !i.isInState(Preparing, Committed) {
+	if !i.IsInState(Preparing, Committed) {
 		logrus.Fatalf("Adding volume is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	i.volumes[name] = size
@@ -325,12 +347,37 @@ func (i *Instance) patchService() {
 }
 
 // deployPod deploys the pod for the instance
-func (i *Instance) deployPod() {
+func (i *Instance) deployPod() error {
+	// Get labels for the pod
 	labels := i.getLabels()
-	i.kubernetesPod = k8s.DeployPod(k8s.Namespace, i.name, labels, i.getTempImageRegistry(), i.command, i.args, i.env, i.volumes, true)
-	logrus.Debugf("Started pod '%s'", i.name)
+
+	// Generate the pod configuration
+	podConfig := k8s.PodConfig{
+		Namespace: k8s.Namespace,
+		Name:      i.name,
+		Labels:    labels,
+		Image:     i.getTempImageRegistry(), // Get temporary image registry for the pod
+		Command:   i.command,
+		Args:      i.args,
+		Env:       i.env,
+		Volumes:   i.volumes,
+	}
+
+	// Deploy the pod
+	pod, err := k8s.DeployPod(podConfig, true)
+	if err != nil {
+		return fmt.Errorf("failed to deploy pod: %v", err)
+	}
+
+	// Set the state of the instance to started
+	i.kubernetesPod = pod
 	i.state = Started
+
+	// Log the deployment of the pod
+	logrus.Debugf("Started pod '%s'", i.name)
 	logrus.Debugf("Set state of container '%s' to '%s'", i.name, i.state.String())
+
+	return nil
 }
 
 // deployVolume deploys the volume for the instance
@@ -352,7 +399,7 @@ func (i *Instance) destroyVolume() {
 // WaitInstanceIsRunning waits until the instance is running
 // This function can only be called in the state 'Started'
 func (i *Instance) WaitInstanceIsRunning() {
-	if !i.isInState(Started) {
+	if !i.IsInState(Started) {
 		logrus.Fatalf("Waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
 	k8s.WaitPodIsRunning(k8s.Namespace, i.name)
@@ -361,7 +408,7 @@ func (i *Instance) WaitInstanceIsRunning() {
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() {
-	if !i.isInState(Preparing) {
+	if !i.IsInState(Preparing) {
 		logrus.Fatalf("Committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 	// TODO: To speed up the process, the image name could be dependent on the hash of the image
@@ -377,7 +424,7 @@ func (i *Instance) Commit() {
 // Start starts the instance
 // This function can only be called in the state 'Committed'
 func (i *Instance) Start() {
-	if !i.isInState(Committed) {
+	if !i.IsInState(Committed) {
 		logrus.Fatalf("Starting is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
@@ -397,7 +444,7 @@ func (i *Instance) Start() {
 // Destroy destroys the instance
 // This function can only be called in the state 'Started' or 'Destroyed'
 func (i *Instance) Destroy() {
-	if !i.isInState(Started, Destroyed) {
+	if !i.IsInState(Started, Destroyed) {
 		logrus.Fatalf("Destroying is only allowed in state 'Started' or 'Destroyed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Destroyed {
@@ -437,7 +484,7 @@ func validatePort(port int) {
 // CreatePool creates a pool of instances
 // This function can only be called in the state 'Committed'
 func (i *Instance) CreatePool(amount int) *InstancePool {
-	if !i.isInState(Committed) {
+	if !i.IsInState(Committed) {
 		logrus.Fatalf("Creating a pool is only allowed in state 'Committed' or 'Destroyed'. Current state is '%s'", i.state.String())
 	}
 	instances := make([]*Instance, amount)
