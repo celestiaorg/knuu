@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -14,65 +15,109 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-// PodExists checks if a pod exists in the given namespace.
-func PodExists(namespace, name string) bool {
-	return getPod(namespace, name) != nil
-}
-
-// getPod retrieves a pod from the given namespace.
-func getPod(namespace, name string) *v1.Pod {
+// getPod retrieves a pod from the given namespace and logs any errors.
+func getPod(namespace, name string) (*v1.Pod, error) {
+	// Use context.Background() to generate an empty context.Context instance
 	pod, err := Clientset.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
-		logrus.Debug("Retrieving pod failed %s: %v", name, err)
-		return nil
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"namespace": namespace,
+			"name":      name,
+		}).Error("failed to get pod")
+
+		return nil, fmt.Errorf("failed to get pod %s: %w", name, err)
 	}
-	return pod
+
+	return pod, nil
 }
 
 // DeployPod creates a new pod in the given namespace if it doesn't already exist.
-func DeployPod(namespace, name string, labels map[string]string, image string, command, args []string, env, volumes map[string]string, init bool) *v1.Pod {
-	if PodExists(namespace, name) {
-		logrus.Debugf("Pod %s already exists, skipping...", name)
-		return getPod(namespace, name)
-	}
-
-	pod := preparePod(namespace, name, labels, image, command, args, env, volumes, init)
-	pod, err := Clientset.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
+func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
+	// Prepare the pod
+	pod, err := preparePod(podConfig, init)
 	if err != nil {
-		logrus.Fatalf("Creating pod %s: %v", name, err)
+		return nil, fmt.Errorf("error preparing pod: %s", err)
 	}
 
-	return pod
+	// Try to create the pod
+	createdPod, err := Clientset.CoreV1().Pods(podConfig.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pod: %v", err)
+	}
+
+	return createdPod, nil
 }
 
-// ReplacePod replaces a pod in the given namespace.
-func ReplacePod(namespace, name string, labels map[string]string, image string, command, args []string, env, volumes map[string]string) {
-	logrus.Debugf("Replacing pod %s", name)
+// PodConfig contains the specifications for creating a new Pod object
+type PodConfig struct {
+	Namespace string            // Kubernetes namespace of the Pod
+	Name      string            // Name to assign to the Pod
+	Labels    map[string]string // Labels to apply to the Pod
+	Image     string            // Name of the Docker image to use for the container
+	Command   []string          // Command to run in the container
+	Args      []string          // Arguments to pass to the command in the container
+	Env       map[string]string // Environment variables to set in the container
+	Volumes   map[string]string // Volumes to mount in the Pod
+}
 
-	DeletePod(namespace, name)
-	for PodExists(namespace, name) {
-		// Wait until the pod is deleted.
+// ReplacePod replaces a pod in the given namespace and returns the new Pod object.
+func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
+	// Log a debug message to indicate that we are replacing a pod
+	logrus.Debugf("Replacing pod %s", podConfig.Name)
+
+	// Delete the existing pod (if any)
+	if err := DeletePod(podConfig.Namespace, podConfig.Name); err != nil {
+		return nil, fmt.Errorf("failed to delete pod: %v", err)
 	}
-	DeployPod(namespace, name, labels, image, command, args, env, volumes, false)
+
+	// Wait for the pod to be fully deleted
+	for {
+		_, err := getPod(podConfig.Namespace, podConfig.Name)
+		if err != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Deploy the new pod
+	pod, err := DeployPod(podConfig, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy pod: %v", err)
+	}
+
+	// Return the newly created pod
+	return pod, nil
 }
 
 // WaitPodIsRunning waits until a pod in the given namespace is running.
-func WaitPodIsRunning(namespace, name string) {
+func WaitPodIsRunning(namespace, name string) error {
 	for {
-		pod := getPod(namespace, name)
+		// Get the pod from Kubernetes API server
+		pod, err := getPod(namespace, name)
+		if err != nil { // Handle errors while getting the pod
+			return fmt.Errorf("failed to get pod: %v", err)
+		}
+
+		// Check if the pod is running
 		if pod.Status.Phase == v1.PodRunning {
 			break
 		}
+
+		time.Sleep(100 * time.Millisecond) // Wait for 1 second before checking again (to avoid spamming API server)
 	}
+
+	return nil
 }
 
 // RunCommandInPod runs a command in a container within a pod.
 func RunCommandInPod(namespace, podName, containerName string, cmd []string) (string, error) {
-	pod := getPod(namespace, podName)
-	if pod == nil {
-		return "", fmt.Errorf("could not find pod %s", podName)
+	// Get the pod object
+	_, err := getPod(namespace, podName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pod: %v", err)
 	}
 
+	// Construct the request for executing the command in the specified container
 	req := Clientset.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
@@ -87,15 +132,17 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
+	// Create an executor for the command execution
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
-		return "", fmt.Errorf("Error getting k8s config: %v", err)
+		return "", fmt.Errorf("failed to get k8s config: %v", err)
 	}
 	exec, err := remotecommand.NewSPDYExecutor(k8sConfig, "POST", req.URL())
 	if err != nil {
-		return "", fmt.Errorf("Error while creating Executor: %v", err)
+		return "", fmt.Errorf("failed to create Executor: %v", err)
 	}
 
+	// Execute the command and capture the output and error streams
 	var stdout, stderr bytes.Buffer
 	err = exec.Stream(remotecommand.StreamOptions{
 		Stdout: &stdout,
@@ -103,65 +150,72 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 		Tty:    false,
 	})
 	if err != nil {
-		return "", fmt.Errorf("Error in Stream: %v", err)
+		return "", fmt.Errorf("failed to execute command: %v", err)
 	}
 
+	// Check if there were any errors on the error stream
 	if stderr.Len() != 0 {
-		return "", fmt.Errorf("Error: %s", stderr.String())
+		return "", fmt.Errorf("error while executing command: %s", stderr.String())
 	}
 
 	return stdout.String(), nil
 }
 
-// DeletePod deletes a pod in the given namespace.
+// DeletePod deletes a pod with the given name in the specified namespace.
 func DeletePod(namespace, name string) error {
-	if !PodExists(namespace, name) {
-		logrus.Debugf("Pod %s does not exist, skipping...", name)
-		return nil
-	}
-
-	deleteOptions := metav1.DeleteOptions{}
-
-	err := Clientset.CoreV1().Pods(namespace).Delete(context.Background(), name, deleteOptions)
+	// Get the Pod object from the API server
+	_, err := getPod(namespace, name)
 	if err != nil {
-		return fmt.Errorf("Deleting pod %s: %v", name, err)
+		return fmt.Errorf("failed to get pod %s: %v", name, err)
 	}
+
+	// Delete the pod using the Kubernetes client API
+	if err = Clientset.CoreV1().Pods(namespace).Delete(context.Background(), name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("failed to delete pod %s: %v", name, err)
+	}
+
+	logrus.Infof("Pod %s deleted in namespace %s", name, namespace)
 	return nil
 }
 
-// buildEnv builds the environment variable configuration for a pod.
-func buildEnv(env map[string]string) []v1.EnvVar {
-	var envVars []v1.EnvVar
-	for k, v := range env {
-		envVars = append(envVars, v1.EnvVar{
-			Name:  k,
-			Value: v,
-		})
+// buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
+func buildEnv(envMap map[string]string) []v1.EnvVar {
+	envVars := make([]v1.EnvVar, 0, len(envMap))
+	for key, val := range envMap {
+		envVar := v1.EnvVar{Name: key, Value: val}
+		envVars = append(envVars, envVar)
 	}
 	return envVars
 }
 
-// buildPodVolumes builds the volume configuration for a pod.
-func buildPodVolumes(name string, volumes map[string]string) []v1.Volume {
-	if len(volumes) != 0 {
-		podVolumes := []v1.Volume{
-			{
-				Name: name,
-				VolumeSource: v1.VolumeSource{
-					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-						ClaimName: name,
-					},
-				},
-			},
-		}
-		return podVolumes
+// buildPodVolumes generates a volume configuration for a pod based on the given name.
+// If the volumes amount is zero, returns an empty slice.
+func buildPodVolumes(name string, volumesAmount int) ([]v1.Volume, error) {
+	if volumesAmount == 0 {
+		return []v1.Volume{}, nil
 	}
-	return []v1.Volume{}
+
+	podVolume := v1.Volume{
+		Name: name,
+		VolumeSource: v1.VolumeSource{
+			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: name,
+			},
+		},
+	}
+
+	return []v1.Volume{podVolume}, nil
 }
 
-// buildContainerVolumes builds the volume mount configuration for a container.
-func buildContainerVolumes(name string, volumes map[string]string) []v1.VolumeMount {
+// buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
+func buildContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeMount, error) {
 	var containerVolumes []v1.VolumeMount
+
+	if len(volumes) == 0 {
+		return containerVolumes, nil // return empty slice if no volumes are specified
+	}
+
+	// iterate over the volumes map, add each volume to the containerVolumes
 	for path, _ := range volumes {
 		containerVolumes = append(containerVolumes, v1.VolumeMount{
 			Name:      name,
@@ -169,49 +223,83 @@ func buildContainerVolumes(name string, volumes map[string]string) []v1.VolumeMo
 			SubPath:   strings.TrimLeft(path, "/"),
 		})
 	}
-	return containerVolumes
+
+	return containerVolumes, nil
 }
 
-// buildInitContainerVolumes builds the volume mount configuration for an init container.
-func buildInitContainerVolumes(name string, volumes map[string]string) []v1.VolumeMount {
-	if len(volumes) != 0 {
-		containerVolumes := []v1.VolumeMount{
-			{
-				Name:      name,
-				MountPath: "/knuu",
-			},
-		}
-		return containerVolumes
-	}
-	return []v1.VolumeMount{}
-}
-
-// buildInitContainerCommand builds the command for an init container.
-func buildInitContainerCommand(name string, volumes map[string]string) []string {
+// buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
+func buildInitContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeMount, error) {
 	if len(volumes) == 0 {
-		return []string{}
+		return []v1.VolumeMount{}, nil // return empty slice if no volumes are specified
 	}
-	var command []string = []string{"sh", "-c"}
-	for path, _ := range volumes {
-		command = append(command, fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s", path, path, path))
+
+	containerVolumes := []v1.VolumeMount{
+		{
+			Name:      name,
+			MountPath: "/knuu", // set the path to "/knuu" as per the requirements
+		},
 	}
-	return command
+
+	return containerVolumes, nil
+}
+
+// buildInitContainerCommand generates a command for an init container based on the given name and volumes.
+func buildInitContainerCommand(name string, volumes map[string]string) ([]string, error) {
+	if len(volumes) == 0 {
+		return []string{}, nil // return empty slice if no volumes are specified
+	}
+
+	var command []string = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
+	for path := range volumes {                 // use _ as the blank identifier since we're not using the value of the map element
+		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s", path, path, path)
+		command = append(command, cmd) // add each command to the command slice
+	}
+
+	return command, nil
 }
 
 // preparePod prepares a pod configuration.
-func preparePod(namespace, name string, labels map[string]string, image string, command, args []string, env, volumes map[string]string, init bool) *v1.Pod {
+func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
+	// TODO: validate userinputs
+	namespace := spec.Namespace
+	name := spec.Name
+	labels := spec.Labels
+	image := spec.Image
+	command := spec.Command
+	args := spec.Args
+	env := spec.Env
+	volumes := spec.Volumes
+
+	// Build environment variables from the given map
 	podEnv := buildEnv(env)
-	podVolumes := buildPodVolumes(name, volumes)
-	containerVolumes := buildContainerVolumes(name, volumes)
-	initContainerVolumes := []v1.VolumeMount{}
-	initContainerCommand := []string{}
-	initContainers := []v1.Container{}
-	if len(volumes) != 0 && init {
-		initContainerVolumes = buildInitContainerVolumes(name, volumes)
-		initContainerCommand = buildInitContainerCommand(name, volumes)
+
+	// Build pod volumes from the given map
+	podVolumes, err := buildPodVolumes(name, len(volumes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pod volumes: %w", err)
+	}
+
+	// Build container volumes from the given map
+	containerVolumes, err := buildContainerVolumes(name, volumes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create container volumes: %w", err)
+	}
+
+	var initContainers []v1.Container
+	if len(volumes) > 0 && init {
+		// Build init containers volumes and command from the given map
+		initContainerVolumes, err := buildInitContainerVolumes(name, volumes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create init container volumes: %w", err)
+		}
+		initContainerCommand, err := buildInitContainerCommand(name, volumes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create init container command: %w", err)
+		}
+
 		initContainers = []v1.Container{
 			{
-				Name:         "volume-management",
+				Name:         "volume-whatever",
 				Image:        image,
 				Command:      initContainerCommand,
 				VolumeMounts: initContainerVolumes,
@@ -219,10 +307,12 @@ func preparePod(namespace, name string, labels map[string]string, image string, 
 		}
 	}
 
-	po := &v1.Pod{
+	// Construct the Pod object using the above data
+	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
+			Namespace: namespace,
+			Name:      name,
+			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
 			InitContainers: initContainers,
@@ -240,5 +330,7 @@ func preparePod(namespace, name string, labels map[string]string, image string, 
 		},
 	}
 
-	return po
+	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)
+
+	return pod, nil
 }
