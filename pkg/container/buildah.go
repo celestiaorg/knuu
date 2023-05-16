@@ -52,7 +52,10 @@ func ExecuteCmdInBuilder(builder *buildah.Builder, command []string) (string, er
 	}
 
 	if err := builder.Run(command, runOpts); err != nil {
-		return "", fmt.Errorf("running command: %w. Stderr: %s", err, stderr.String())
+		if stderr.String() != "" {
+			return "", fmt.Errorf("running command: %w. Stderr: %s", err, stderr.String())
+		}
+		return "", fmt.Errorf("running command: %w", err)
 	}
 
 	return stdout.String(), nil
