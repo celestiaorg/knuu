@@ -10,68 +10,68 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// ServiceExists checks if a service exists.
-func ServiceExists(namespace, name string) bool {
-	return GetService(namespace, name) != nil
-}
-
 // GetService retrieves a service.
-func GetService(namespace, name string) *v1.Service {
+func GetService(namespace, name string) (*v1.Service, error) {
 	svc, err := Clientset.CoreV1().Services(namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("error getting service %s: %w", name, err)
 	}
-	return svc
+	return svc, nil
 }
 
 // DeployService deploys a service if it does not exist.
-func DeployService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) *v1.Service {
-	if ServiceExists(namespace, name) {
-		logrus.Debugf("Service %s already exists, skipping...", name)
-		return GetService(namespace, name)
-	}
-
-	svc := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
-
-	svc, err := Clientset.CoreV1().Services(namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+func DeployService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*v1.Service, error) {
+	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
-		logrus.Fatalf("Error creating service %s: %v", name, err)
+		return nil, fmt.Errorf("error preparing service %s: %w", name, err)
 	}
 
-	return svc
+	svc, err = Clientset.CoreV1().Services(namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error creating service %s: %w", name, err)
+	}
+	logrus.Debugf("Service %s deployed", name)
+	return svc, nil
 }
 
 // PatchService patches an existing service.
-func PatchService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) {
-	svc := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
-
-	_, err := Clientset.CoreV1().Services(namespace).Update(context.Background(), svc, metav1.UpdateOptions{})
+func PatchService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) error {
+	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
-		logrus.Fatal(err)
+		return fmt.Errorf("error preparing service %s: %w", name, err)
 	}
+
+	_, err = Clientset.CoreV1().Services(namespace).Update(context.Background(), svc, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error patching service %s: %w", name, err)
+	}
+
+	logrus.Debugf("Service %s patched", name)
+	return nil
 }
 
 // DeleteService deletes a service if it exists.
 func DeleteService(namespace, name string) error {
-	if !ServiceExists(namespace, name) {
-		logrus.Debugf("Service %s does not exist, skipping...", name)
-		return nil
+	_, err := GetService(namespace, name)
+	if err != nil {
+		return fmt.Errorf("failed to get pod %s: %v", name, err)
 	}
 
-	err := Clientset.CoreV1().Services(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
+	err = Clientset.CoreV1().Services(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("Error deleting service %s: %w", name, err)
 	}
+	logrus.Debugf("Service %s deleted", name)
 	return nil
 }
 
 // GetServiceIP retrieves the IP address of a service.
-func GetServiceIP(namespace, name string) string {
+func GetServiceIP(namespace, name string) (string, error) {
 	svc, err := Clientset.CoreV1().Services(namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
-		logrus.Fatal(err)
+		return "", fmt.Errorf("error getting service %s: %w", name, err)
 	}
-	return svc.Spec.ClusterIP
+	return svc.Spec.ClusterIP, nil
 }
 
 // buildPorts constructs a list of ServicePort objects from the given TCP and UDP port lists.
@@ -101,11 +101,11 @@ func buildPorts(portsTCP, portsUDP []int) []v1.ServicePort {
 }
 
 // prepareService constructs a new Service object.
-func prepareService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) *v1.Service {
+func prepareService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*v1.Service, error) {
 	servicePorts := buildPorts(portsTCP, portsUDP)
 
 	if len(servicePorts) == 0 {
-		logrus.Fatalf("Error preparing service %s: no ports specified", name)
+		return nil, fmt.Errorf("error preparing service %s: no ports specified", name)
 	}
 
 	svc := &v1.Service{
@@ -120,5 +120,5 @@ func prepareService(namespace, name string, labels, selectorMap map[string]strin
 		},
 	}
 
-	return svc
+	return svc, nil
 }

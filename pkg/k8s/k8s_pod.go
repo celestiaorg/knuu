@@ -20,11 +20,6 @@ func getPod(namespace, name string) (*v1.Pod, error) {
 	// Use context.Background() to generate an empty context.Context instance
 	pod, err := Clientset.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"namespace": namespace,
-			"name":      name,
-		}).Error("failed to get pod")
-
 		return nil, fmt.Errorf("failed to get pod %s: %w", name, err)
 	}
 
@@ -174,7 +169,7 @@ func DeletePod(namespace, name string) error {
 		return fmt.Errorf("failed to delete pod %s: %v", name, err)
 	}
 
-	logrus.Infof("Pod %s deleted in namespace %s", name, namespace)
+	logrus.Debugf("Pod %s deleted in namespace %s", name, namespace)
 	return nil
 }
 
