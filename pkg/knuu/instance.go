@@ -454,7 +454,6 @@ func (i *Instance) Commit() error {
 	if !i.IsInState(Preparing) {
 		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
-	// TODO: To speed up the process, the image name could be dependent on the hash of the image
 	err := container.PushBuilderImage(i.buildContext, i.imageBuilder, i.buildStore, i.getTempImageRegistry())
 	if err != nil {
 		return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
