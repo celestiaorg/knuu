@@ -49,7 +49,7 @@ func (i *Instance) getLabels() map[string]string {
 
 // deployService deploys the service for the instance
 func (i *Instance) deployService() error {
-	svc, _ := k8s.GetService(k8s.Namespace, i.k8sName)
+	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
 	if svc != nil {
 		// Service already exists, so we patch it
 		err := i.patchService()
@@ -60,7 +60,7 @@ func (i *Instance) deployService() error {
 
 	labels := i.getLabels()
 	selectorMap := i.getLabels()
-	service, err := k8s.DeployService(k8s.Namespace, i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
+	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
 	if err != nil {
 		return fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
 	}
@@ -72,13 +72,13 @@ func (i *Instance) deployService() error {
 // patchService patches the service for the instance
 func (i *Instance) patchService() error {
 	if i.kubernetesService == nil {
-		svc, err := k8s.GetService(k8s.Namespace, i.k8sName)
+		svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
 		if err != nil {
 			return fmt.Errorf("error getting service '%s': %w", i.k8sName, err)
 		}
 		i.kubernetesService = svc
 	}
-	err := k8s.PatchService(k8s.Namespace, i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
+	err := k8s.PatchService(k8s.Namespace(), i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
 	if err != nil {
 		return fmt.Errorf("error patching service '%s': %w", i.k8sName, err)
 	}
@@ -88,7 +88,7 @@ func (i *Instance) patchService() error {
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService() error {
-	k8s.DeleteService(k8s.Namespace, i.k8sName)
+	k8s.DeleteService(k8s.Namespace(), i.k8sName)
 
 	return nil
 }
@@ -100,7 +100,7 @@ func (i *Instance) deployPod() error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace: k8s.Namespace,
+		Namespace: k8s.Namespace(),
 		Name:      i.k8sName,
 		Labels:    labels,
 		Image:     i.getTempImageRegistry(), // Get temporary image registry for the pod
@@ -128,7 +128,7 @@ func (i *Instance) deployPod() error {
 
 // destroyPod destroys the pod for the instance
 func (i *Instance) destroyPod() error {
-	k8s.DeletePod(k8s.Namespace, i.k8sName)
+	k8s.DeletePod(k8s.Namespace(), i.k8sName)
 
 	return nil
 }
@@ -139,7 +139,7 @@ func (i *Instance) deployVolume() error {
 	for _, volumeSize := range i.volumes {
 		size.Add(resource.MustParse(volumeSize))
 	}
-	k8s.DeployPersistentVolumeClaim(k8s.Namespace, i.k8sName, i.getLabels(), size, []string{"ReadWriteOnce"})
+	k8s.DeployPersistentVolumeClaim(k8s.Namespace(), i.k8sName, i.getLabels(), size)
 	logrus.Debugf("Deployed persistent volume '%s'", i.k8sName)
 
 	return nil
@@ -147,7 +147,7 @@ func (i *Instance) deployVolume() error {
 
 // destroyVolume destroys the volume for the instance
 func (i *Instance) destroyVolume() error {
-	k8s.DeletePersistentVolumeClaim(k8s.Namespace, i.k8sName)
+	k8s.DeletePersistentVolumeClaim(k8s.Namespace(), i.k8sName)
 	logrus.Debugf("Destroyed persistent volume '%s'", i.k8sName)
 
 	return nil
@@ -161,9 +161,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		k8sName:           i.k8sName + suffix,
 		state:             i.state,
 		kubernetesService: i.kubernetesService,
-		imageBuilder:      i.imageBuilder,
-		buildStore:        i.buildStore,
-		buildContext:      i.buildContext,
+		builderFactory:    i.builderFactory,
 		kubernetesPod:     i.kubernetesPod,
 		portsTCP:          i.portsTCP,
 		portsUDP:          i.portsUDP,

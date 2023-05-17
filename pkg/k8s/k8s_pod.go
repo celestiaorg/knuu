@@ -17,8 +17,11 @@ import (
 
 // getPod retrieves a pod from the given namespace and logs any errors.
 func getPod(namespace, name string) (*v1.Pod, error) {
-	// Use context.Background() to generate an empty context.Context instance
-	pod, err := Clientset.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	pod, err := Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pod %s: %w", name, err)
 	}
@@ -34,8 +37,11 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 		return nil, fmt.Errorf("error preparing pod: %s", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	// Try to create the pod
-	createdPod, err := Clientset.CoreV1().Pods(podConfig.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
+	createdPod, err := Clientset().CoreV1().Pods(podConfig.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pod: %v", err)
 	}
@@ -113,7 +119,7 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 	}
 
 	// Construct the request for executing the command in the specified container
-	req := Clientset.CoreV1().RESTClient().Post().
+	req := Clientset().CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).
@@ -137,9 +143,12 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 		return "", fmt.Errorf("failed to create Executor: %v", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	// Execute the command and capture the output and error streams
 	var stdout, stderr bytes.Buffer
-	err = exec.Stream(remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 		Tty:    false,
@@ -161,11 +170,15 @@ func DeletePod(namespace, name string) error {
 	// Get the Pod object from the API server
 	_, err := getPod(namespace, name)
 	if err != nil {
-		return fmt.Errorf("failed to get pod %s: %v", name, err)
+		// If the pod does not exist, skip and return without error
+		return nil
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	// Delete the pod using the Kubernetes client API
-	if err = Clientset.CoreV1().Pods(namespace).Delete(context.Background(), name, metav1.DeleteOptions{}); err != nil {
+	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete pod %s: %v", name, err)
 	}
 

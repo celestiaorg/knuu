@@ -2,6 +2,8 @@ package k8s
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -9,58 +11,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// DeployPersistentVolumeClaim deploys a PersistentVolumeClaim if it does not exist.
-func DeployPersistentVolumeClaim(namespace, name string, labels map[string]string, size resource.Quantity, accessModes []string) {
-	if PersistentVolumeClaimExists(namespace, name) {
-		logrus.Debugf("PersistentVolume %s already exists, skipping...", name)
-		return
-	}
-
-	pvc := preparePersistentVolumeClaim(namespace, name, labels, size, accessModes)
-
-	_, err := Clientset.CoreV1().PersistentVolumeClaims(namespace).Create(context.Background(), pvc, metav1.CreateOptions{})
-	if err != nil {
-		logrus.Fatalf("Error creating PersistentVolume %s: %v", name, err)
-	}
-}
-
-// DeletePersistentVolumeClaim deletes a PersistentVolumeClaim if it exists.
-func DeletePersistentVolumeClaim(namespace, name string) {
-	if !PersistentVolumeClaimExists(namespace, name) {
-		logrus.Debugf("PersistentVolumeClaim %s does not exist, skipping...", name)
-		return
-	}
-
-	err := Clientset.CoreV1().PersistentVolumeClaims(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
-	if err != nil {
-		logrus.Fatalf("Error deleting PersistentVolumeClaim %s: %v", name, err)
-	}
-	logrus.Debugf("PersistentVolumeClaim %s deleted", name)
-}
-
-// getPersistentVolumeClaim retrieves a PersistentVolumeClaim.
-func getPersistentVolumeClaim(namespace, name string) *v1.PersistentVolumeClaim {
-	pv, err := Clientset.CoreV1().PersistentVolumeClaims(namespace).Get(context.Background(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil
-	}
-	return pv
-}
-
-// PersistentVolumeClaimExists checks if a PersistentVolumeClaim exists.
-func PersistentVolumeClaimExists(namespace, name string) bool {
-	return getPersistentVolumeClaim(namespace, name) != nil
-}
-
-// preparePersistentVolumeClaim prepares a PersistentVolumeClaim configuration.
-func preparePersistentVolumeClaim(namespace, name string, labels map[string]string, size resource.Quantity, accessModes []string) *v1.PersistentVolumeClaim {
-	pv := &v1.PersistentVolumeClaim{
+// createPersistentVolumeClaim deploys a PersistentVolumeClaim if it does not exist.
+func createPersistentVolumeClaim(namespace, name string, labels map[string]string, size resource.Quantity, accessModes []v1.PersistentVolumeAccessMode) error {
+	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
+			Namespace: namespace,
+			Name:      name,
+			Labels:    labels,
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes: []v1.PersistentVolumeAccessMode{v1.PersistentVolumeAccessMode(accessModes[0])},
+			AccessModes: accessModes,
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: size,
@@ -69,5 +29,61 @@ func preparePersistentVolumeClaim(namespace, name string, labels map[string]stri
 		},
 	}
 
-	return pv
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if _, err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+
+	logrus.Debugf("PersistentVolumeClaim %s created", name)
+	return nil
+}
+
+// deletePersistentVolumeClaim deletes a PersistentVolumeClaim if it exists.
+func deletePersistentVolumeClaim(namespace, name string) error {
+	// Get the pvc object from the API server
+	_, err := getPersistentVolumeClaim(namespace, name)
+	if err != nil {
+		// If the pvc does not exist, skip and return without error
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("error deleting PersistentVolumeClaim %s: %w", name, err)
+	}
+
+	logrus.Debugf("PersistentVolumeClaim %s deleted", name)
+	return nil
+}
+
+// getPersistentVolumeClaim retrieves a PersistentVolumeClaim.
+func getPersistentVolumeClaim(namespace, name string) (*v1.PersistentVolumeClaim, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	pv, err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return pv, nil
+}
+
+// DeployPersistentVolumeClaim creates a new PersistentVolumeClaim in the specified namespace.
+func DeployPersistentVolumeClaim(namespace, name string, labels map[string]string, size resource.Quantity) {
+	accessModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+	if err := createPersistentVolumeClaim(namespace, name, labels, size, accessModes); err != nil {
+		logrus.Fatalf("Error creating PersistentVolumeClaim %s: %v", name, err)
+	}
+}
+
+// DeletePersistentVolumeClaim deletes the PersistentVolumeClaim with the specified name in the specified namespace.
+func DeletePersistentVolumeClaim(namespace, name string) {
+	if err := deletePersistentVolumeClaim(namespace, name); err != nil {
+		logrus.Fatalf("Error deleting PersistentVolumeClaim %s: %v", name, err)
+	}
 }

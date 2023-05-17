@@ -2,52 +2,60 @@
 package k8s
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Clientset is a global variable that holds a kubernetes clientset.
-var Clientset *kubernetes.Clientset
+var clientset *kubernetes.Clientset
 
-// Namespace is the current namespace in use by the Kubernetes client.
-var Namespace = "default"
+// namespace is the current namespace in use by the Kubernetes client.
+var namespace = "default"
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
-func Initialize() {
+func Initialize() error {
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
-		logrus.Fatalf("Retrieving the Kubernetes config: %w", err)
+		return fmt.Errorf("retrieving the Kubernetes config: %w", err)
 	}
 
-	Clientset, err = kubernetes.NewForConfig(k8sConfig)
+	clientset, err = kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
-		logrus.Fatalf("Creating clientset for Kubernetes: %w", err)
+		return fmt.Errorf("creating clientset for Kubernetes: %w", err)
 	}
 
+	// Check if the program is running in a Kubernetes cluster environment
 	if isClusterEnvironment() {
+		// Read the namespace from the pod's spec
 		namespaceBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
-			logrus.Fatalf("Reading namespace from pod's spec: %w", err)
+			return fmt.Errorf("reading namespace from pod's spec: %w", err)
 		}
 		setNamespace(string(namespaceBytes))
 	} else {
 		setNamespace("test")
 	}
+	return nil
 }
 
-// GetCurrentNamespace returns the current namespace in use.
-func GetCurrentNamespace() string {
-	return Namespace
+// Namespace returns the current namespace in use.
+func Namespace() string {
+	return namespace
 }
 
-// setNamespace updates the Namespace to the provided string.
+// Clientset returns the Kubernetes clientset.
+func Clientset() *kubernetes.Clientset {
+	return clientset
+}
+
+// setNamespace updates the namespace to the provided string.
 func setNamespace(newNamespace string) {
-	Namespace = newNamespace
+	namespace = newNamespace
 }
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
@@ -55,10 +63,10 @@ func isClusterEnvironment() bool {
 	tokenPath := "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	certPath := "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
-	if _, err := os.Stat(tokenPath); os.IsNotExist(err) {
+	if _, err := os.Stat(tokenPath); err != nil {
 		return false
 	}
-	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+	if _, err := os.Stat(certPath); err != nil {
 		return false
 	}
 
@@ -67,9 +75,12 @@ func isClusterEnvironment() bool {
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.
 func getClusterConfig() (*rest.Config, error) {
+	// Check if the program is running in a Kubernetes cluster environment
 	if isClusterEnvironment() {
 		return rest.InClusterConfig()
 	}
+
+	// If not running in a Kubernetes cluster environment, build the configuration from the kubeconfig file
 	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }

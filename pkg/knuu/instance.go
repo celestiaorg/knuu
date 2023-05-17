@@ -2,14 +2,11 @@
 package knuu
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/containers/buildah"
-	"github.com/containers/storage"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -22,9 +19,7 @@ type Instance struct {
 	k8sName           string
 	state             InstanceState
 	kubernetesService *v1.Service
-	imageBuilder      *buildah.Builder
-	buildStore        storage.Store
-	buildContext      context.Context
+	builderFactory    *container.BuilderFactory
 	kubernetesPod     *v1.Pod
 	portsTCP          []int
 	portsUDP          []int
@@ -64,7 +59,7 @@ func NewInstance(name string) (*Instance, error) {
 func (i *Instance) SetImage(image string) error {
 	// Check if setting the image is allowed in the current state
 	if !i.IsInState(None, Started) {
-		return fmt.Errorf("Setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
+		return fmt.Errorf("setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
 	}
 
 	var err error
@@ -72,24 +67,19 @@ func (i *Instance) SetImage(image string) error {
 	// Handle each state accordingly
 	switch i.state {
 	case None:
-		// Create a new build context
-		context, _ := context.WithCancel(context.Background())
-
-		i.buildContext = context
-
 		// Use the builder to build a new image
-		builder, storage, err := container.NewBuilder(context, image)
+		factory, err := container.NewBuilderFactory(image)
+		//builder, storage, err := container.NewBuilder(context, image)
 		if err != nil {
-			return fmt.Errorf("Error getting builder: %s", err.Error())
+			return fmt.Errorf("error creating builder: %s", err.Error())
 		}
-		i.imageBuilder = builder
-		i.buildStore = storage
+		i.builderFactory = factory
 		i.state = Preparing
 	case Started:
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace: k8s.Namespace,
+			Namespace: k8s.Namespace(),
 			Name:      i.k8sName,
 			Labels:    i.kubernetesPod.Labels,
 			Image:     image,
@@ -101,7 +91,7 @@ func (i *Instance) SetImage(image string) error {
 		// Replace the pod with a new one, using the given image
 		_, err = k8s.ReplacePod(podConfig)
 		if err != nil {
-			return fmt.Errorf("Error replacing pod: %s", err.Error())
+			return fmt.Errorf("error replacing pod: %s", err.Error())
 		}
 		i.WaitInstanceIsRunning()
 	}
@@ -166,13 +156,13 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		return "", fmt.Errorf("executing command is only allowed in state 'Preparing' or 'Started'. Current state is '%s'", i.state.String())
 	}
 	if i.IsInState(Preparing) {
-		output, err := container.ExecuteCmdInBuilder(i.imageBuilder, command)
+		output, err := i.builderFactory.ExecuteCmdInBuilder(command)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.name, err)
 		}
 		return output, nil
 	} else if i.IsInState(Started) {
-		output, err := k8s.RunCommandInPod(k8s.Namespace, i.k8sName, i.k8sName, command)
+		output, err := k8s.RunCommandInPod(k8s.Namespace(), i.k8sName, i.k8sName, command)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in started instance '%s': %v", command, i.k8sName, err)
 		}
@@ -192,7 +182,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	}
 
 	i.files = append(i.files, dest)
-	err := container.AddFileToBuilder(i.imageBuilder, src, dest, chown)
+	err := i.builderFactory.AddFileToBuilder(src, dest, chown)
 	if err != nil {
 		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
 	}
@@ -231,7 +221,7 @@ func (i *Instance) Commit() error {
 		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 	// TODO: To speed up the process, the image name could be dependent on the hash of the image
-	err := container.PushBuilderImage(i.buildContext, i.imageBuilder, i.buildStore, i.getTempImageRegistry())
+	err := i.builderFactory.PushBuilderImage(i.getTempImageRegistry())
 	if err != nil {
 		return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
 	}
@@ -260,7 +250,7 @@ func (i *Instance) SetEnvironmentVariable(key string, value string) error {
 		return fmt.Errorf("setting environment variable is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Preparing {
-		container.SetEnvVar(i.imageBuilder, key, value)
+		i.builderFactory.SetEnvVar(key, value)
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
@@ -271,7 +261,7 @@ func (i *Instance) SetEnvironmentVariable(key string, value string) error {
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
-	svc, _ := k8s.GetService(k8s.Namespace, i.k8sName)
+	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
 	if svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService()
@@ -280,7 +270,7 @@ func (i *Instance) GetIP() (string, error) {
 		}
 	}
 
-	ip, err := k8s.GetServiceIP(k8s.Namespace, i.k8sName)
+	ip, err := k8s.GetServiceIP(k8s.Namespace(), i.k8sName)
 	if err != nil {
 		return "", fmt.Errorf("error getting IP of service '%s': %w", i.k8sName, err)
 	}
@@ -295,7 +285,7 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 		return nil, fmt.Errorf("getting file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
-	bytes, err := container.ReadFileFromBuilder(i.imageBuilder, file)
+	bytes, err := i.builderFactory.ReadFileFromBuilder(file)
 	if err != nil {
 		return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
 	}
@@ -310,7 +300,7 @@ func (i *Instance) Start() error {
 	}
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
 		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace, i.k8sName)
+		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
 		if svc == nil {
 			err := i.deployService()
 			if err != nil {
@@ -345,7 +335,7 @@ func (i *Instance) WaitInstanceIsRunning() error {
 	if !i.IsInState(Started) {
 		return fmt.Errorf("waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	err := k8s.WaitPodIsRunning(k8s.Namespace, i.k8sName)
+	err := k8s.WaitPodIsRunning(k8s.Namespace(), i.k8sName)
 	if err != nil {
 		return fmt.Errorf("error waiting for pod '%s' is running: %w", i.k8sName, err)
 	}
