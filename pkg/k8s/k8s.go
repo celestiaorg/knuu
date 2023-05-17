@@ -11,8 +11,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// TODO: Clean namespace resources before running tests
-
 // Clientset is a global variable that holds a kubernetes clientset.
 var Clientset *kubernetes.Clientset
 
