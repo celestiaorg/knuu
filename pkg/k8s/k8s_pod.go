@@ -255,7 +255,6 @@ func buildInitContainerCommand(name string, volumes map[string]string) ([]string
 
 // preparePod prepares a pod configuration.
 func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
-	// TODO: validate userinputs
 	namespace := spec.Namespace
 	name := spec.Name
 	labels := spec.Labels
