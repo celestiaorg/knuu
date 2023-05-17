@@ -1,6 +1,11 @@
 // Package knuu provides the core functionality of knuu.
 package knuu
 
+import (
+	"fmt"
+	"github.com/sirupsen/logrus"
+)
+
 // InstancePool is a struct that represents a pool of instances
 type InstancePool struct {
 	instances []*Instance
@@ -10,6 +15,26 @@ type InstancePool struct {
 // Instances returns the instances in the instance pool
 func (i *InstancePool) Instances() []*Instance {
 	return i.instances
+}
+
+// CreatePool creates a pool of instances
+// This function can only be called in the state 'Committed'
+func (i *Instance) CreatePool(amount int) (*InstancePool, error) {
+	if !i.IsInState(Committed) {
+		return nil, fmt.Errorf("creating a pool is only allowed in state 'Committed' or 'Destroyed'. Current state is '%s'", i.state.String())
+	}
+	instances := make([]*Instance, amount)
+	for j := 0; j < amount; j++ {
+		instances[j] = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
+	}
+
+	i.state = Destroyed
+	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+
+	return &InstancePool{
+		instances: instances,
+		amount:    amount,
+	}, nil
 }
 
 // Start starts all instances in the instance pool
