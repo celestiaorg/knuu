@@ -32,7 +32,10 @@ func Initialize() error {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	k8s.Initialize()
+	err := k8s.Initialize()
+    if err != nil {
+        return err
+    }
 
 	return nil
 }

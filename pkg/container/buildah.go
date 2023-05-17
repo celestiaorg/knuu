@@ -1,11 +1,10 @@
-// Package container provides utility functions for working with buildah containers.
 package container
 
 import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/containers/buildah"
@@ -16,17 +15,30 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// NewBuilder initiates a new buildah builder for the given image.
-// It returns the new builder, the storage.Store object and any error encountered.
-func NewBuilder(ctx context.Context, imageName string) (*buildah.Builder, storage.Store, error) {
+// BuilderFactory is responsible for creating new instances of buildah.Builder
+type BuilderFactory struct {
+	ctx     context.Context
+	builder *buildah.Builder
+	store   storage.Store
+}
+
+// NewBuilderFactory creates a new instance of BuilderFactory.
+func NewBuilderFactory(imageName string) (*BuilderFactory, error) {
+	ctx, _ := context.WithCancel(context.Background())
+	if imageName == "" {
+		return nil, fmt.Errorf("image name cannot be empty")
+	}
+
+	logrus.Debugf("Creating new Buildah builder for image '%s'", imageName)
+
 	storeOpts, err := storage.DefaultStoreOptionsAutoDetectUID()
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting default storage options: %w", err)
+		return nil, fmt.Errorf("failed to get default storage options: %w", err)
 	}
 
 	buildStore, err := storage.GetStore(storeOpts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating storage store: %w", err)
+		return nil, fmt.Errorf("failed to create storage store: %w", err)
 	}
 
 	builderOpts := buildah.BuilderOptions{
@@ -35,15 +47,21 @@ func NewBuilder(ctx context.Context, imageName string) (*buildah.Builder, storag
 
 	builder, err := buildah.NewBuilder(ctx, buildStore, builderOpts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating new builder: %w", err)
+		return nil, fmt.Errorf("failed to create new builder: %w", err)
 	}
 
-	return builder, buildStore, nil
+	logrus.Debugf("Successfully created new Buildah builder for image '%s'", imageName)
+
+	return &BuilderFactory{
+		ctx:     ctx,
+		builder: builder,
+		store:   buildStore,
+	}, nil
 }
 
 // ExecuteCmdInBuilder runs the provided command in the context of the given builder.
 // It returns the command's output or any error encountered.
-func ExecuteCmdInBuilder(builder *buildah.Builder, command []string) (string, error) {
+func (f *BuilderFactory) ExecuteCmdInBuilder(command []string) (string, error) {
 	var stdout, stderr bytes.Buffer
 
 	runOpts := buildah.RunOptions{
@@ -51,80 +69,93 @@ func ExecuteCmdInBuilder(builder *buildah.Builder, command []string) (string, er
 		Stderr: &stderr,
 	}
 
-	if err := builder.Run(command, runOpts); err != nil {
+	if err := f.builder.Run(command, runOpts); err != nil {
+		errMessage := fmt.Errorf("running command: %w.", err)
 		if stderr.String() != "" {
-			return "", fmt.Errorf("running command: %w. Stderr: %s", err, stderr.String())
+			errMessage = fmt.Errorf("%s Stderr: %s", errMessage, stderr.String())
 		}
-		return "", fmt.Errorf("running command: %w", err)
+		return "", errMessage
 	}
 
+	logrus.Debugf("Successfully executed command '%v' in builder", command)
 	return stdout.String(), nil
 }
 
 // AddFileToBuilder adds a file from the source path to the destination path in the image, with the specified ownership.
-func AddFileToBuilder(builder *buildah.Builder, srcPath, destPath, chown string) error {
+func (f *BuilderFactory) AddFileToBuilder(srcPath, destPath, chown string) error {
 	addOpts := buildah.AddAndCopyOptions{Chown: chown}
 
-	if err := builder.Add(destPath, false, addOpts, srcPath); err != nil {
-		return fmt.Errorf("adding file to image: %w", err)
+	if err := f.builder.Add(destPath, false, addOpts, srcPath); err != nil {
+		return fmt.Errorf("failed to add file to image: %w", err)
 	}
+
+	logrus.Debugf("file %s added to image at %s", srcPath, destPath)
 
 	return nil
 }
 
 // ReadFileFromBuilder reads a file from the given builder's mount point.
 // It returns the file's content or any error encountered.
-func ReadFileFromBuilder(builder *buildah.Builder, filePath string) ([]byte, error) {
-	mountPoint, err := builder.Mount("")
+func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
+	// Mount builder's mount point.
+	mountPoint, err := f.builder.Mount("")
 	if err != nil {
-		return nil, fmt.Errorf("mounting build container: %w", err)
+		return nil, fmt.Errorf("failed to mount build container: %w", err)
 	}
-	defer builder.Unmount()
 
+	// Create full path using provided file path and the mount point.
 	fullPath := filepath.Join(mountPoint, filePath)
-	content, err := ioutil.ReadFile(fullPath)
+
+	// Read file content from the full path.
+	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading file from build container: %w", err)
+		return nil, fmt.Errorf("failed to read file from build container: %w", err)
 	}
 
 	return content, nil
 }
 
-// SetEnvVar sets an environment variable in the given builder.
-func SetEnvVar(builder *buildah.Builder, name, value string) {
-	builder.SetEnv(name, value)
+// SetEnvVar sets the value of an environment variable in the builder.
+func (f *BuilderFactory) SetEnvVar(name, value string) error {
+	// Set and log the value of the environment variable
+	f.builder.SetEnv(name, value)
+	logrus.Debugf("Set environment variable %s=%s", name, value)
+
+	return nil
 }
 
 // PushBuilderImage pushes the image from the given builder to a registry.
 // The image is identified by the provided name.
-func PushBuilderImage(ctx context.Context, builder *buildah.Builder, buildStore storage.Store, imageName string) error {
-	imgRef, err := is.Transport.ParseStoreReference(buildStore, imageName)
+func (f *BuilderFactory) PushBuilderImage(imageName string) error {
+	// Parse image reference
+	imgRef, err := is.Transport.ParseStoreReference(f.store, imageName)
 	if err != nil {
-		return fmt.Errorf("parsing image reference: %w", err)
+		return fmt.Errorf("failed to parse image reference: %w", err)
 	}
 
-	imgID, _, _, err := builder.Commit(ctx, imgRef, buildah.CommitOptions{})
+	// Commit and get image ID
+	imgID, _, _, err := f.builder.Commit(f.ctx, imgRef, buildah.CommitOptions{})
 	if err != nil {
-		return fmt.Errorf("committing image: %w", err)
+		return fmt.Errorf("failed to commit image: %w", err)
 	}
-
 	logrus.Debugf("Committed image '%s' with ID '%s'", imageName, imgID)
 
+	// Parse destination reference
 	dest, err := docker.ParseReference("//" + imageName)
 	if err != nil {
-		return fmt.Errorf("parsing destination reference: %w", err)
+		return fmt.Errorf("failed to parse destination reference: %w", err)
 	}
 
+	// Push image with options
 	pushOpts := buildah.PushOptions{
-		Store:         buildStore,
+		Store:         f.store,
 		SystemContext: &types.SystemContext{},
 	}
 
-	ref, _, err := buildah.Push(ctx, imageName, dest, pushOpts)
+	ref, _, err := buildah.Push(f.ctx, imageName, dest, pushOpts)
 	if err != nil {
-		return fmt.Errorf("pushing image: %w", err)
+		return fmt.Errorf("failed to push image: %w", err)
 	}
-
 	logrus.Debugf("Pushed image '%s' with ref '%s'", imageName, ref)
 
 	return nil
