@@ -8,7 +8,7 @@ require (
 	github.com/containers/storage v1.46.1
 	github.com/google/uuid v1.3.0
 	github.com/sirupsen/logrus v1.9.2
-	k8s.io/api v0.27.1
+	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
 	k8s.io/client-go v0.27.1
 )
