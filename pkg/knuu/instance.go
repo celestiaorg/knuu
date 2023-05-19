@@ -374,6 +374,10 @@ func (i *Instance) Destroy() error {
 }
 
 func (i *Instance) Clone() (*Instance, error) {
+	if !i.IsInState(Committed) {
+		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+
 	newK8sName, err := generateK8sName(i.name)
 	if err != nil {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", i.name, err)
