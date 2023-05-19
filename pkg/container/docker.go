@@ -60,30 +60,6 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 	if f.imageNameTo == "" {
 		return nil, fmt.Errorf("no image name provided, push before reading")
 	}
-
-	// Create and start a new container to read the file
-	containerID, err := f.createAndStartContainer()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create and start container: %w", err)
-	}
-	defer f.stopAndRemoveContainer(containerID)
-
-	// Copy the file from the container
-	reader, err := f.copyFromContainer(containerID, filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy file from container: %w", err)
-	}
-	defer reader.Close()
-
-	// Read and return the file's content
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file from tar: %w", err)
-	}
-	return data, nil
-}
-
-func (f *BuilderFactory) createAndStartContainer() (string, error) {
 	containerConfig := &container.Config{
 		Image: f.imageNameTo,
 		Cmd:   []string{"tail", "-f", "/dev/null"}, // This keeps the container running
@@ -97,49 +73,59 @@ func (f *BuilderFactory) createAndStartContainer() (string, error) {
 		"",
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to create container: %w", err)
+		return nil, fmt.Errorf("failed to create container: %w", err)
 	}
+
+	defer func() {
+		// Stop the container
+		timeout := int(time.Duration(10) * time.Second)
+		stopOptions := container.StopOptions{
+			Timeout: &timeout,
+		}
+
+		if err := f.cli.ContainerStop(context.Background(), resp.ID, stopOptions); err != nil {
+			logrus.Warnf("failed to stop container: %v", err)
+		}
+
+		// Remove the container
+		if err := f.cli.ContainerRemove(context.Background(), resp.ID, types.ContainerRemoveOptions{}); err != nil {
+			logrus.Warnf("failed to remove container: %v", err)
+		}
+	}()
 
 	if err := f.cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-		// Stop and remove the container if starting it fails
-		f.cli.ContainerStop(context.Background(), resp.ID, container.StopOptions{})
-		f.cli.ContainerRemove(context.Background(), resp.ID, types.ContainerRemoveOptions{})
-		return "", fmt.Errorf("failed to start container: %w", err)
+		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
-	return resp.ID, nil
-}
-
-func (f *BuilderFactory) stopAndRemoveContainer(containerID string) {
-	timeout := int(time.Duration(10) * time.Second)
-	stopOptions := container.StopOptions{
-		Timeout: &timeout,
-	}
-	if err := f.cli.ContainerStop(context.Background(), containerID, stopOptions); err != nil {
-		logrus.Warnf("failed to stop container %v: %v", containerID, err)
-	}
-	if err := f.cli.ContainerRemove(context.Background(), containerID, types.ContainerRemoveOptions{}); err != nil {
-		logrus.Warnf("failed to remove container %v: %v", containerID, err)
-	}
-}
-
-func (f *BuilderFactory) copyFromContainer(containerID string, filePath string) (io.ReadCloser, error) {
-	reader, _, err := f.cli.CopyFromContainer(context.Background(), containerID, filePath)
+	// Now you can copy the file
+	reader, _, err := f.cli.CopyFromContainer(context.Background(), resp.ID, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy file from container %v: %w", containerID, err)
+		return nil, fmt.Errorf("failed to copy file from container: %w", err)
 	}
+	defer reader.Close()
+
 	tarReader := tar.NewReader(reader)
-	header, err := tarReader.Next()
-	if err == io.EOF {
-		return nil, fmt.Errorf("file not found in container %v", containerID)
+
+	for {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break // End of archive
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read from tar: %w", err)
+		}
+
+		if header.Typeflag == tar.TypeReg { // if it's a file then extract it
+			data, err := io.ReadAll(tarReader)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read file from tar: %w", err)
+			}
+			return data, nil
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from tar: %w", err)
-	}
-	if header.Typeflag != tar.TypeReg { // if it's not a regular file
-		return nil, fmt.Errorf("path %s in container %v is not a file", filePath, containerID)
-	}
-	return reader, nil
+
+	return nil, fmt.Errorf("file not found in tar")
 }
 
 // SetEnvVar sets the value of an environment variable in the builder.
