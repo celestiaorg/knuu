@@ -7,15 +7,14 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 )
 
 // Instance represents a instance
 type Instance struct {
-	uuid              uuid.UUID
 	name              string
+	imageName         string
 	k8sName           string
 	state             InstanceState
 	kubernetesService *v1.Service
@@ -33,24 +32,24 @@ type Instance struct {
 // NewInstance creates a new instance of the Instance struct
 func NewInstance(name string) (*Instance, error) {
 	// Generate a UUID for this instance
-	uuid, err := uuid.NewRandom()
+
+	k8sName, err := generateK8sName(name)
 	if err != nil {
-		return nil, fmt.Errorf("error generating UUID for instance '%s': %w", name, err)
+		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
 	}
-	k8sName := fmt.Sprintf("%s-%s", name, uuid.String()[:8])
 	// Create the instance
 	return &Instance{
-		uuid:     uuid,
-		name:     name,
-		k8sName:  k8sName,
-		state:    None,
-		portsTCP: make([]int, 0),
-		portsUDP: make([]int, 0),
-		files:    make([]string, 0),
-		command:  make([]string, 0),
-		args:     make([]string, 0),
-		env:      make(map[string]string),
-		volumes:  make(map[string]string),
+		name:      name,
+		k8sName:   k8sName,
+		imageName: "",
+		state:     None,
+		portsTCP:  make([]int, 0),
+		portsUDP:  make([]int, 0),
+		files:     make([]string, 0),
+		command:   make([]string, 0),
+		args:      make([]string, 0),
+		env:       make(map[string]string),
+		volumes:   make(map[string]string),
 	}, nil
 }
 
@@ -221,7 +220,11 @@ func (i *Instance) Commit() error {
 		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 	// TODO: To speed up the process, the image name could be dependent on the hash of the image
-	err := i.builderFactory.PushBuilderImage(i.getTempImageRegistry())
+	imageName, err := i.getImageRegistry()
+	if err != nil {
+		return fmt.Errorf("error getting image registry: %w", err)
+	}
+	err = i.builderFactory.PushBuilderImage(imageName)
 	if err != nil {
 		return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
 	}
@@ -368,4 +371,27 @@ func (i *Instance) Destroy() error {
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
+}
+
+func (i *Instance) Clone() (*Instance, error) {
+	newK8sName, err := generateK8sName(i.name)
+	if err != nil {
+		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", i.name, err)
+	}
+	return &Instance{
+		name:              i.name,
+		k8sName:           newK8sName,
+		imageName:         i.imageName,
+		state:             i.state,
+		kubernetesService: i.kubernetesService,
+		builderFactory:    i.builderFactory,
+		kubernetesPod:     i.kubernetesPod,
+		portsTCP:          i.portsTCP,
+		portsUDP:          i.portsUDP,
+		files:             i.files,
+		command:           i.command,
+		args:              i.args,
+		env:               i.env,
+		volumes:           i.volumes,
+	}, nil
 }
