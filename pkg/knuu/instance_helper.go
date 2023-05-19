@@ -3,13 +3,23 @@ package knuu
 import (
 	"fmt"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// getTempImageRegistry returns the name of the temporary image registry
-func (i *Instance) getTempImageRegistry() string {
-	return fmt.Sprintf("ttl.sh/%s:1h", i.uuid.String())
+// getImageRegistry returns the name of the temporary image registry
+func (i *Instance) getImageRegistry() (string, error) {
+	if i.imageName != "" {
+		return i.imageName, nil
+	}
+	// If not already set, generate a random name using ttl.sh
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("error generating UUID: %w", err)
+	}
+	i.imageName = fmt.Sprintf("ttl.sh/%s:1h", uuid.String())
+	return i.imageName, nil
 }
 
 // validatePort validates the port
@@ -98,12 +108,17 @@ func (i *Instance) deployPod() error {
 	// Get labels for the pod
 	labels := i.getLabels()
 
+	imageName, err := i.getImageRegistry()
+	if err != nil {
+		return fmt.Errorf("failed to get image name: %v", err)
+	}
+
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace: k8s.Namespace(),
 		Name:      i.k8sName,
 		Labels:    labels,
-		Image:     i.getTempImageRegistry(), // Get temporary image registry for the pod
+		Image:     imageName,
 		Command:   i.command,
 		Args:      i.args,
 		Env:       i.env,
@@ -156,9 +171,9 @@ func (i *Instance) destroyVolume() error {
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	return &Instance{
-		uuid:              i.uuid,
 		name:              i.name + suffix,
 		k8sName:           i.k8sName + suffix,
+		imageName:         i.imageName,
 		state:             i.state,
 		kubernetesService: i.kubernetesService,
 		builderFactory:    i.builderFactory,
@@ -171,4 +186,12 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		env:               i.env,
 		volumes:           i.volumes,
 	}
+}
+
+func generateK8sName(name string) (string, error) {
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("error generating UUID: %w", err)
+	}
+	return fmt.Sprintf("%s-%s", name, uuid.String()[:8]), nil
 }
