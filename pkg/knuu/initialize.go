@@ -2,22 +2,14 @@
 package knuu
 
 import (
-	"errors"
-	"os"
+    "os"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/containers/buildah"
-	"github.com/containers/storage/pkg/unshare"
-	"github.com/sirupsen/logrus"
+    "github.com/celestiaorg/knuu/pkg/k8s"
+    "github.com/sirupsen/logrus"
 )
 
 // Initialize initializes knuu
 func Initialize() error {
-
-	if buildah.InitReexec() {
-		return errors.New("InitReexec triggered re-exec")
-	}
-	unshare.MaybeReexecUsingUserNamespace(false)
 
 	switch os.Getenv("LOG_LEVEL") {
 	case "debug":
@@ -33,9 +25,9 @@ func Initialize() error {
 	}
 
 	err := k8s.Initialize()
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
