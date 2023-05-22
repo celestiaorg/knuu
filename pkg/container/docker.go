@@ -172,6 +172,12 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return fmt.Errorf("failed to push image: %w", err)
 	}
 
+	// Remove the Dockerfile
+	err = os.Remove("Dockerfile")
+	if err != nil {
+		return fmt.Errorf("failed to remove Dockerfile: %w", err)
+	}
+
 	return nil
 }
 
