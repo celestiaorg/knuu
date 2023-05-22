@@ -1,4 +1,3 @@
-// Package k8s provides utility functions for working with Kubernetes pods.
 package k8s
 
 import (
