@@ -2,19 +2,16 @@ package container
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -138,93 +135,54 @@ func (f *BuilderFactory) SetEnvVar(name, value string) error {
 // The image is identified by the provided name.
 func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 
-	f.imageNameTo = imageName
-
-	buf := new(bytes.Buffer)
-	tw := tar.NewWriter(buf)
-	defer tw.Close()
-
+	// Create a Dockerfile with the provided instructions
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
-	dockerFileReader := strings.NewReader(dockerFile)
-	tw.WriteHeader(&tar.Header{
-		Name: "Dockerfile",
-		Size: int64(dockerFileReader.Len()),
-	})
-	io.Copy(tw, dockerFileReader)
-
-	addDirToTar(tw, "./")
-
-	buildOptions := types.ImageBuildOptions{
-		Dockerfile: "Dockerfile",
-		Tags:       []string{imageName},
-		Platform:   "linux/amd64",
+	err := os.WriteFile("Dockerfile", []byte(dockerFile), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
-	buildResponse, err := f.cli.ImageBuild(context.Background(), buf, buildOptions)
+	// Check if there is an existing builder instance
+	cmd := exec.Command("docker", "buildx", "ls")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list buildx builders: %w", err)
+	}
+
+	// If no builder instance exists, create a new one
+	if !strings.Contains(string(output), "default") {
+		cmd = exec.Command("docker", "buildx", "create", "--use")
+		err = runCommand(cmd)
+		if err != nil {
+			return fmt.Errorf("failed to create buildx builder: %w", err)
+		}
+	}
+
+	// Build the Docker image using buildx
+	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, ".")
+	err = runCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to build image: %w", err)
 	}
-	defer buildResponse.Body.Close()
 
-	// Create a Scanner to read the build output line by line
-	scanner := bufio.NewScanner(buildResponse.Body)
-
-	type ErrorMessage struct {
-		Error string
-	}
-	var errorMessage ErrorMessage
-
-	for scanner.Scan() {
-		// Each line is a JSON object, so we can unmarshal it
-		var line map[string]interface{}
-		err := json.Unmarshal(scanner.Bytes(), &line)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON: %w", err)
-		}
-
-		// If there's an error, return it
-		if err, ok := line["error"].(string); ok {
-			errorMessage.Error = err
-			return fmt.Errorf("failed to build image: %v", errorMessage)
-		}
-	}
-
-	// Prepare an empty AuthConfig
-	authConfig := registry.AuthConfig{}
-	encodedJSON, err := json.Marshal(authConfig)
-	if err != nil {
-		panic(err)
-	}
-	authStr := base64.URLEncoding.EncodeToString(encodedJSON)
-
-	pushOptions := types.ImagePushOptions{
-		RegistryAuth: authStr,
-	}
-
-	out, err := f.cli.ImagePush(context.Background(), imageName, pushOptions)
+	// Push the Docker image to the registry
+	cmd = exec.Command("docker", "push", imageName)
+	err = runCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to push image: %w", err)
 	}
 
-	defer out.Close()
+	return nil
+}
 
-	//type ErrorMessage struct {
-	//	Error string
-	//}
-	//var errorMessage ErrorMessage
-	buffIOReader := bufio.NewReader(out)
-
-	for {
-		streamBytes, err := buffIOReader.ReadBytes('\n')
-		if err == io.EOF {
-			break
-		}
-		json.Unmarshal(streamBytes, &errorMessage)
-		if errorMessage.Error != "" {
-			return fmt.Errorf("failed to push image: %s", errorMessage.Error)
-		}
+func runCommand(cmd *exec.Cmd) error {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("command failed: %s\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 	}
-
 	return nil
 }
 
