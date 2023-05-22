@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
@@ -135,9 +136,16 @@ func (f *BuilderFactory) SetEnvVar(name, value string) error {
 // The image is identified by the provided name.
 func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 
-	// Create a Dockerfile with the provided instructions
+	// Generate a UUID
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("failed to generate UUID: %w", err)
+	}
+
+	// Create a Dockerfile with a unique name
+	dockerFileName := fmt.Sprintf("Dockerfile_%s", uuid.String())
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
-	err := os.WriteFile("Dockerfile", []byte(dockerFile), 0644)
+	err = os.WriteFile(dockerFileName, []byte(dockerFile), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
@@ -159,7 +167,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	}
 
 	// Build the Docker image using buildx
-	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, ".")
+	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, ".", "-f", dockerFileName)
 	err = runCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to build image: %w", err)
@@ -173,7 +181,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	}
 
 	// Remove the Dockerfile
-	err = os.Remove("Dockerfile")
+	err = os.Remove(dockerFileName)
 	if err != nil {
 		return fmt.Errorf("failed to remove Dockerfile: %w", err)
 	}
