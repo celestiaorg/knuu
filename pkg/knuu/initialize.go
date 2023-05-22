@@ -11,6 +11,7 @@ import (
 
 // Identifier is the identifier of the current knuu instance
 var identifier string
+var startTime string
 
 // Initialize initializes knuu
 // Deprecated: Use InitializeWithIdentifier instead
@@ -29,6 +30,9 @@ func Identifier() string {
 // InitializeWithIdentifier initializes knuu with a unique identifier
 func InitializeWithIdentifier(uniqueIdentifier string) error {
 	identifier = uniqueIdentifier
+
+	t := time.Now()
+	startTime = fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
 
 	switch os.Getenv("LOG_LEVEL") {
 	case "debug":
