@@ -157,6 +157,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	buildOptions := types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
 		Tags:       []string{imageName},
+		Platform:   "linux/amd64",
 	}
 
 	buildResponse, err := f.cli.ImageBuild(context.Background(), buf, buildOptions)
