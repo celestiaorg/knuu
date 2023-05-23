@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 	"time"
 
@@ -50,14 +51,17 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 
 // PodConfig contains the specifications for creating a new Pod object
 type PodConfig struct {
-	Namespace string            // Kubernetes namespace of the Pod
-	Name      string            // Name to assign to the Pod
-	Labels    map[string]string // Labels to apply to the Pod
-	Image     string            // Name of the Docker image to use for the container
-	Command   []string          // Command to run in the container
-	Args      []string          // Arguments to pass to the command in the container
-	Env       map[string]string // Environment variables to set in the container
-	Volumes   map[string]string // Volumes to mount in the Pod
+	Namespace     string            // Kubernetes namespace of the Pod
+	Name          string            // Name to assign to the Pod
+	Labels        map[string]string // Labels to apply to the Pod
+	Image         string            // Name of the Docker image to use for the container
+	Command       []string          // Command to run in the container
+	Args          []string          // Arguments to pass to the command in the container
+	Env           map[string]string // Environment variables to set in the container
+	Volumes       map[string]string // Volumes to mount in the Pod
+	MemoryRequest string            // Memory request for the container
+	MemoryLimit   string            // Memory limit for the container
+	CPURequest    string            // CPU request for the container
 }
 
 // ReplacePod replaces a pod in the given namespace and returns the new Pod object.
@@ -265,6 +269,23 @@ func buildInitContainerCommand(name string, volumes map[string]string) ([]string
 	return command, nil
 }
 
+// buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
+func buildResources(CPURequest string, MemoryRequest string, MemoryLimit string) (v1.ResourceRequirements, error) {
+	resources := v1.ResourceRequirements{}
+
+	resources = v1.ResourceRequirements{
+		Requests: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse(CPURequest),
+			v1.ResourceMemory: resource.MustParse(MemoryRequest),
+		},
+		Limits: v1.ResourceList{
+			v1.ResourceMemory: resource.MustParse(MemoryLimit),
+		},
+	}
+
+	return resources, nil
+}
+
 // preparePod prepares a pod configuration.
 func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	namespace := spec.Namespace
@@ -313,6 +334,12 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 		}
 	}
 
+	var resources v1.ResourceRequirements
+	resources, err = buildResources(spec.CPURequest, spec.MemoryRequest, spec.MemoryLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource configuration: %w", err)
+	}
+
 	// Construct the Pod object using the above data
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -330,6 +357,7 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 					Args:         args,
 					Env:          podEnv,
 					VolumeMounts: containerVolumes,
+					Resources:    resources,
 				},
 			},
 			Volumes: podVolumes,
