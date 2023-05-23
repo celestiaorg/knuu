@@ -20,6 +20,17 @@ func NewExecutor() (*Executor, error) {
 		return nil, fmt.Errorf("error committing instance: %v", err)
 	}
 	err = instance.SetArgs("sleep", "infinity")
+	if err != nil {
+		return nil, fmt.Errorf("error setting args '%v':", err)
+	}
+	err = instance.SetMemory("100M", "100M")
+	if err != nil {
+		return nil, fmt.Errorf("error setting memory '%v':", err)
+	}
+	err = instance.SetCPU("100m")
+	if err != nil {
+		return nil, fmt.Errorf("error setting cpu '%v':", err)
+	}
 	err = instance.Start()
 	if err != nil {
 		return nil, fmt.Errorf("error starting instance: %v", err)
