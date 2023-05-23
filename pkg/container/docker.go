@@ -1,3 +1,4 @@
+// Package container provides utilities for interacting with containers.
 package container
 
 import (
