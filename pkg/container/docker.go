@@ -142,6 +142,8 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return fmt.Errorf("failed to generate UUID: %w", err)
 	}
 
+	f.imageNameTo = imageName
+
 	// Create a Dockerfile with a unique name
 	dockerFileName := fmt.Sprintf("Dockerfile_%s", uuid.String())
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
