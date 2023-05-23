@@ -3,12 +3,13 @@ package knuu
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"os"
+	"path/filepath"
 )
 
 // Instance represents a instance
@@ -196,19 +197,26 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 
-	tmpFile, err := os.CreateTemp("", "temp-file-")
+	uuid, err := uuid.NewRandom()
 	if err != nil {
-		return fmt.Errorf("error creating temporary file: %w", err)
+		return fmt.Errorf("error creating uuid: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	file := "./tmp/" + uuid.String() + "/" + dest
+	filePath := filepath.Dir(file)
 
-	_, err = tmpFile.Write(bytes)
+	// write to a file in the ./<uuid> directory, make sure dir exists
+	err = os.MkdirAll(filePath, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("error writing content to temporary file: %w", err)
+		return fmt.Errorf("error creating directory: %w", err)
 	}
-	tmpFile.Close()
 
-	i.AddFile(tmpFile.Name(), dest, chown)
+	// write to a file in the ./<uuid> directory
+	err = os.WriteFile(file, bytes, 0644)
+	if err != nil {
+		return fmt.Errorf("error writing file: %w", err)
+	}
+
+	i.AddFile(file, dest, chown)
 
 	return nil
 }
