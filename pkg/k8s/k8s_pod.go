@@ -270,16 +270,36 @@ func buildInitContainerCommand(name string, volumes map[string]string) ([]string
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
-func buildResources(CPURequest string, MemoryRequest string, MemoryLimit string) (v1.ResourceRequirements, error) {
+func buildResources(memoryRequest string, memoryLimit string, cpuRequest string) (v1.ResourceRequirements, error) {
 	resources := v1.ResourceRequirements{}
 
+	memoryRequestQuantity, err := resource.ParseQuantity(memoryRequest)
+	if err != nil {
+		if memoryRequest != "" {
+			return resources, fmt.Errorf("failed to parse memory request quantity '%s': %v", memoryRequest, err)
+		}
+	}
+	memoryLimitQuantity, err := resource.ParseQuantity(memoryLimit)
+	if err != nil {
+		if memoryLimit != "" {
+			return resources, fmt.Errorf("failed to parse memory limit quantity '%s': %v", memoryLimit, err)
+		}
+	}
+	cpuRequestQuantity, err := resource.ParseQuantity(cpuRequest)
+	if err != nil {
+		if cpuRequest != "" {
+			return resources, fmt.Errorf("failed to parse CPU request quantity '%s': %v", cpuRequest, err)
+		}
+	}
+
+	// If a resource is not set it will use the default value of 0 which is the same as not setting it at all.
 	resources = v1.ResourceRequirements{
 		Requests: v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse(CPURequest),
-			v1.ResourceMemory: resource.MustParse(MemoryRequest),
+			v1.ResourceMemory: memoryRequestQuantity,
+			v1.ResourceCPU:    cpuRequestQuantity,
 		},
 		Limits: v1.ResourceList{
-			v1.ResourceMemory: resource.MustParse(MemoryLimit),
+			v1.ResourceMemory: memoryLimitQuantity,
 		},
 	}
 
@@ -335,7 +355,7 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	}
 
 	var resources v1.ResourceRequirements
-	resources, err = buildResources(spec.CPURequest, spec.MemoryRequest, spec.MemoryLimit)
+	resources, err = buildResources(spec.MemoryRequest, spec.MemoryLimit, spec.CPURequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource configuration: %w", err)
 	}
