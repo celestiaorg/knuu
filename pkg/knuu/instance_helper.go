@@ -54,7 +54,14 @@ func (i *Instance) isUDPPortRegistered(port int) bool {
 
 // getLabels returns the labels for the instance
 func (i *Instance) getLabels() map[string]string {
-	return map[string]string{"app": i.k8sName}
+	return map[string]string{
+		"app":                          i.k8sName,
+		"k8s.kubernetes.io/managed-by": "knuu",
+		"test-run-id":                  identifier,
+		"test-started":                 startTime,
+		"name":                         i.name,
+		"k8s-name":                     i.k8sName,
+	}
 }
 
 // deployService deploys the service for the instance
