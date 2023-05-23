@@ -1,4 +1,3 @@
-// Package knuu provides the core functionality of knuu.
 package knuu
 
 import (
