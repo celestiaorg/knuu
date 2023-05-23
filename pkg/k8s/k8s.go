@@ -15,7 +15,7 @@ import (
 var clientset *kubernetes.Clientset
 
 // namespace is the current namespace in use by the Kubernetes client.
-var namespace = "default"
+var namespace = ""
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
 func Initialize() error {
@@ -38,7 +38,12 @@ func Initialize() error {
 		}
 		setNamespace(string(namespaceBytes))
 	} else {
-		setNamespace("test")
+		// Read the namespace from KNUU_NAMESPACE environment variable
+		if os.Getenv("KNUU_NAMESPACE") != "" {
+			setNamespace(os.Getenv("KNUU_NAMESPACE"))
+		} else {
+			setNamespace("test")
+		}
 	}
 	return nil
 }
