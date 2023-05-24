@@ -1,4 +1,3 @@
-// Package knuu provides the core functionality of knuu.
 package knuu
 
 import (
@@ -28,6 +27,9 @@ type Instance struct {
 	args              []string
 	env               map[string]string
 	volumes           map[string]string
+	memoryRequest     string
+	memoryLimit       string
+	cpuRequest        string
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -40,17 +42,20 @@ func NewInstance(name string) (*Instance, error) {
 	}
 	// Create the instance
 	return &Instance{
-		name:      name,
-		k8sName:   k8sName,
-		imageName: "",
-		state:     None,
-		portsTCP:  make([]int, 0),
-		portsUDP:  make([]int, 0),
-		files:     make([]string, 0),
-		command:   make([]string, 0),
-		args:      make([]string, 0),
-		env:       make(map[string]string),
-		volumes:   make(map[string]string),
+		name:          name,
+		k8sName:       k8sName,
+		imageName:     "",
+		state:         None,
+		portsTCP:      make([]int, 0),
+		portsUDP:      make([]int, 0),
+		files:         make([]string, 0),
+		command:       make([]string, 0),
+		args:          make([]string, 0),
+		env:           make(map[string]string),
+		volumes:       make(map[string]string),
+		memoryRequest: "",
+		memoryLimit:   "",
+		cpuRequest:    "",
 	}, nil
 }
 
@@ -79,14 +84,17 @@ func (i *Instance) SetImage(image string) error {
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace: k8s.Namespace(),
-			Name:      i.k8sName,
-			Labels:    i.kubernetesPod.Labels,
-			Image:     image,
-			Command:   i.command,
-			Args:      i.args,
-			Env:       i.env,
-			Volumes:   i.volumes,
+			Namespace:     k8s.Namespace(),
+			Name:          i.k8sName,
+			Labels:        i.kubernetesPod.Labels,
+			Image:         image,
+			Command:       i.command,
+			Args:          i.args,
+			Env:           i.env,
+			Volumes:       i.volumes,
+			MemoryRequest: i.memoryRequest,
+			MemoryLimit:   i.memoryLimit,
+			CPURequest:    i.cpuRequest,
 		}
 		// Replace the pod with a new one, using the given image
 		_, err = k8s.ReplacePod(podConfig)
@@ -277,6 +285,29 @@ func (i *Instance) AddVolume(name string, size string) error {
 	return nil
 }
 
+// SetMemory sets the memory of the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetMemory(request string, limit string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting memory is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.memoryRequest = request
+	i.memoryLimit = limit
+	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request, limit, i.name)
+	return nil
+}
+
+// SetCPU sets the CPU of the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetCPU(request string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting cpu is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.cpuRequest = request
+	logrus.Debugf("Set cpu to '%s' in instance '%s'", request, i.name)
+	return nil
+}
+
 // SetEnvironmentVariable sets the given environment variable in the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetEnvironmentVariable(key string, value string) error {
@@ -428,5 +459,8 @@ func (i *Instance) Clone() (*Instance, error) {
 		args:              i.args,
 		env:               i.env,
 		volumes:           i.volumes,
+		memoryRequest:     i.memoryRequest,
+		memoryLimit:       i.memoryLimit,
+		cpuRequest:        i.cpuRequest,
 	}, nil
 }

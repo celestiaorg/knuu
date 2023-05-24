@@ -123,14 +123,17 @@ func (i *Instance) deployPod() error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace: k8s.Namespace(),
-		Name:      i.k8sName,
-		Labels:    labels,
-		Image:     imageName,
-		Command:   i.command,
-		Args:      i.args,
-		Env:       i.env,
-		Volumes:   i.volumes,
+		Namespace:     k8s.Namespace(),
+		Name:          i.k8sName,
+		Labels:        labels,
+		Image:         imageName,
+		Command:       i.command,
+		Args:          i.args,
+		Env:           i.env,
+		Volumes:       i.volumes,
+		MemoryRequest: i.memoryRequest,
+		MemoryLimit:   i.memoryLimit,
+		CPURequest:    i.cpuRequest,
 	}
 
 	// Deploy the pod
@@ -193,6 +196,9 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		args:              i.args,
 		env:               i.env,
 		volumes:           i.volumes,
+		memoryRequest:     i.memoryRequest,
+		memoryLimit:       i.memoryLimit,
+		cpuRequest:        i.cpuRequest,
 	}
 }
 
