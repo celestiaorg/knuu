@@ -5,6 +5,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
+	"net/http"
 	"strings"
 	"time"
 
@@ -340,4 +344,69 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)
 
 	return pod, nil
+}
+
+// PortForwardPod forwards a local port to a port on a pod.
+func PortForwardPod(namespace string, podName string, localPort int, remotePort int) error {
+	// Get the pod object
+	_, err := getPod(namespace, podName)
+	if err != nil {
+		return fmt.Errorf("failed to get pod: %v", err)
+	}
+
+	// Get a config to talk to the apiserver
+	restconfig, err := getClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get cluster config: %v", err)
+	}
+
+	// Setup the port forwarding
+	url := Clientset().CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward").
+		URL()
+
+	transport, upgrader, err := spdy.RoundTripperFor(restconfig)
+	if err != nil {
+		return fmt.Errorf("failed to create round tripper: %v", err)
+	}
+
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
+
+	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+
+	var stdout, stderr io.Writer
+	// Create a new PortForwarder
+	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
+	if err != nil {
+		return fmt.Errorf("failed to create port forwarder: %v", err)
+	}
+	if stderr != nil {
+		return fmt.Errorf("failed to port forward: %v", stderr)
+	}
+	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
+	logrus.Debugf("Port forwarding stdout: %v", stdout)
+
+	// Start the port forwarding
+	go func() {
+		if err := pf.ForwardPorts(); err != nil {
+			// Handle error
+			logrus.Errorf("Error forwarding ports: %v", err)
+		}
+	}()
+
+	// Wait for the port forwarding to be ready
+	select {
+	case <-readyChan:
+		// Ready to forward
+	case <-time.After(time.Second * 5):
+		return fmt.Errorf("timed out waiting for port forwarding to be ready")
+	}
+
+	return nil
 }

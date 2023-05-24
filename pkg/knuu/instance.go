@@ -134,6 +134,29 @@ func (i *Instance) AddPortTCP(port int) error {
 	return nil
 }
 
+// PortForwardTCP forwards the given port to a random port on the host
+// This function can only be called in the state 'Started'
+func (i *Instance) PortForwardTCP(port int) (int, error) {
+	if !i.IsInState(Started) {
+		return -1, fmt.Errorf("random port forwarding is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	validatePort(port)
+	if !i.isTCPPortRegistered(port) {
+		return -1, fmt.Errorf("TCP port '%d' is not registered", port)
+	}
+	// Get a random port on the host
+	localPort, err := getFreePortTCP()
+	if err != nil {
+		return -1, fmt.Errorf("error getting free port: %v", err)
+	}
+	// Forward the port
+	err = k8s.PortForwardPod(k8s.Namespace(), i.k8sName, localPort, port)
+	if err != nil {
+		return -1, fmt.Errorf("error forwarding port: %v", err)
+	}
+	return localPort, nil
+}
+
 // AddPortUDP adds a UDP port to the instance
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortUDP(port int) error {

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"net"
 )
 
 // getImageRegistry returns the name of the temporary image registry
@@ -201,4 +202,19 @@ func generateK8sName(name string) (string, error) {
 		return "", fmt.Errorf("error generating UUID: %w", err)
 	}
 	return fmt.Sprintf("%s-%s", name, uuid.String()[:8]), nil
+}
+
+// getFreePort returns a free port
+func getFreePortTCP() (int, error) {
+	// Get a random port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, fmt.Errorf("error getting free port: %w", err)
+	}
+	defer listener.Close()
+
+	// Get the port from the listener
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	return port, nil
 }
