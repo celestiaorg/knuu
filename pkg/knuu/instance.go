@@ -258,7 +258,6 @@ func (i *Instance) Commit() error {
 	if !i.IsInState(Preparing) {
 		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
-	// TODO: To speed up the process, the image name could be dependent on the hash of the image
 	if i.builderFactory.Changed() {
 		// TODO: To speed up the process, the image name could be dependent on the hash of the image
 		imageName, err := i.getImageRegistry()
