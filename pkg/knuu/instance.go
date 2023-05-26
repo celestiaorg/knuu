@@ -109,7 +109,7 @@ func (i *Instance) SetImage(image string) error {
 
 // SetCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
-func (i *Instance) SetCommand(command []string) error {
+func (i *Instance) SetCommand(command ...string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting command is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
