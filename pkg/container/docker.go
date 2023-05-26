@@ -138,6 +138,12 @@ func (f *BuilderFactory) SetEnvVar(name, value string) error {
 	return nil
 }
 
+// SetUser sets the user in the builder.
+func (f *BuilderFactory) SetUser(user string) error {
+	f.dockerFileInstructions = append(f.dockerFileInstructions, "USER "+user)
+	return nil
+}
+
 // Changed returns true if the builder has been modified, false otherwise.
 func (f *BuilderFactory) Changed() bool {
 	return len(f.dockerFileInstructions) > 1
