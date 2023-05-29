@@ -3,7 +3,7 @@ module github.com/celestiaorg/knuu
 go 1.20
 
 require (
-	github.com/docker/docker v24.0.1+incompatible
+	github.com/docker/docker v24.0.2+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/sirupsen/logrus v1.9.2
 	k8s.io/api v0.27.2
