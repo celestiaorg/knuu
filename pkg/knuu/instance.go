@@ -258,16 +258,22 @@ func (i *Instance) Commit() error {
 	if !i.IsInState(Preparing) {
 		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
-	// TODO: To speed up the process, the image name could be dependent on the hash of the image
-	imageName, err := i.getImageRegistry()
-	if err != nil {
-		return fmt.Errorf("error getting image registry: %w", err)
+	if i.builderFactory.Changed() {
+		// TODO: To speed up the process, the image name could be dependent on the hash of the image
+		imageName, err := i.getImageRegistry()
+		if err != nil {
+			return fmt.Errorf("error getting image registry: %w", err)
+		}
+		err = i.builderFactory.PushBuilderImage(imageName)
+		if err != nil {
+			return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+		}
+		i.imageName = imageName
+		logrus.Debugf("Pushed image for instance '%s'", i.name)
+	} else {
+		i.imageName = i.builderFactory.ImageNameFrom()
+		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
 	}
-	err = i.builderFactory.PushBuilderImage(imageName)
-	if err != nil {
-		return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
-	}
-	logrus.Debugf("Pushed image for instance '%s'", i.name)
 	i.state = Committed
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 

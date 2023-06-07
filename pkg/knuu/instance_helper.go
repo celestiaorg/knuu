@@ -19,8 +19,8 @@ func (i *Instance) getImageRegistry() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error generating UUID: %w", err)
 	}
-	i.imageName = fmt.Sprintf("ttl.sh/%s:1h", uuid.String())
-	return i.imageName, nil
+	imageName := fmt.Sprintf("ttl.sh/%s:1h", uuid.String())
+	return imageName, nil
 }
 
 // validatePort validates the port

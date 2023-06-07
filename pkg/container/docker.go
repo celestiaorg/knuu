@@ -39,6 +39,11 @@ func NewBuilderFactory(imageName string) (*BuilderFactory, error) {
 	}, nil
 }
 
+// ImageNameFrom returns the name of the image from which the builder is created.
+func (f *BuilderFactory) ImageNameFrom() string {
+	return f.imageNameFrom
+}
+
 // ExecuteCmdInBuilder runs the provided command in the context of the given builder.
 // It returns the command's output or any error encountered.
 func (f *BuilderFactory) ExecuteCmdInBuilder(command []string) (string, error) {
@@ -133,9 +138,19 @@ func (f *BuilderFactory) SetEnvVar(name, value string) error {
 	return nil
 }
 
+// Changed returns true if the builder has been modified, false otherwise.
+func (f *BuilderFactory) Changed() bool {
+	return len(f.dockerFileInstructions) > 1
+}
+
 // PushBuilderImage pushes the image from the given builder to a registry.
 // The image is identified by the provided name.
 func (f *BuilderFactory) PushBuilderImage(imageName string) error {
+
+	if !f.Changed() {
+		logrus.Debugf("No changes made to image %s, skipping push", f.imageNameFrom)
+		return nil
+	}
 
 	// Generate a UUID
 	uuid, err := uuid.NewRandom()
