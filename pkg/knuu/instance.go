@@ -441,6 +441,8 @@ func (i *Instance) Destroy() error {
 	return nil
 }
 
+// Clone creates a clone of the instance
+// This function can only be called in the state 'Committed'
 func (i *Instance) Clone() (*Instance, error) {
 	if !i.IsInState(Committed) {
 		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
@@ -450,6 +452,7 @@ func (i *Instance) Clone() (*Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", i.name, err)
 	}
+	// Create a new instance with the same attributes as the original instance
 	return &Instance{
 		name:              i.name,
 		k8sName:           newK8sName,
