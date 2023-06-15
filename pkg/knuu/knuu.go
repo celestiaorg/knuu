@@ -29,6 +29,9 @@ func Identifier() string {
 
 // InitializeWithIdentifier initializes knuu with a unique identifier
 func InitializeWithIdentifier(uniqueIdentifier string) error {
+	if uniqueIdentifier == "" {
+		return fmt.Errorf("cannot initialize knuu with empty identifier")
+	}
 	identifier = uniqueIdentifier
 
 	t := time.Now()
@@ -53,4 +56,9 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	}
 
 	return nil
+}
+
+// IsInitialized returns true if knuu is initialized, and false otherwise
+func IsInitialized() bool {
+	return k8s.IsInitialized()
 }
