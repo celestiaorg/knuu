@@ -31,6 +31,7 @@ func NewExecutor() (*Executor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error setting cpu '%v':", err)
 	}
+	instance.instanceType = ExecutorInstance
 	err = instance.Start()
 	if err != nil {
 		return nil, fmt.Errorf("error starting instance: %v", err)
