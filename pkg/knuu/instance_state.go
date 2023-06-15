@@ -9,6 +9,7 @@ const (
 	Preparing
 	Committed
 	Started
+	Stopped
 	Destroyed
 )
 
@@ -17,7 +18,7 @@ func (s InstanceState) String() string {
 	if s < 0 || s > 4 {
 		return "Unknown"
 	}
-	return [...]string{"None", "Preparing", "Committed", "Started", "Destroyed"}[s]
+	return [...]string{"None", "Preparing", "Committed", "Started", "Stopped", "Destroyed"}[s]
 }
 
 // IsInState checks if the instance is in one of the provided states
