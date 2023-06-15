@@ -1,15 +1,15 @@
 package k8s
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"github.com/sirupsen/logrus"
-	"time"
+    "context"
+    "errors"
+    "fmt"
+    "github.com/sirupsen/logrus"
+    "time"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+    v1 "k8s.io/api/core/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // GetService retrieves a service.
@@ -17,6 +17,9 @@ func GetService(namespace, name string) (*v1.Service, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	if !IsInitialized() {
+		return nil, fmt.Errorf("knuu is not initialized")
+	}
 	svc, err := Clientset().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error getting service %s: %w", name, err)
@@ -35,6 +38,9 @@ func DeployService(namespace, name string, labels, selectorMap map[string]string
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	if !IsInitialized() {
+		return nil, fmt.Errorf("knuu is not initialized")
+	}
 	serv, err := Clientset().CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating service %s: %w", name, err)
@@ -54,6 +60,9 @@ func PatchService(namespace, name string, labels, selectorMap map[string]string,
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	if !IsInitialized() {
+		return fmt.Errorf("knuu is not initialized")
+	}
 	_, err = Clientset().CoreV1().Services(namespace).Update(ctx, svc, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("error patching service %s: %w", name, err)
@@ -73,6 +82,9 @@ func DeleteService(namespace, name string) error {
 		return fmt.Errorf("error getting service %s: %w", name, err)
 	}
 
+	if !IsInitialized() {
+		return fmt.Errorf("knuu is not initialized")
+	}
 	err = Clientset().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("error deleting service %s: %w", name, err)
