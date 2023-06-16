@@ -216,12 +216,19 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	}
 
 	i.files = append(i.files, dest)
-	err := i.builderFactory.AddFileToBuilder(src, dest, chown)
+	err := i.builderFactory.AddToBuilder(src, dest, chown)
 	if err != nil {
 		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
 	}
 	logrus.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
+}
+
+// AddFolder adds a folder to the instance
+// This function can only be called in the state 'Preparing'
+func (i *Instance) AddFolder(src string, dest string, chown string) error {
+	// As dockers `ADD` works for both files and folders, we can just call AddFile here
+	return i.AddFile(src, dest, chown)
 }
 
 // AddFileBytes adds a file with the given content to the instance
