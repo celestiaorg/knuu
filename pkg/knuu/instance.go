@@ -417,6 +417,7 @@ func (i *Instance) WaitInstanceIsRunning() error {
 }
 
 // DisableNetwork disables the network of the instance
+// This does not apply to executor instances
 // This function can only be called in the state 'Started'
 func (i *Instance) DisableNetwork() error {
 	if !i.IsInState(Started) {
