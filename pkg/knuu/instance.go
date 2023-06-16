@@ -60,6 +60,7 @@ func NewInstance(name string) (*Instance, error) {
 }
 
 // SetImage sets the image of the instance.
+// When calling in state 'Started', make sure to call AddVolume() before.
 // It is only allowed in the 'None' and 'Started' states.
 func (i *Instance) SetImage(image string) error {
 	// Check if setting the image is allowed in the current state
@@ -252,6 +253,20 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 	return nil
 }
 
+// SetUser sets the user for the instance
+// This function can only be called in the state 'Preparing'
+func (i *Instance) SetUser(user string) error {
+	if !i.IsInState(Preparing) {
+		return fmt.Errorf("setting user is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	}
+	err := i.builderFactory.SetUser(user)
+	if err != nil {
+		return fmt.Errorf("error setting user '%s' for instance '%s': %w", user, i.name, err)
+	}
+	logrus.Debugf("Set user '%s' for instance '%s'", user, i.name)
+	return nil
+}
+
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
@@ -366,28 +381,30 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 // Start starts the instance
 // This function can only be called in the state 'Committed'
 func (i *Instance) Start() error {
-	if !i.IsInState(Committed) {
+	if !i.IsInState(Committed, Stopped) {
 		return fmt.Errorf("starting is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-		if svc == nil {
-			err := i.deployService()
-			if err != nil {
-				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-			}
-		} else if svc != nil {
-			err := i.patchService()
-			if err != nil {
-				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+	if i.state == Committed {
+		if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+			logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+			svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+			if svc == nil {
+				err := i.deployService()
+				if err != nil {
+					return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+				}
+			} else if svc != nil {
+				err := i.patchService()
+				if err != nil {
+					return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+				}
 			}
 		}
-	}
-	if len(i.volumes) != 0 {
-		err := i.deployVolume()
-		if err != nil {
-			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+		if len(i.volumes) != 0 {
+			err := i.deployVolume()
+			if err != nil {
+				return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+			}
 		}
 	}
 	err := i.deployPod()
@@ -400,16 +417,66 @@ func (i *Instance) Start() error {
 	return nil
 }
 
+// IsRunning returns true if the instance is running
+// This function can only be called in the state 'Started'
+func (i *Instance) IsRunning() (bool, error) {
+	if !i.IsInState(Started, Stopped) {
+		return false, fmt.Errorf("checking if instance is running is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	return k8s.IsPodRunning(k8s.Namespace(), i.k8sName)
+}
+
 // WaitInstanceIsRunning waits until the instance is running
 // This function can only be called in the state 'Started'
 func (i *Instance) WaitInstanceIsRunning() error {
 	if !i.IsInState(Started) {
 		return fmt.Errorf("waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	err := k8s.WaitPodIsRunning(k8s.Namespace(), i.k8sName)
-	if err != nil {
-		return fmt.Errorf("error waiting for pod '%s' is running: %w", i.k8sName, err)
+	for {
+		running, err := i.IsRunning()
+		if err != nil {
+			return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
+		}
+		if running {
+			break
+		}
 	}
+
+	return nil
+}
+
+// WaitInstanceIsStopped waits until the instance is not running anymore
+// This function can only be called in the state 'Stopped'
+func (i *Instance) WaitInstanceIsStopped() error {
+	if !i.IsInState(Stopped) {
+		return fmt.Errorf("waiting for instance is only allowed in state 'Stopped'. Current state is '%s'", i.state.String())
+	}
+	for {
+		running, err := i.IsRunning()
+		if !running {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
+// Stop stops the instance
+// CAUTION: In order to keep data of the instance, you need to use AddVolume() before.
+// This function can only be called in the state 'Started'
+func (i *Instance) Stop() error {
+	if !i.IsInState(Started) {
+		return fmt.Errorf("stopping is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	err := i.destroyPod()
+	if err != nil {
+		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
+	}
+	i.state = Stopped
+	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
@@ -417,20 +484,23 @@ func (i *Instance) WaitInstanceIsRunning() error {
 // Destroy destroys the instance
 // This function can only be called in the state 'Started' or 'Destroyed'
 func (i *Instance) Destroy() error {
-	if !i.IsInState(Started, Destroyed) {
+	if !i.IsInState(Started, Stopped, Destroyed) {
 		return fmt.Errorf("destroying is only allowed in state 'Started' or 'Destroyed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Destroyed {
 		return nil
 	}
-	i.destroyPod()
+	err := i.destroyPod()
+	if err != nil {
+		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
+	}
 	if len(i.volumes) != 0 {
 		err := i.destroyVolume()
 		if err != nil {
 			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
 		}
 	}
-	err := i.destroyService()
+	err = i.destroyService()
 	if err != nil {
 		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
 	}
