@@ -1,22 +1,22 @@
 package k8s
 
 import (
-    "bytes"
-    "context"
-    "fmt"
-    "io"
-    "k8s.io/apimachinery/pkg/api/resource"
-    "k8s.io/client-go/tools/portforward"
-    "k8s.io/client-go/transport/spdy"
-    "net/http"
-    "strings"
-    "time"
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
+	"net/http"
+	"strings"
+	"time"
 
-    "github.com/sirupsen/logrus"
-    v1 "k8s.io/api/core/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/client-go/kubernetes/scheme"
-    "k8s.io/client-go/tools/remotecommand"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 // getPod retrieves a pod from the given namespace and logs any errors.
@@ -103,24 +103,16 @@ func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
 	return pod, nil
 }
 
-// WaitPodIsRunning waits until a pod in the given namespace is running.
-func WaitPodIsRunning(namespace, name string) error {
-	for {
-		// Get the pod from Kubernetes API server
-		pod, err := getPod(namespace, name)
-		if err != nil { // Handle errors while getting the pod
-			return fmt.Errorf("failed to get pod: %v", err)
-		}
-
-		// Check if the pod is running
-		if pod.Status.Phase == v1.PodRunning {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond) // Wait for 1 second before checking again (to avoid spamming API server)
+// IsPodRunning returns true if the pod is running.
+func IsPodRunning(namespace, name string) (bool, error) {
+	// Get the pod from Kubernetes API server
+	pod, err := getPod(namespace, name)
+	if err != nil {
+		return false, fmt.Errorf("failed to get pod: %v", err)
 	}
 
-	return nil
+	// Check if the pod is running
+	return pod.Status.Phase == v1.PodRunning, nil
 }
 
 // RunCommandInPod runs a command in a container within a pod.
@@ -182,6 +174,7 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 }
 
 // DeletePod deletes a pod with the given name in the specified namespace.
+// Skips the deletion if the pod does not exist.
 func DeletePod(namespace, name string) error {
 	// Get the Pod object from the API server
 	_, err := getPod(namespace, name)
