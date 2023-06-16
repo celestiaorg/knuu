@@ -13,8 +13,7 @@ import (
 var identifier string
 var startTime string
 
-// Initialize initializes knuu
-// Deprecated: Use InitializeWithIdentifier instead
+// Initialize initializes knuug
 func Initialize() error {
 
 	t := time.Now()

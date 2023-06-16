@@ -52,8 +52,8 @@ func (f *BuilderFactory) ExecuteCmdInBuilder(command []string) (string, error) {
 	return "", nil
 }
 
-// AddFileToBuilder adds a file from the source path to the destination path in the image, with the specified ownership.
-func (f *BuilderFactory) AddFileToBuilder(srcPath, destPath, chown string) error {
+// AddToBuilder adds a file from the source path to the destination path in the image, with the specified ownership.
+func (f *BuilderFactory) AddToBuilder(srcPath, destPath, chown string) error {
 	f.dockerFileInstructions = append(f.dockerFileInstructions, "ADD --chown="+chown+" "+srcPath+" "+destPath)
 	return nil
 }
@@ -135,6 +135,12 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 // SetEnvVar sets the value of an environment variable in the builder.
 func (f *BuilderFactory) SetEnvVar(name, value string) error {
 	f.dockerFileInstructions = append(f.dockerFileInstructions, "ENV "+name+"="+value)
+	return nil
+}
+
+// SetUser sets the user in the builder.
+func (f *BuilderFactory) SetUser(user string) error {
+	f.dockerFileInstructions = append(f.dockerFileInstructions, "USER "+user)
 	return nil
 }
 
