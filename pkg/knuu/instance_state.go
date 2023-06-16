@@ -15,7 +15,7 @@ const (
 
 // String returns the string representation of the state
 func (s InstanceState) String() string {
-	if s < 0 || s > 4 {
+	if s < 0 || s > 5 {
 		return "Unknown"
 	}
 	return [...]string{"None", "Preparing", "Committed", "Started", "Stopped", "Destroyed"}[s]
