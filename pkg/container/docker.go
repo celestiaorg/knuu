@@ -52,8 +52,8 @@ func (f *BuilderFactory) ExecuteCmdInBuilder(command []string) (string, error) {
 	return "", nil
 }
 
-// AddFileToBuilder adds a file from the source path to the destination path in the image, with the specified ownership.
-func (f *BuilderFactory) AddFileToBuilder(srcPath, destPath, chown string) error {
+// AddToBuilder adds a file from the source path to the destination path in the image, with the specified ownership.
+func (f *BuilderFactory) AddToBuilder(srcPath, destPath, chown string) error {
 	f.dockerFileInstructions = append(f.dockerFileInstructions, "ADD --chown="+chown+" "+srcPath+" "+destPath)
 	return nil
 }
