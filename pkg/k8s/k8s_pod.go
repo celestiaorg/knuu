@@ -74,13 +74,13 @@ type PodConfig struct {
 	CPURequest    string            // CPU request for the container
 }
 
-// ReplacePod replaces a pod in the given namespace and returns the new Pod object.
-func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
+// ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
+func ReplacePodWithGracePeriod(podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
 	// Log a debug message to indicate that we are replacing a pod
 	logrus.Debugf("Replacing pod %s", podConfig.Name)
 
 	// Delete the existing pod (if any)
-	if err := DeletePod(podConfig.Namespace, podConfig.Name); err != nil {
+	if err := DeletePodWithGracePeriod(podConfig.Namespace, podConfig.Name, gracePeriod); err != nil {
 		return nil, fmt.Errorf("failed to delete pod: %v", err)
 	}
 
@@ -101,6 +101,11 @@ func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
 
 	// Return the newly created pod
 	return pod, nil
+}
+
+// ReplacePod replaces a pod in the given namespace and returns the new Pod object.
+func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
+	return ReplacePodWithGracePeriod(podConfig, nil)
 }
 
 // IsPodRunning returns true if the pod is running.
@@ -173,9 +178,8 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 	return stdout.String(), nil
 }
 
-// DeletePod deletes a pod with the given name in the specified namespace.
-// Skips the deletion if the pod does not exist.
-func DeletePod(namespace, name string) error {
+// DeletePodWithGracePeriod deletes a pod with the given name in the specified namespace.
+func DeletePodWithGracePeriod(namespace, name string, gracePeriodSeconds *int64) error {
 	// Get the Pod object from the API server
 	_, err := getPod(namespace, name)
 	if err != nil {
@@ -190,12 +194,19 @@ func DeletePod(namespace, name string) error {
 	if !IsInitialized() {
 		return fmt.Errorf("knuu is not initialized")
 	}
-	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+	deleteOptions := metav1.DeleteOptions{
+		GracePeriodSeconds: gracePeriodSeconds,
+	}
+	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, deleteOptions); err != nil {
 		return fmt.Errorf("failed to delete pod %s: %v", name, err)
 	}
 
-	logrus.Debugf("Pod %s deleted in namespace %s", name, namespace)
 	return nil
+}
+
+// DeletePod deletes a pod with the given name in the specified namespace.
+func DeletePod(namespace, name string) error {
+	return DeletePodWithGracePeriod(namespace, name, nil)
 }
 
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.

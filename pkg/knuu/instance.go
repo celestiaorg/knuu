@@ -110,6 +110,40 @@ func (i *Instance) SetImage(image string) error {
 	return nil
 }
 
+// SetImageInstant sets the image of the instance without a grace period.
+// Instant means that the pod is replaced without a grace period of 1 second.
+// It is only allowed in the 'Running' state.
+func (i *Instance) SetImageInstant(image string) error {
+	// Check if setting the image is allowed in the current state
+	if !i.IsInState(Started) {
+		return fmt.Errorf("setting image is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+
+	// Generate the pod configuration
+	podConfig := k8s.PodConfig{
+		Namespace:     k8s.Namespace(),
+		Name:          i.k8sName,
+		Labels:        i.kubernetesPod.Labels,
+		Image:         image,
+		Command:       i.command,
+		Args:          i.args,
+		Env:           i.env,
+		Volumes:       i.volumes,
+		MemoryRequest: i.memoryRequest,
+		MemoryLimit:   i.memoryLimit,
+		CPURequest:    i.cpuRequest,
+	}
+	// Replace the pod with a new one, using the given image
+	gracePeriod := int64(1)
+	_, err := k8s.ReplacePodWithGracePeriod(podConfig, &gracePeriod)
+	if err != nil {
+		return fmt.Errorf("error replacing pod: %s", err.Error())
+	}
+	i.WaitInstanceIsRunning()
+
+	return nil
+}
+
 // SetCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (i *Instance) SetCommand(command ...string) error {

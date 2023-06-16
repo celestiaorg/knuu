@@ -3,6 +3,7 @@ package k8s
 
 import (
 	"fmt"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"path/filepath"
 
@@ -93,4 +94,9 @@ func getClusterConfig() (*rest.Config, error) {
 	// If not running in a Kubernetes cluster environment, build the configuration from the kubeconfig file
 	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
+}
+
+// isNotFound checks if the error is a NotFound error
+func isNotFound(err error) bool {
+	return apierrs.IsNotFound(err)
 }
