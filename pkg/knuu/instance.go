@@ -252,6 +252,20 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 	return nil
 }
 
+// SetUser sets the user for the instance
+// This function can only be called in the state 'Preparing'
+func (i *Instance) SetUser(user string) error {
+	if !i.IsInState(Preparing) {
+		return fmt.Errorf("setting user is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	}
+	err := i.builderFactory.SetUser(user)
+	if err != nil {
+		return fmt.Errorf("error setting user '%s' for instance '%s': %w", user, i.name, err)
+	}
+	logrus.Debugf("Set user '%s' for instance '%s'", user, i.name)
+	return nil
+}
+
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
