@@ -62,6 +62,7 @@ func (i *Instance) getLabels() map[string]string {
 		"test-started":                 startTime,
 		"name":                         i.name,
 		"k8s-name":                     i.k8sName,
+		"type":                         i.instanceType.String(),
 	}
 }
 

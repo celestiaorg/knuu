@@ -17,6 +17,7 @@ type Instance struct {
 	imageName         string
 	k8sName           string
 	state             InstanceState
+	instanceType      InstanceType
 	kubernetesService *v1.Service
 	builderFactory    *container.BuilderFactory
 	kubernetesPod     *v1.Pod
@@ -46,6 +47,7 @@ func NewInstance(name string) (*Instance, error) {
 		k8sName:       k8sName,
 		imageName:     "",
 		state:         None,
+		instanceType:  BasicInstance,
 		portsTCP:      make([]int, 0),
 		portsUDP:      make([]int, 0),
 		files:         make([]string, 0),
@@ -452,6 +454,36 @@ func (i *Instance) WaitInstanceIsRunning() error {
 	return nil
 }
 
+// DisableNetwork disables the network of the instance
+// This does not apply to executor instances
+// This function can only be called in the state 'Started'
+func (i *Instance) DisableNetwork() error {
+	if !i.IsInState(Started) {
+		return fmt.Errorf("disabling network is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	executorSelectorMap := map[string]string{
+		"type": ExecutorInstance.String(),
+	}
+	err := k8s.CreateNetworkPolicy(k8s.Namespace(), i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	if err != nil {
+		return fmt.Errorf("error disabling network for instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
+
+// EnableNetwork enables the network of the instance
+// This function can only be called in the state 'Started'
+func (i *Instance) EnableNetwork() error {
+	if !i.IsInState(Started) {
+		return fmt.Errorf("enabling network is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	err := k8s.DeleteNetworkPolicy(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
+
 // WaitInstanceIsStopped waits until the instance is not running anymore
 // This function can only be called in the state 'Stopped'
 func (i *Instance) WaitInstanceIsStopped() error {
@@ -535,6 +567,7 @@ func (i *Instance) Clone() (*Instance, error) {
 		k8sName:           newK8sName,
 		imageName:         i.imageName,
 		state:             i.state,
+		instanceType:      i.instanceType,
 		kubernetesService: i.kubernetesService,
 		builderFactory:    i.builderFactory,
 		kubernetesPod:     i.kubernetesPod,
