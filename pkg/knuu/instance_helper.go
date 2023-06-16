@@ -153,8 +153,12 @@ func (i *Instance) deployPod() error {
 }
 
 // destroyPod destroys the pod for the instance
+// Skips if the pod is already destroyed
 func (i *Instance) destroyPod() error {
-	k8s.DeletePod(k8s.Namespace(), i.k8sName)
+	err := k8s.DeletePod(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return fmt.Errorf("failed to delete pod: %v", err)
+	}
 
 	return nil
 }
