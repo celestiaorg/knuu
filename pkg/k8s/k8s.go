@@ -48,6 +48,11 @@ func Initialize() error {
 	return nil
 }
 
+// IsInitialized checks if the Kubernetes clientset has been initialized.
+func IsInitialized() bool {
+	return clientset != nil
+}
+
 // Namespace returns the current namespace in use.
 func Namespace() string {
 	return namespace

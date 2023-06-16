@@ -25,6 +25,9 @@ func getPod(namespace, name string) (*v1.Pod, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	if !IsInitialized() {
+		return nil, fmt.Errorf("knuu is not initialized")
+	}
 	pod, err := Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pod %s: %w", name, err)
@@ -45,6 +48,9 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 	defer cancel()
 
 	// Try to create the pod
+	if !IsInitialized() {
+		return nil, fmt.Errorf("knuu is not initialized")
+	}
 	createdPod, err := Clientset().CoreV1().Pods(podConfig.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pod: %v", err)
@@ -118,6 +124,9 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 	}
 
 	// Construct the request for executing the command in the specified container
+	if !IsInitialized() {
+		return "", fmt.Errorf("knuu is not initialized")
+	}
 	req := Clientset().CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
@@ -178,6 +187,9 @@ func DeletePod(namespace, name string) error {
 	defer cancel()
 
 	// Delete the pod using the Kubernetes client API
+	if !IsInitialized() {
+		return fmt.Errorf("knuu is not initialized")
+	}
 	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete pod %s: %v", name, err)
 	}
@@ -401,6 +413,9 @@ func PortForwardPod(namespace string, podName string, localPort int, remotePort 
 	}
 
 	// Setup the port forwarding
+	if !IsInitialized() {
+		return fmt.Errorf("knuu is not initialized")
+	}
 	url := Clientset().CoreV1().RESTClient().Post().
 		Resource("pods").
 		Namespace(namespace).
