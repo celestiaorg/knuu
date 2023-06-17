@@ -242,9 +242,9 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 	return "", nil
 }
 
-// AddFile adds a file to the instance
+// Add adds to the instance
 // This function can only be called in the state 'Preparing'
-func (i *Instance) AddFile(src string, dest string, chown string) error {
+func (i *Instance) Add(src string, dest string, chown string) error {
 	if !i.IsInState(Preparing) {
 		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
@@ -258,11 +258,18 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	return nil
 }
 
+// AddFile adds a file to the instance
+// This function can only be called in the state 'Preparing'
+func (i *Instance) AddFile(src string, dest string, chown string) error {
+	// As dockers `ADD` works for both files and folders, we can just call Add here
+	return i.AddFile(src, dest, chown)
+}
+
 // AddFolder adds a folder to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	// As dockers `ADD` works for both files and folders, we can just call AddFile here
-	return i.AddFile(src, dest, chown)
+	// As dockers `ADD` works for both files and folders, we can just call Add here
+	return i.Add(src, dest, chown)
 }
 
 // AddFileBytes adds a file with the given content to the instance
@@ -291,7 +298,7 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 		return fmt.Errorf("error writing file: %w", err)
 	}
 
-	i.AddFile(file, dest, chown)
+	i.Add(file, dest, chown)
 
 	return nil
 }
