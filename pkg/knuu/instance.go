@@ -598,6 +598,5 @@ func (i *Instance) Clone() (*Instance, error) {
 	// Create a new instance with the same attributes as the original instance
 	ins := i.cloneWithSuffix("")
 	ins.k8sName = newK8sName
-	ins.instanceType = i.instanceType
 	return ins, nil
 }

@@ -191,6 +191,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		k8sName:           i.k8sName + suffix,
 		imageName:         i.imageName,
 		state:             i.state,
+		instanceType:      i.instanceType,
 		kubernetesService: i.kubernetesService,
 		builderFactory:    i.builderFactory,
 		kubernetesPod:     i.kubernetesPod,
