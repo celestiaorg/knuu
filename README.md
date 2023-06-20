@@ -165,13 +165,18 @@ To run all tests in the current directory, you can run:
 go test -v ./...
 ```
 
-<!---
 ## Contributing
 
-We warmly welcome and appreciate contributions from the community! By participating in this project, you agree to abide by the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md).
+We warmly welcome and appreciate contributions.
+<!---
+By participating in this project, you agree to abide by the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
+--->
 
+To ensure that your contribution is working as expected, please run [knuu-example](https://github.com/celestiaorg/knuu-example) with your fork and branch.
+
+<!---
 ## Governance
 
 [Describe the governance model for your project. Reference the GOVERNANCE.md file.]
