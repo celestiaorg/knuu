@@ -596,24 +596,7 @@ func (i *Instance) Clone() (*Instance, error) {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", i.name, err)
 	}
 	// Create a new instance with the same attributes as the original instance
-	return &Instance{
-		name:              i.name,
-		k8sName:           newK8sName,
-		imageName:         i.imageName,
-		state:             i.state,
-		instanceType:      i.instanceType,
-		kubernetesService: i.kubernetesService,
-		builderFactory:    i.builderFactory,
-		kubernetesPod:     i.kubernetesPod,
-		portsTCP:          i.portsTCP,
-		portsUDP:          i.portsUDP,
-		files:             i.files,
-		command:           i.command,
-		args:              i.args,
-		env:               i.env,
-		volumes:           i.volumes,
-		memoryRequest:     i.memoryRequest,
-		memoryLimit:       i.memoryLimit,
-		cpuRequest:        i.cpuRequest,
-	}, nil
+	ins := i.cloneWithSuffix("")
+	ins.k8sName = newK8sName
+	return ins, nil
 }
