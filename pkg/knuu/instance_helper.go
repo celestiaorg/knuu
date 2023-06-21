@@ -261,7 +261,6 @@ func (i *Instance) validateFileArgs(src string, dest string, chown string) error
 
 // addFileToBuilder adds a file to the builder
 func (i *Instance) addFileToBuilder(src string, dest string, chown string) error {
-	i.files = append(i.files, dest)
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
 	err := i.builderFactory.AddToBuilder(dest, dest, chown)
 	if err != nil {

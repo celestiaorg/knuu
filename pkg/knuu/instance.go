@@ -23,7 +23,6 @@ type Instance struct {
 	kubernetesPod     *v1.Pod
 	portsTCP          []int
 	portsUDP          []int
-	files             []string
 	command           []string
 	args              []string
 	env               map[string]string
@@ -50,7 +49,6 @@ func NewInstance(name string) (*Instance, error) {
 		instanceType:  BasicInstance,
 		portsTCP:      make([]int, 0),
 		portsUDP:      make([]int, 0),
-		files:         make([]string, 0),
 		command:       make([]string, 0),
 		args:          make([]string, 0),
 		env:           make(map[string]string),
