@@ -4,7 +4,7 @@
 
 ## Description
 
-Knuu is an open-source project, and the goal of knuu is to provide a framework for writing integration tests.
+The goal of knuu is to provide a framework for writing integration tests.
 The framework is written in Go and is designed to be used in Go projects.
 The idea is to provide a framework that uses the power of containers and Kubernetes without the test writer having to know the details of how to use them.
 
@@ -23,11 +23,11 @@ Some of the features of knuu are:
     - Disable networking to simulate network outages
 - Configure Storage
 - Execute Commands
-- Configure resources
+- Configure HW resources
 - Create a pool of Instances and control them as a group
-- And more to come...
+- See this issue for more upcoming features: [#91](https://github.com/celestiaorg/knuu/issues/91)
 
-> If you have feedback on the framework, want to report a bug, or suggest an improvement, please create an issue.
+> If you have feedback on the framework, want to report a bug, or suggest an improvement, please create an issue [here](https://github.com/celestiaorg/knuu/issues/new/choose).
 
 ## Getting Started
 
@@ -35,9 +35,11 @@ This section will guide you on how to set up and run **knuu**.
 
 ### Prerequisites
 
-1. **Docker**: Knuu requires Docker to run. You can install Docker by following the instructions [here](https://docs.docker.com/get-docker/).
+1. **Docker**: Knuu requires Docker to run
+   > You can install Docker by following the instructions [here](https://docs.docker.com/get-docker/).
 
 2. **Kubernetes cluster**: Set up access to a Kubernetes cluster using a kubeconfig.
+   > In case you have no Kubernets cluster running yet, you can get more information [here](https://kubernetes.io/docs/setup/).
 
 3. **'test' Namespace**: Create a namespace called 'test' in your Kubernetes cluster.
    > **Note:** The used namespace can be changed by setting the `KNUU_NAMESPACE` environment variable.
@@ -58,7 +60,9 @@ Simple example:
     )
     ```
 
-2. Create a file called `main_test.go` with the following content to initialize knuu:
+2. Run `go mod tidy` to download the dependencies.
+
+3. Create a file called `main_test.go` with the following content to initialize knuu:
 
     ```go
     package main
@@ -85,7 +89,7 @@ Simple example:
     }
     ```
 
-3. Create a file called `example_test.go` with the following content:
+4. Create a file called `example_test.go` with the following content:
 
     ```go
    package main
