@@ -9,11 +9,11 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -24,10 +24,11 @@ type BuilderFactory struct {
 	imageNameTo            string
 	cli                    *client.Client
 	dockerFileInstructions []string
+	context                string
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
-func NewBuilderFactory(imageName string) (*BuilderFactory, error) {
+func NewBuilderFactory(imageName string, buildContext string) (*BuilderFactory, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
@@ -36,6 +37,7 @@ func NewBuilderFactory(imageName string) (*BuilderFactory, error) {
 		imageNameFrom:          imageName,
 		cli:                    cli,
 		dockerFileInstructions: []string{"FROM " + imageName},
+		context:                buildContext,
 	}, nil
 }
 
@@ -158,18 +160,18 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return nil
 	}
 
-	// Generate a UUID
-	uuid, err := uuid.NewRandom()
-	if err != nil {
-		return fmt.Errorf("failed to generate UUID: %w", err)
-	}
-
 	f.imageNameTo = imageName
 
-	// Create a Dockerfile with a unique name
-	dockerFileName := fmt.Sprintf("Dockerfile_%s", uuid.String())
+	dockerFilePath := filepath.Join(f.context, "Dockerfile")
+	// create path if it does not exist
+	if _, err := os.Stat(f.context); os.IsNotExist(err) {
+		err = os.MkdirAll(f.context, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create context directory: %w", err)
+		}
+	}
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
-	err = os.WriteFile(dockerFileName, []byte(dockerFile), 0644)
+	err := os.WriteFile(dockerFilePath, []byte(dockerFile), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
@@ -191,7 +193,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	}
 
 	// Build the Docker image using buildx
-	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, ".", "-f", dockerFileName)
+	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, f.context)
 	err = runCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to build image: %w", err)
@@ -204,10 +206,10 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return fmt.Errorf("failed to push image: %w", err)
 	}
 
-	// Remove the Dockerfile
-	err = os.Remove(dockerFileName)
+	// Remove the context directory
+	err = os.RemoveAll(f.context)
 	if err != nil {
-		return fmt.Errorf("failed to remove Dockerfile: %w", err)
+		return fmt.Errorf("failed to remove context directory: %w", err)
 	}
 
 	return nil
