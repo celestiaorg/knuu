@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"io"
 	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
@@ -76,7 +76,7 @@ func (i *Instance) SetImage(image string) error {
 	switch i.state {
 	case None:
 		// Use the builder to build a new image
-		factory, err := container.NewBuilderFactory(image)
+		factory, err := container.NewBuilderFactory(image, i.getBuildDir())
 		//builder, storage, err := container.NewBuilder(context, image)
 		if err != nil {
 			return fmt.Errorf("error creating builder: %s", err.Error())
@@ -249,11 +249,43 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 
-	i.files = append(i.files, dest)
-	err := i.builderFactory.AddToBuilder(src, dest, chown)
-	if err != nil {
-		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
+	i.validateFileArgs(src, dest, chown)
+
+	// check if src exists (either as file or as folder)
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return fmt.Errorf("src '%s' does not exist", src)
 	}
+
+	// copy file to build dir
+	dstPath := filepath.Join(i.getBuildDir(), dest)
+
+	// make sure dir exists
+	err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("error creating directory: %w", err)
+	}
+	// Create destination file making sure the path is writeable.
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file '%s': %w", dstPath, err)
+	}
+	defer dst.Close()
+
+	// Open source file for reading.
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file '%s': %w", src, err)
+	}
+	defer srcFile.Close()
+
+	// Copy the contents from source file to destination file
+	_, err = io.Copy(dst, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy from source '%s' to destination '%s': %w", src, dstPath, err)
+	}
+
+	i.addFileToBuilder(src, dest, chown)
+
 	logrus.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
 }
@@ -261,8 +293,48 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 // AddFolder adds a folder to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	// As dockers `ADD` works for both files and folders, we can just call AddFile here
-	return i.AddFile(src, dest, chown)
+	if !i.IsInState(Preparing) {
+		return fmt.Errorf("adding folder is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	}
+
+	i.validateFileArgs(src, dest, chown)
+
+	// check if src exists (should be a folder)
+	srcInfo, err := os.Stat(src)
+	if os.IsNotExist(err) || !srcInfo.IsDir() {
+		return fmt.Errorf("src '%s' does not exist or is not a directory", src)
+	}
+
+	// iterate over the files/directories in the src
+	err = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// create the destination path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(i.getBuildDir(), dest, relPath)
+
+		if info.IsDir() {
+			// create directory at destination path
+			return os.MkdirAll(dstPath, os.ModePerm)
+		} else {
+			// copy file to destination path
+			return i.AddFile(path, filepath.Join(dest, relPath), chown)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error copying folder '%s' to instance '%s': %w", src, i.name, err)
+	}
+
+	logrus.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
+	return nil
 }
 
 // AddFileBytes adds a file with the given content to the instance
@@ -272,28 +344,23 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
 	}
 
-	uuid, err := uuid.NewRandom()
+	// create a temporary file
+	tmpfile, err := os.CreateTemp("", "temp")
 	if err != nil {
-		return fmt.Errorf("error creating uuid: %w", err)
+		return err
 	}
-	file := "./tmp/" + uuid.String() + "/" + dest
-	filePath := filepath.Dir(file)
+	defer os.Remove(tmpfile.Name()) // clean up
 
-	// write to a file in the ./<uuid> directory, make sure dir exists
-	err = os.MkdirAll(filePath, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("error creating directory: %w", err)
+	// write bytes to the temporary file
+	if _, err := tmpfile.Write(bytes); err != nil {
+		return err
 	}
-
-	// write to a file in the ./<uuid> directory
-	err = os.WriteFile(file, bytes, 0644)
-	if err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+	if err := tmpfile.Close(); err != nil {
+		return err
 	}
 
-	i.AddFile(file, dest, chown)
-
-	return nil
+	// use AddFile to copy the temp file to the destination
+	return i.AddFile(tmpfile.Name(), dest, chown)
 }
 
 // SetUser sets the user for the instance

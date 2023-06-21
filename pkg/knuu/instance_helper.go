@@ -7,6 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
+	"path/filepath"
+	"strings"
 )
 
 // getImageRegistry returns the name of the temporary image registry
@@ -229,4 +231,42 @@ func getFreePortTCP() (int, error) {
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	return port, nil
+}
+
+// getBuildDir returns the build directory for the instance
+func (i *Instance) getBuildDir() string {
+	return filepath.Join("/tmp", "knuu", i.k8sName)
+}
+
+// validateFileArgs validates the file arguments
+func (i *Instance) validateFileArgs(src string, dest string, chown string) error {
+	// check src
+	if src == "" {
+		return fmt.Errorf("src must be set")
+	}
+	// check dest
+	if dest == "" {
+		return fmt.Errorf("dest must be set")
+	}
+	// check chown
+	if chown == "" {
+		return fmt.Errorf("chown must be set")
+	}
+	// validate chown format
+	if !strings.Contains(chown, ":") || len(strings.Split(chown, ":")) != 2 {
+		return fmt.Errorf("chown must be in format 'user:group'")
+	}
+
+	return nil
+}
+
+// addFileToBuilder adds a file to the builder
+func (i *Instance) addFileToBuilder(src string, dest string, chown string) error {
+	i.files = append(i.files, dest)
+	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
+	err := i.builderFactory.AddToBuilder(dest, dest, chown)
+	if err != nil {
+		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
+	}
+	return nil
 }
