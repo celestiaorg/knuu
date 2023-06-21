@@ -199,7 +199,6 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		kubernetesPod:     i.kubernetesPod,
 		portsTCP:          i.portsTCP,
 		portsUDP:          i.portsUDP,
-		files:             i.files,
 		command:           i.command,
 		args:              i.args,
 		env:               i.env,
