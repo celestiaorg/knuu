@@ -546,7 +546,7 @@ func (i *Instance) WaitInstanceIsRunning() error {
 	if !i.IsInState(Started) {
 		return fmt.Errorf("waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(1 * time.Minute)
 	tick := time.Tick(1 * time.Second)
 
 	for {
