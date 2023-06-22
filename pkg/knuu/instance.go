@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Instance represents a instance
@@ -522,6 +523,11 @@ func (i *Instance) Start() error {
 	i.state = Started
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
+	err = i.WaitInstanceIsRunning()
+	if err != nil {
+		return fmt.Errorf("error waiting for instance '%s' to be running: %w", i.k8sName, err)
+	}
+
 	return nil
 }
 
@@ -540,13 +546,21 @@ func (i *Instance) WaitInstanceIsRunning() error {
 	if !i.IsInState(Started) {
 		return fmt.Errorf("waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
+	timeout := time.After(5 * time.Minute)
+	tick := time.Tick(1 * time.Second)
+
 	for {
-		running, err := i.IsRunning()
-		if err != nil {
-			return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
-		}
-		if running {
-			break
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout while waiting for instance '%s' to be running", i.k8sName)
+		case <-tick:
+			running, err := i.IsRunning()
+			if err != nil {
+				return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
+			}
+			if running {
+				return nil
+			}
 		}
 	}
 
