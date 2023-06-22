@@ -59,6 +59,22 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 	return createdPod, nil
 }
 
+// Volume represents a volume.
+type Volume struct {
+	Path  string
+	Size  string
+	Owner int64
+}
+
+// NewVolume creates a new volume with the given path, size and owner.
+func NewVolume(path, size string, owner int64) *Volume {
+	return &Volume{
+		Path:  path,
+		Size:  size,
+		Owner: owner,
+	}
+}
+
 // PodConfig contains the specifications for creating a new Pod object
 type PodConfig struct {
 	Namespace     string            // Kubernetes namespace of the Pod
@@ -68,7 +84,7 @@ type PodConfig struct {
 	Command       []string          // Command to run in the container
 	Args          []string          // Arguments to pass to the command in the container
 	Env           map[string]string // Environment variables to set in the container
-	Volumes       map[string]string // Volumes to mount in the Pod
+	Volumes       []*Volume         // Volumes to mount in the Pod
 	MemoryRequest string            // Memory request for the container
 	MemoryLimit   string            // Memory limit for the container
 	CPURequest    string            // CPU request for the container
@@ -245,7 +261,7 @@ func buildPodVolumes(name string, volumesAmount int) ([]v1.Volume, error) {
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeMount, error) {
+func buildContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
 	var containerVolumes []v1.VolumeMount
 
 	if len(volumes) == 0 {
@@ -253,11 +269,11 @@ func buildContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeM
 	}
 
 	// iterate over the volumes map, add each volume to the containerVolumes
-	for path, _ := range volumes {
+	for _, volume := range volumes {
 		containerVolumes = append(containerVolumes, v1.VolumeMount{
 			Name:      name,
-			MountPath: path,
-			SubPath:   strings.TrimLeft(path, "/"),
+			MountPath: volume.Path,
+			SubPath:   strings.TrimLeft(volume.Path, "/"),
 		})
 	}
 
@@ -265,7 +281,7 @@ func buildContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeM
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
-func buildInitContainerVolumes(name string, volumes map[string]string) ([]v1.VolumeMount, error) {
+func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
 	if len(volumes) == 0 {
 		return []v1.VolumeMount{}, nil // return empty slice if no volumes are specified
 	}
@@ -281,14 +297,14 @@ func buildInitContainerVolumes(name string, volumes map[string]string) ([]v1.Vol
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(name string, volumes map[string]string) ([]string, error) {
+func buildInitContainerCommand(name string, volumes []*Volume) ([]string, error) {
 	if len(volumes) == 0 {
 		return []string{}, nil // return empty slice if no volumes are specified
 	}
 
 	var command []string = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
-	for path := range volumes {                 // use _ as the blank identifier since we're not using the value of the map element
-		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s", path, path, path)
+	for _, volume := range volumes {
+		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
 		command = append(command, cmd) // add each command to the command slice
 	}
 
@@ -370,10 +386,15 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 			return nil, fmt.Errorf("failed to create init container command: %w", err)
 		}
 
+		user := int64(0)
+
 		initContainers = []v1.Container{
 			{
-				Name:         "volume-whatever",
-				Image:        image,
+				Name:  "volume-whatever",
+				Image: image,
+				SecurityContext: &v1.SecurityContext{
+					RunAsUser: &user,
+				},
 				Command:      initContainerCommand,
 				VolumeMounts: initContainerVolumes,
 			},

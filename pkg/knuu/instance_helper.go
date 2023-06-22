@@ -169,8 +169,8 @@ func (i *Instance) destroyPod() error {
 // deployVolume deploys the volume for the instance
 func (i *Instance) deployVolume() error {
 	size := resource.Quantity{}
-	for _, volumeSize := range i.volumes {
-		size.Add(resource.MustParse(volumeSize))
+	for _, volume := range i.volumes {
+		size.Add(resource.MustParse(volume.Size))
 	}
 	k8s.DeployPersistentVolumeClaim(k8s.Namespace(), i.k8sName, i.getLabels(), size)
 	logrus.Debugf("Deployed persistent volume '%s'", i.k8sName)

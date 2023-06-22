@@ -27,7 +27,7 @@ type Instance struct {
 	command           []string
 	args              []string
 	env               map[string]string
-	volumes           map[string]string
+	volumes           []*k8s.Volume
 	memoryRequest     string
 	memoryLimit       string
 	cpuRequest        string
@@ -53,7 +53,7 @@ func NewInstance(name string) (*Instance, error) {
 		command:       make([]string, 0),
 		args:          make([]string, 0),
 		env:           make(map[string]string),
-		volumes:       make(map[string]string),
+		volumes:       make([]*k8s.Volume, 0),
 		memoryRequest: "",
 		memoryLimit:   "",
 		cpuRequest:    "",
@@ -405,13 +405,22 @@ func (i *Instance) Commit() error {
 }
 
 // AddVolume adds a volume to the instance
+// The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolume(name string, size string) error {
+func (i *Instance) AddVolume(path string, size string) error {
+	i.AddVolumeWithOwner(path, size, 0)
+	return nil
+}
+
+// AddVolumeWithOwner adds a volume to the instance with the given owner
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) AddVolumeWithOwner(path string, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("adding volume is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.volumes[name] = size
-	logrus.Debugf("Added volume '%s' with size '%s' to instance '%s'", name, size, i.name)
+	volume := k8s.NewVolume(path, size, owner)
+	i.volumes = append(i.volumes, volume)
+	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
 	return nil
 }
 
