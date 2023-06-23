@@ -6,6 +6,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
 	"io"
+	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
@@ -14,23 +15,23 @@ import (
 
 // Instance represents a instance
 type Instance struct {
-	name              string
-	imageName         string
-	k8sName           string
-	state             InstanceState
-	instanceType      InstanceType
-	kubernetesService *v1.Service
-	builderFactory    *container.BuilderFactory
-	kubernetesPod     *v1.Pod
-	portsTCP          []int
-	portsUDP          []int
-	command           []string
-	args              []string
-	env               map[string]string
-	volumes           []*k8s.Volume
-	memoryRequest     string
-	memoryLimit       string
-	cpuRequest        string
+	name                  string
+	imageName             string
+	k8sName               string
+	state                 InstanceState
+	instanceType          InstanceType
+	kubernetesService     *v1.Service
+	builderFactory        *container.BuilderFactory
+	kubernetesStatefulSet *appv1.StatefulSet
+	portsTCP              []int
+	portsUDP              []int
+	command               []string
+	args                  []string
+	env                   map[string]string
+	volumes               []*k8s.Volume
+	memoryRequest         string
+	memoryLimit           string
+	cpuRequest            string
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -88,7 +89,7 @@ func (i *Instance) SetImage(image string) error {
 		podConfig := k8s.PodConfig{
 			Namespace:     k8s.Namespace(),
 			Name:          i.k8sName,
-			Labels:        i.kubernetesPod.Labels,
+			Labels:        i.kubernetesStatefulSet.Labels,
 			Image:         image,
 			Command:       i.command,
 			Args:          i.args,
@@ -98,8 +99,17 @@ func (i *Instance) SetImage(image string) error {
 			MemoryLimit:   i.memoryLimit,
 			CPURequest:    i.cpuRequest,
 		}
+		// Generate the statefulset configuration
+		statefulSetConfig := k8s.StatefulSetConfig{
+			Namespace: k8s.Namespace(),
+			Name:      i.k8sName,
+			Labels:    i.kubernetesStatefulSet.Labels,
+			Replicas:  1,
+			PodConfig: podConfig,
+		}
+
 		// Replace the pod with a new one, using the given image
-		_, err = k8s.ReplacePod(podConfig)
+		_, err = k8s.ReplaceStatefulSet(statefulSetConfig)
 		if err != nil {
 			return fmt.Errorf("error replacing pod: %s", err.Error())
 		}
@@ -122,7 +132,7 @@ func (i *Instance) SetImageInstant(image string) error {
 	podConfig := k8s.PodConfig{
 		Namespace:     k8s.Namespace(),
 		Name:          i.k8sName,
-		Labels:        i.kubernetesPod.Labels,
+		Labels:        i.kubernetesStatefulSet.Labels,
 		Image:         image,
 		Command:       i.command,
 		Args:          i.args,
@@ -132,9 +142,18 @@ func (i *Instance) SetImageInstant(image string) error {
 		MemoryLimit:   i.memoryLimit,
 		CPURequest:    i.cpuRequest,
 	}
+	// Generate the statefulset configuration
+	statefulSetConfig := k8s.StatefulSetConfig{
+		Namespace: k8s.Namespace(),
+		Name:      i.k8sName,
+		Labels:    i.kubernetesStatefulSet.Labels,
+		Replicas:  1,
+		PodConfig: podConfig,
+	}
+
 	// Replace the pod with a new one, using the given image
 	gracePeriod := int64(1)
-	_, err := k8s.ReplacePodWithGracePeriod(podConfig, &gracePeriod)
+	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, &gracePeriod)
 	if err != nil {
 		return fmt.Errorf("error replacing pod: %s", err.Error())
 	}
@@ -194,7 +213,11 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 		return -1, fmt.Errorf("error getting free port: %v", err)
 	}
 	// Forward the port
-	err = k8s.PortForwardPod(k8s.Namespace(), i.k8sName, localPort, port)
+	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return -1, fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+	}
+	err = k8s.PortForwardPod(k8s.Namespace(), pod.Name, localPort, port)
 	if err != nil {
 		return -1, fmt.Errorf("error forwarding port: %v", err)
 	}
@@ -229,7 +252,11 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		}
 		return output, nil
 	} else if i.IsInState(Started) {
-		output, err := k8s.RunCommandInPod(k8s.Namespace(), i.k8sName, i.k8sName, command)
+		pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+		if err != nil {
+			return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		}
+		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, command)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in started instance '%s': %v", command, i.k8sName, err)
 		}
@@ -546,7 +573,7 @@ func (i *Instance) IsRunning() (bool, error) {
 	if !i.IsInState(Started, Stopped) {
 		return false, fmt.Errorf("checking if instance is running is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	return k8s.IsPodRunning(k8s.Namespace(), i.k8sName)
+	return k8s.IsStatefulSetRunning(k8s.Namespace(), i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running

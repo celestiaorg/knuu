@@ -348,11 +348,9 @@ func buildResources(memoryRequest string, memoryLimit string, cpuRequest string)
 	return resources, nil
 }
 
-// preparePod prepares a pod configuration.
-func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
-	namespace := spec.Namespace
+// preparePodSpec prepares a pod spec configuration.
+func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	name := spec.Name
-	labels := spec.Labels
 	image := spec.Image
 	command := spec.Command
 	args := spec.Args
@@ -365,13 +363,13 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	// Build pod volumes from the given map
 	podVolumes, err := buildPodVolumes(name, len(volumes))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pod volumes: %w", err)
+		return v1.PodSpec{}, fmt.Errorf("failed to build pod volumes: %v", err)
 	}
 
 	// Build container volumes from the given map
 	containerVolumes, err := buildContainerVolumes(name, volumes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create container volumes: %w", err)
+		return v1.PodSpec{}, fmt.Errorf("failed to build container volumes: %v", err)
 	}
 
 	var initContainers []v1.Container
@@ -379,11 +377,11 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 		// Build init containers volumes and command from the given map
 		initContainerVolumes, err := buildInitContainerVolumes(name, volumes)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create init container volumes: %w", err)
+			return v1.PodSpec{}, fmt.Errorf("failed to build init container volumes: %v", err)
 		}
 		initContainerCommand, err := buildInitContainerCommand(name, volumes)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create init container command: %w", err)
+			return v1.PodSpec{}, fmt.Errorf("failed to build init container command: %v", err)
 		}
 
 		user := int64(0)
@@ -404,7 +402,38 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	var resources v1.ResourceRequirements
 	resources, err = buildResources(spec.MemoryRequest, spec.MemoryLimit, spec.CPURequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource configuration: %w", err)
+		return v1.PodSpec{}, fmt.Errorf("failed to build resources: %v", err)
+	}
+
+	podSpec := v1.PodSpec{
+
+		InitContainers: initContainers,
+		Containers: []v1.Container{
+			{
+				Name:         name,
+				Image:        image,
+				Command:      command,
+				Args:         args,
+				Env:          podEnv,
+				VolumeMounts: containerVolumes,
+				Resources:    resources,
+			},
+		},
+		Volumes: podVolumes,
+	}
+
+	return podSpec, nil
+}
+
+// preparePod prepares a pod configuration.
+func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
+	namespace := spec.Namespace
+	name := spec.Name
+	labels := spec.Labels
+
+	podSpec, err := preparePodSpec(spec, init)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pod spec: %w", err)
 	}
 
 	// Construct the Pod object using the above data
@@ -414,21 +443,7 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 			Name:      name,
 			Labels:    labels,
 		},
-		Spec: v1.PodSpec{
-			InitContainers: initContainers,
-			Containers: []v1.Container{
-				{
-					Name:         name,
-					Image:        image,
-					Command:      command,
-					Args:         args,
-					Env:          podEnv,
-					VolumeMounts: containerVolumes,
-					Resources:    resources,
-				},
-			},
-			Volumes: podVolumes,
-		},
+		Spec: podSpec,
 	}
 
 	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)

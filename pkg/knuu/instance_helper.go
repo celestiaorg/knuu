@@ -139,17 +139,25 @@ func (i *Instance) deployPod() error {
 		CPURequest:    i.cpuRequest,
 	}
 
-	// Deploy the pod
-	pod, err := k8s.DeployPod(podConfig, true)
+	statefulSetConfig := k8s.StatefulSetConfig{
+		Namespace: k8s.Namespace(),
+		Name:      i.k8sName,
+		Labels:    labels,
+		Replicas:  1,
+		PodConfig: podConfig,
+	}
+
+	// Deploy the statefulSet
+	statefulSet, err := k8s.DeployStatefulSet(statefulSetConfig, true)
 	if err != nil {
 		return fmt.Errorf("failed to deploy pod: %v", err)
 	}
 
 	// Set the state of the instance to started
-	i.kubernetesPod = pod
+	i.kubernetesStatefulSet = statefulSet
 
 	// Log the deployment of the pod
-	logrus.Debugf("Started pod '%s'", i.k8sName)
+	logrus.Debugf("Started statefulSet '%s'", i.k8sName)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -158,7 +166,7 @@ func (i *Instance) deployPod() error {
 // destroyPod destroys the pod for the instance
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod() error {
-	err := k8s.DeletePod(k8s.Namespace(), i.k8sName)
+	err := k8s.DeleteStatefulSet(k8s.Namespace(), i.k8sName)
 	if err != nil {
 		return fmt.Errorf("failed to delete pod: %v", err)
 	}
@@ -189,23 +197,23 @@ func (i *Instance) destroyVolume() error {
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	return &Instance{
-		name:              i.name + suffix,
-		k8sName:           i.k8sName + suffix,
-		imageName:         i.imageName,
-		state:             i.state,
-		instanceType:      i.instanceType,
-		kubernetesService: i.kubernetesService,
-		builderFactory:    i.builderFactory,
-		kubernetesPod:     i.kubernetesPod,
-		portsTCP:          i.portsTCP,
-		portsUDP:          i.portsUDP,
-		command:           i.command,
-		args:              i.args,
-		env:               i.env,
-		volumes:           i.volumes,
-		memoryRequest:     i.memoryRequest,
-		memoryLimit:       i.memoryLimit,
-		cpuRequest:        i.cpuRequest,
+		name:                  i.name + suffix,
+		k8sName:               i.k8sName + suffix,
+		imageName:             i.imageName,
+		state:                 i.state,
+		instanceType:          i.instanceType,
+		kubernetesService:     i.kubernetesService,
+		builderFactory:        i.builderFactory,
+		kubernetesStatefulSet: i.kubernetesStatefulSet,
+		portsTCP:              i.portsTCP,
+		portsUDP:              i.portsUDP,
+		command:               i.command,
+		args:                  i.args,
+		env:                   i.env,
+		volumes:               i.volumes,
+		memoryRequest:         i.memoryRequest,
+		memoryLimit:           i.memoryLimit,
+		cpuRequest:            i.cpuRequest,
 	}
 }
 
