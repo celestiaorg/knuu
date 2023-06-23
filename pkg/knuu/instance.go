@@ -32,6 +32,7 @@ type Instance struct {
 	memoryRequest         string
 	memoryLimit           string
 	cpuRequest            string
+	serviceAccountName    string
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -44,20 +45,21 @@ func NewInstance(name string) (*Instance, error) {
 	}
 	// Create the instance
 	return &Instance{
-		name:          name,
-		k8sName:       k8sName,
-		imageName:     "",
-		state:         None,
-		instanceType:  BasicInstance,
-		portsTCP:      make([]int, 0),
-		portsUDP:      make([]int, 0),
-		command:       make([]string, 0),
-		args:          make([]string, 0),
-		env:           make(map[string]string),
-		volumes:       make([]*k8s.Volume, 0),
-		memoryRequest: "",
-		memoryLimit:   "",
-		cpuRequest:    "",
+		name:               name,
+		k8sName:            k8sName,
+		imageName:          "",
+		state:              None,
+		instanceType:       BasicInstance,
+		portsTCP:           make([]int, 0),
+		portsUDP:           make([]int, 0),
+		command:            make([]string, 0),
+		args:               make([]string, 0),
+		env:                make(map[string]string),
+		volumes:            make([]*k8s.Volume, 0),
+		memoryRequest:      "",
+		memoryLimit:        "",
+		cpuRequest:         "",
+		serviceAccountName: "default",
 	}, nil
 }
 
@@ -87,17 +89,18 @@ func (i *Instance) SetImage(image string) error {
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace:     k8s.Namespace(),
-			Name:          i.k8sName,
-			Labels:        i.kubernetesStatefulSet.Labels,
-			Image:         image,
-			Command:       i.command,
-			Args:          i.args,
-			Env:           i.env,
-			Volumes:       i.volumes,
-			MemoryRequest: i.memoryRequest,
-			MemoryLimit:   i.memoryLimit,
-			CPURequest:    i.cpuRequest,
+			Namespace:          k8s.Namespace(),
+			Name:               i.k8sName,
+			Labels:             i.kubernetesStatefulSet.Labels,
+			Image:              image,
+			Command:            i.command,
+			Args:               i.args,
+			Env:                i.env,
+			Volumes:            i.volumes,
+			MemoryRequest:      i.memoryRequest,
+			MemoryLimit:        i.memoryLimit,
+			CPURequest:         i.cpuRequest,
+			ServiceAccountName: i.serviceAccountName,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -130,17 +133,18 @@ func (i *Instance) SetImageInstant(image string) error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:     k8s.Namespace(),
-		Name:          i.k8sName,
-		Labels:        i.kubernetesStatefulSet.Labels,
-		Image:         image,
-		Command:       i.command,
-		Args:          i.args,
-		Env:           i.env,
-		Volumes:       i.volumes,
-		MemoryRequest: i.memoryRequest,
-		MemoryLimit:   i.memoryLimit,
-		CPURequest:    i.cpuRequest,
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             i.kubernetesStatefulSet.Labels,
+		Image:              image,
+		Command:            i.command,
+		Args:               i.args,
+		Env:                i.env,
+		Volumes:            i.volumes,
+		MemoryRequest:      i.memoryRequest,
+		MemoryLimit:        i.memoryLimit,
+		CPURequest:         i.cpuRequest,
+		ServiceAccountName: i.serviceAccountName,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -521,6 +525,17 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 		return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
 	}
 	return bytes, nil
+}
+
+// SetServiceAccount sets the service account of the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetServiceAccount(serviceAccount string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting service account is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.serviceAccountName = serviceAccount
+	logrus.Debugf("Set service account to '%s' in instance '%s'", serviceAccount, i.name)
+	return nil
 }
 
 // Start starts the instance

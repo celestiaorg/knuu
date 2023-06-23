@@ -12,6 +12,7 @@ import (
 // Identifier is the identifier of the current knuu instance
 var identifier string
 var startTime string
+var timeout time.Duration
 
 // Initialize initializes knuug
 func Initialize() error {
@@ -27,6 +28,7 @@ func Identifier() string {
 }
 
 // InitializeWithIdentifier initializes knuu with a unique identifier
+// Default timeout is 60 minutes and can be changed by setting the KNUU_TIMEOUT environment variable
 func InitializeWithIdentifier(uniqueIdentifier string) error {
 	if uniqueIdentifier == "" {
 		return fmt.Errorf("cannot initialize knuu with empty identifier")
@@ -54,10 +56,72 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return err
 	}
 
+	// read timeout from env
+	timeoutString := os.Getenv("KNUU_TIMEOUT")
+
+	if timeoutString == "" {
+		timeout = 60 * time.Minute
+	} else {
+		parsedTimeout, err := time.ParseDuration(timeoutString)
+		if err != nil {
+			return fmt.Errorf("cannot parse timeout: %s", err)
+		}
+		timeout = parsedTimeout
+	}
+
+	if err := handleTimeout(); err != nil {
+		return fmt.Errorf("cannot handle timeout: %s", err)
+	}
+
 	return nil
 }
 
 // IsInitialized returns true if knuu is initialized, and false otherwise
 func IsInitialized() bool {
 	return k8s.IsInitialized()
+}
+
+// handleTimeout creates a timeout handler that will delete all resources with the identifier after the timeout
+func handleTimeout() error {
+
+	instance, err := NewInstance("timeout-handler")
+	if err != nil {
+		return fmt.Errorf("cannot create instance: %s", err)
+	}
+	// FIXME: use supported kubernetes version images (use of latest could break)
+	if err := instance.SetImage("docker.io/bitnami/kubectl:latest"); err != nil {
+		return fmt.Errorf("cannot set image: %s", err)
+	}
+	if err := instance.Commit(); err != nil {
+		return fmt.Errorf("cannot commit instance: %s", err)
+	}
+	timeoutSeconds := int64(timeout.Seconds())
+
+	// command to wait for timeout and delete all resources with the identifier
+	var command = []string{"sh", "-c"}
+	cmd := fmt.Sprintf("sleep %d && kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s --wait=false", timeoutSeconds, identifier, k8s.Namespace())
+	command = append(command, cmd)
+
+	if err := instance.SetCommand(command...); err != nil {
+		return fmt.Errorf("cannot set command: %s", err)
+	}
+
+	if err := k8s.CreateRole(instance.k8sName, k8s.Namespace(), instance.getLabels(), []string{"*"}, []string{"*"}, []string{"*"}); err != nil {
+		return fmt.Errorf("cannot create role: %s", err)
+	}
+	if err := k8s.CreateServiceAccount(instance.k8sName, k8s.Namespace(), instance.getLabels()); err != nil {
+		return fmt.Errorf("cannot create service account: %s", err)
+	}
+	if err := k8s.CreateRoleBinding(instance.k8sName, k8s.Namespace(), instance.getLabels(), instance.k8sName, instance.k8sName); err != nil {
+		return fmt.Errorf("cannot create role binding: %s", err)
+	}
+	if err := instance.SetServiceAccount(instance.k8sName); err != nil {
+		return fmt.Errorf("cannot set service account: %s", err)
+	}
+
+	if err := instance.Start(); err != nil {
+		return fmt.Errorf("cannot start instance: %s", err)
+	}
+
+	return nil
 }

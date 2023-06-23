@@ -77,17 +77,18 @@ func NewVolume(path, size string, owner int64) *Volume {
 
 // PodConfig contains the specifications for creating a new Pod object
 type PodConfig struct {
-	Namespace     string            // Kubernetes namespace of the Pod
-	Name          string            // Name to assign to the Pod
-	Labels        map[string]string // Labels to apply to the Pod
-	Image         string            // Name of the Docker image to use for the container
-	Command       []string          // Command to run in the container
-	Args          []string          // Arguments to pass to the command in the container
-	Env           map[string]string // Environment variables to set in the container
-	Volumes       []*Volume         // Volumes to mount in the Pod
-	MemoryRequest string            // Memory request for the container
-	MemoryLimit   string            // Memory limit for the container
-	CPURequest    string            // CPU request for the container
+	Namespace          string            // Kubernetes namespace of the Pod
+	Name               string            // Name to assign to the Pod
+	Labels             map[string]string // Labels to apply to the Pod
+	Image              string            // Name of the Docker image to use for the container
+	Command            []string          // Command to run in the container
+	Args               []string          // Arguments to pass to the command in the container
+	Env                map[string]string // Environment variables to set in the container
+	Volumes            []*Volume         // Volumes to mount in the Pod
+	MemoryRequest      string            // Memory request for the container
+	MemoryLimit        string            // Memory limit for the container
+	CPURequest         string            // CPU request for the container
+	ServiceAccountName string            // ServiceAccount to assign to Pod
 }
 
 // ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
@@ -406,8 +407,8 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	}
 
 	podSpec := v1.PodSpec{
-
-		InitContainers: initContainers,
+		ServiceAccountName: spec.ServiceAccountName,
+		InitContainers:     initContainers,
 		Containers: []v1.Container{
 			{
 				Name:         name,

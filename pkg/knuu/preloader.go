@@ -87,7 +87,10 @@ func (p *Preloader) preloadImages() error {
 	})
 
 	labels := map[string]string{
-		"app": p.k8sName,
+		"app":                          p.k8sName,
+		"k8s.kubernetes.io/managed-by": "knuu",
+		"test-run-id":                  identifier,
+		"test-started":                 startTime,
 	}
 
 	exists, err := k8s.DaemonSetExists(k8s.Namespace(), p.k8sName)

@@ -126,17 +126,18 @@ func (i *Instance) deployPod() error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:     k8s.Namespace(),
-		Name:          i.k8sName,
-		Labels:        labels,
-		Image:         imageName,
-		Command:       i.command,
-		Args:          i.args,
-		Env:           i.env,
-		Volumes:       i.volumes,
-		MemoryRequest: i.memoryRequest,
-		MemoryLimit:   i.memoryLimit,
-		CPURequest:    i.cpuRequest,
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             labels,
+		Image:              imageName,
+		Command:            i.command,
+		Args:               i.args,
+		Env:                i.env,
+		Volumes:            i.volumes,
+		MemoryRequest:      i.memoryRequest,
+		MemoryLimit:        i.memoryLimit,
+		CPURequest:         i.cpuRequest,
+		ServiceAccountName: i.serviceAccountName,
 	}
 
 	statefulSetConfig := k8s.StatefulSetConfig{
