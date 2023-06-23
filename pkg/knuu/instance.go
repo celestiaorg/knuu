@@ -99,8 +99,17 @@ func (i *Instance) SetImage(image string) error {
 			MemoryLimit:   i.memoryLimit,
 			CPURequest:    i.cpuRequest,
 		}
+		// Generate the statefulset configuration
+		statefulSetConfig := k8s.StatefulSetConfig{
+			Namespace: k8s.Namespace(),
+			Name:      i.k8sName,
+			Labels:    i.kubernetesStatefulSet.Labels,
+			Replicas:  1,
+			PodConfig: podConfig,
+		}
+
 		// Replace the pod with a new one, using the given image
-		_, err = k8s.ReplacePod(podConfig)
+		_, err = k8s.ReplaceStatefulSet(statefulSetConfig)
 		if err != nil {
 			return fmt.Errorf("error replacing pod: %s", err.Error())
 		}
@@ -133,9 +142,18 @@ func (i *Instance) SetImageInstant(image string) error {
 		MemoryLimit:   i.memoryLimit,
 		CPURequest:    i.cpuRequest,
 	}
+	// Generate the statefulset configuration
+	statefulSetConfig := k8s.StatefulSetConfig{
+		Namespace: k8s.Namespace(),
+		Name:      i.k8sName,
+		Labels:    i.kubernetesStatefulSet.Labels,
+		Replicas:  1,
+		PodConfig: podConfig,
+	}
+
 	// Replace the pod with a new one, using the given image
 	gracePeriod := int64(1)
-	_, err := k8s.ReplacePodWithGracePeriod(podConfig, &gracePeriod)
+	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, &gracePeriod)
 	if err != nil {
 		return fmt.Errorf("error replacing pod: %s", err.Error())
 	}
