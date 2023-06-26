@@ -88,7 +88,7 @@ func handleTimeout() error {
 	if err != nil {
 		return fmt.Errorf("cannot create instance: %s", err)
 	}
-	// FIXME: use supported kubernetes version images (use of latest could break)
+	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
 	if err := instance.SetImage("docker.io/bitnami/kubectl:latest"); err != nil {
 		return fmt.Errorf("cannot set image: %s", err)
 	}
