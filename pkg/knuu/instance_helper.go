@@ -163,7 +163,7 @@ func (i *Instance) deployPod() error {
 	return nil
 }
 
-// destroyPod destroys the pod for the instance
+// destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod() error {
 	grace := int64(0)
