@@ -99,6 +99,7 @@ func handleTimeout() error {
 
 	// command to wait for timeout and delete all resources with the identifier
 	var command = []string{"sh", "-c"}
+	// Command runs in-cluster to delete resources post-test. Chosen for simplicity over a separate Go app.
 	cmd := fmt.Sprintf("sleep %d && kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s --wait=false", timeoutSeconds, identifier, k8s.Namespace())
 	command = append(command, cmd)
 
