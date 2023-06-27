@@ -163,10 +163,11 @@ func (i *Instance) deployPod() error {
 	return nil
 }
 
-// destroyPod destroys the pod for the instance
+// destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod() error {
-	err := k8s.DeleteStatefulSet(k8s.Namespace(), i.k8sName)
+	grace := int64(0)
+	err := k8s.DeleteStatefulSetWithGracePeriod(k8s.Namespace(), i.k8sName, &grace)
 	if err != nil {
 		return fmt.Errorf("failed to delete pod: %v", err)
 	}
