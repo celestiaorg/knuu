@@ -30,7 +30,7 @@ git clone <forked-repository-url>
 git checkout -b working-branch
 ```
 Be sure to name your branch according to the changes you are making.
-For example: `fix:add-missing-tests`.
+For example: `add-missing-tests`.
 
 4. Make your changes: Do not address multiple issues per PR. 
 For example, if you are adding a feature, it should not have bug fixes too. This is to enable the maintainers review your PR efficiently.
