@@ -9,7 +9,7 @@ import (
 )
 
 // CreateRole creates a role
-func CreateRole(name, namespace string, labels map[string]string, apiGroups, resources, verbs []string) error {
+func CreateRole(namespace, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error {
 
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -17,13 +17,7 @@ func CreateRole(name, namespace string, labels map[string]string, apiGroups, res
 			Namespace: namespace,
 			Labels:    labels,
 		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: apiGroups,
-				Resources: resources,
-				Verbs:     verbs,
-			},
-		},
+		Rules: policyRules,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -40,7 +34,7 @@ func CreateRole(name, namespace string, labels map[string]string, apiGroups, res
 }
 
 // DeleteRole deletes a role
-func DeleteRole(name, namespace string) error {
+func DeleteRole(namespace, name string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

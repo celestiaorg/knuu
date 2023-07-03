@@ -9,7 +9,7 @@ import (
 )
 
 // CreateRoleBinding creates a roleBinding
-func CreateRoleBinding(name, namespace string, labels map[string]string, role, serviceAccount string) error {
+func CreateRoleBinding(namespace, name string, labels map[string]string, role, serviceAccount string) error {
 
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -44,7 +44,7 @@ func CreateRoleBinding(name, namespace string, labels map[string]string, role, s
 }
 
 // DeleteRoleBinding deletes a roleBinding
-func DeleteRoleBinding(name, namespace string) error {
+func DeleteRoleBinding(namespace, name string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

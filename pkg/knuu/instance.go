@@ -8,6 +8,7 @@ import (
 	"io"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +34,7 @@ type Instance struct {
 	memoryRequest         string
 	memoryLimit           string
 	cpuRequest            string
-	serviceAccountName    string
+	policyRules           []rbacv1.PolicyRule
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
@@ -49,24 +50,24 @@ func NewInstance(name string) (*Instance, error) {
 	}
 	// Create the instance
 	return &Instance{
-		name:               name,
-		k8sName:            k8sName,
-		imageName:          "",
-		state:              None,
-		instanceType:       BasicInstance,
-		portsTCP:           make([]int, 0),
-		portsUDP:           make([]int, 0),
-		command:            make([]string, 0),
-		args:               make([]string, 0),
-		env:                make(map[string]string),
-		volumes:            make([]*k8s.Volume, 0),
-		memoryRequest:      "",
-		memoryLimit:        "",
-		cpuRequest:         "",
-		serviceAccountName: "default",
-		livenessProbe:      nil,
-		readinessProbe:     nil,
-		startupProbe:       nil,
+		name:           name,
+		k8sName:        k8sName,
+		imageName:      "",
+		state:          None,
+		instanceType:   BasicInstance,
+		portsTCP:       make([]int, 0),
+		portsUDP:       make([]int, 0),
+		command:        make([]string, 0),
+		args:           make([]string, 0),
+		env:            make(map[string]string),
+		volumes:        make([]*k8s.Volume, 0),
+		memoryRequest:  "",
+		memoryLimit:    "",
+		cpuRequest:     "",
+		policyRules:    make([]rbacv1.PolicyRule, 0),
+		livenessProbe:  nil,
+		readinessProbe: nil,
+		startupProbe:   nil,
 	}, nil
 }
 
@@ -96,21 +97,20 @@ func (i *Instance) SetImage(image string) error {
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace:          k8s.Namespace(),
-			Name:               i.k8sName,
-			Labels:             i.kubernetesStatefulSet.Labels,
-			Image:              image,
-			Command:            i.command,
-			Args:               i.args,
-			Env:                i.env,
-			Volumes:            i.volumes,
-			MemoryRequest:      i.memoryRequest,
-			MemoryLimit:        i.memoryLimit,
-			CPURequest:         i.cpuRequest,
-			ServiceAccountName: i.serviceAccountName,
-			LivenessProbe:      i.livenessProbe,
-			ReadinessProbe:     i.readinessProbe,
-			StartupProbe:       i.startupProbe,
+			Namespace:      k8s.Namespace(),
+			Name:           i.k8sName,
+			Labels:         i.kubernetesStatefulSet.Labels,
+			Image:          image,
+			Command:        i.command,
+			Args:           i.args,
+			Env:            i.env,
+			Volumes:        i.volumes,
+			MemoryRequest:  i.memoryRequest,
+			MemoryLimit:    i.memoryLimit,
+			CPURequest:     i.cpuRequest,
+			LivenessProbe:  i.livenessProbe,
+			ReadinessProbe: i.readinessProbe,
+			StartupProbe:   i.startupProbe,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -143,21 +143,20 @@ func (i *Instance) SetImageInstant(image string) error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:          k8s.Namespace(),
-		Name:               i.k8sName,
-		Labels:             i.kubernetesStatefulSet.Labels,
-		Image:              image,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
-		ServiceAccountName: i.serviceAccountName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
+		Namespace:      k8s.Namespace(),
+		Name:           i.k8sName,
+		Labels:         i.kubernetesStatefulSet.Labels,
+		Image:          image,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -541,14 +540,13 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 	return bytes, nil
 }
 
-// SetServiceAccount sets the service account of the instance
+// AddPolicyRule adds a policy rule to the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetServiceAccount(serviceAccount string) error {
+func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting service account is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return fmt.Errorf("adding policy rule is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.serviceAccountName = serviceAccount
-	logrus.Debugf("Set service account to '%s' in instance '%s'", serviceAccount, i.name)
+	i.policyRules = append(i.policyRules, rule)
 	return nil
 }
 
