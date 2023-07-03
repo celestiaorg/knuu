@@ -33,6 +33,9 @@ type Instance struct {
 	memoryLimit           string
 	cpuRequest            string
 	serviceAccountName    string
+	livenessProbe         *k8s.Probe
+	readinessProbe        *k8s.Probe
+	startupProbe          *k8s.Probe
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -60,6 +63,9 @@ func NewInstance(name string) (*Instance, error) {
 		memoryLimit:        "",
 		cpuRequest:         "",
 		serviceAccountName: "default",
+		livenessProbe:      nil,
+		readinessProbe:     nil,
+		startupProbe:       nil,
 	}, nil
 }
 
@@ -101,6 +107,9 @@ func (i *Instance) SetImage(image string) error {
 			MemoryLimit:        i.memoryLimit,
 			CPURequest:         i.cpuRequest,
 			ServiceAccountName: i.serviceAccountName,
+			LivenessProbe:      i.livenessProbe,
+			ReadinessProbe:     i.readinessProbe,
+			StartupProbe:       i.startupProbe,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -145,6 +154,9 @@ func (i *Instance) SetImageInstant(image string) error {
 		MemoryLimit:        i.memoryLimit,
 		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.serviceAccountName,
+		LivenessProbe:      i.livenessProbe,
+		ReadinessProbe:     i.readinessProbe,
+		StartupProbe:       i.startupProbe,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -535,6 +547,42 @@ func (i *Instance) SetServiceAccount(serviceAccount string) error {
 	}
 	i.serviceAccountName = serviceAccount
 	logrus.Debugf("Set service account to '%s' in instance '%s'", serviceAccount, i.name)
+	return nil
+}
+
+// SetLivenessProbe sets the liveness probe of the instance
+// A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetLivenessProbe(livenessProbe *k8s.Probe) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting liveness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.livenessProbe = livenessProbe
+	logrus.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
+	return nil
+}
+
+// SetReadinessProbe sets the readiness probe of the instance
+// A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetReadinessProbe(readinessProbe *k8s.Probe) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting readiness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.readinessProbe = readinessProbe
+	logrus.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
+	return nil
+}
+
+// SetStartupProbe sets the startup probe of the instance
+// A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetStartupProbe(startupProbe *k8s.Probe) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting startup probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.startupProbe = startupProbe
+	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
 	return nil
 }
 
