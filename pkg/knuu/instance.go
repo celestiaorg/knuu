@@ -550,13 +550,21 @@ func (i *Instance) SetServiceAccount(serviceAccount string) error {
 	return nil
 }
 
+// checkStateForProbe checks if the current state is allowed for setting a probe
+func (i *Instance) checkStateForProbe() error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	return nil
+}
+
 // SetLivenessProbe sets the liveness probe of the instance
 // A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
 // See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting liveness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := i.checkStateForProbe(); err != nil {
+		return err
 	}
 	i.livenessProbe = livenessProbe
 	logrus.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
@@ -568,8 +576,8 @@ func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 // See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting readiness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := i.checkStateForProbe(); err != nil {
+		return err
 	}
 	i.readinessProbe = readinessProbe
 	logrus.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
@@ -581,8 +589,8 @@ func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 // See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting startup probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := i.checkStateForProbe(); err != nil {
+		return err
 	}
 	i.startupProbe = startupProbe
 	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
