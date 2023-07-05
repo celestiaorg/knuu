@@ -33,9 +33,9 @@ type Instance struct {
 	memoryLimit           string
 	cpuRequest            string
 	serviceAccountName    string
-	livenessProbe         *k8s.Probe
-	readinessProbe        *k8s.Probe
-	startupProbe          *k8s.Probe
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -552,8 +552,9 @@ func (i *Instance) SetServiceAccount(serviceAccount string) error {
 
 // SetLivenessProbe sets the liveness probe of the instance
 // A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetLivenessProbe(livenessProbe *k8s.Probe) error {
+func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting liveness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
@@ -564,8 +565,9 @@ func (i *Instance) SetLivenessProbe(livenessProbe *k8s.Probe) error {
 
 // SetReadinessProbe sets the readiness probe of the instance
 // A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetReadinessProbe(readinessProbe *k8s.Probe) error {
+func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting readiness probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
@@ -576,8 +578,9 @@ func (i *Instance) SetReadinessProbe(readinessProbe *k8s.Probe) error {
 
 // SetStartupProbe sets the startup probe of the instance
 // A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetStartupProbe(startupProbe *k8s.Probe) error {
+func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting startup probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}

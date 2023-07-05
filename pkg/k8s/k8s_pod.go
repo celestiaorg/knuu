@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 	"net/http"
@@ -90,9 +89,9 @@ type PodConfig struct {
 	MemoryLimit        string            // Memory limit for the container
 	CPURequest         string            // CPU request for the container
 	ServiceAccountName string            // ServiceAccount to assign to Pod
-	LivenessProbe      *Probe            // Liveness probe for the container
-	ReadinessProbe     *Probe            // Readiness probe for the container
-	StartupProbe       *Probe            // Startup probe for the container
+	LivenessProbe      *v1.Probe         // Liveness probe for the container
+	ReadinessProbe     *v1.Probe         // Readiness probe for the container
+	StartupProbe       *v1.Probe         // Startup probe for the container
 }
 
 // ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
@@ -353,33 +352,6 @@ func buildResources(memoryRequest string, memoryLimit string, cpuRequest string)
 	return resources, nil
 }
 
-// buildProbe generates a probe configuration for a container
-func buildProbe(probe *Probe) *v1.Probe {
-	if probe == nil {
-		return nil // return nil if no probe is specified
-	}
-
-	probeHandler := v1.ProbeHandler{}
-	if probe.HTTPGet != nil {
-		probeHandler.HTTPGet = &v1.HTTPGetAction{
-			Path: probe.HTTPGet.Path,
-			Port: intstr.FromInt(int(probe.HTTPGet.Port)),
-		}
-	} else if probe.TCPSocket != nil {
-		probeHandler.TCPSocket = &v1.TCPSocketAction{
-			Port: intstr.FromString(probe.TCPSocket.Port),
-		}
-	}
-
-	// Build the probe configuration
-	probeConfig := &v1.Probe{
-		ProbeHandler:        probeHandler,
-		InitialDelaySeconds: probe.InitialDelaySeconds,
-	}
-
-	return probeConfig
-}
-
 // preparePodSpec prepares a pod spec configuration.
 func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	name := spec.Name
@@ -403,11 +375,6 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	if err != nil {
 		return v1.PodSpec{}, fmt.Errorf("failed to build container volumes: %v", err)
 	}
-
-	// Build probes
-	livenessProbe := buildProbe(spec.LivenessProbe)
-	readinessProbe := buildProbe(spec.ReadinessProbe)
-	startupProbe := buildProbe(spec.StartupProbe)
 
 	var initContainers []v1.Container
 	if len(volumes) > 0 && init {
@@ -454,9 +421,9 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 				Env:            podEnv,
 				VolumeMounts:   containerVolumes,
 				Resources:      resources,
-				LivenessProbe:  livenessProbe,
-				ReadinessProbe: readinessProbe,
-				StartupProbe:   startupProbe,
+				LivenessProbe:  spec.LivenessProbe,
+				ReadinessProbe: spec.ReadinessProbe,
+				StartupProbe:   spec.StartupProbe,
 			},
 		},
 		Volumes: podVolumes,
