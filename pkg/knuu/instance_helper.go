@@ -138,6 +138,9 @@ func (i *Instance) deployPod() error {
 		MemoryLimit:        i.memoryLimit,
 		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.serviceAccountName,
+		LivenessProbe:      i.livenessProbe,
+		ReadinessProbe:     i.readinessProbe,
+		StartupProbe:       i.startupProbe,
 	}
 
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -216,6 +219,10 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		memoryRequest:         i.memoryRequest,
 		memoryLimit:           i.memoryLimit,
 		cpuRequest:            i.cpuRequest,
+		serviceAccountName:    i.serviceAccountName,
+		livenessProbe:         i.livenessProbe,
+		readinessProbe:        i.readinessProbe,
+		startupProbe:          i.startupProbe,
 	}
 }
 

@@ -89,6 +89,9 @@ type PodConfig struct {
 	MemoryLimit        string            // Memory limit for the container
 	CPURequest         string            // CPU request for the container
 	ServiceAccountName string            // ServiceAccount to assign to Pod
+	LivenessProbe      *v1.Probe         // Liveness probe for the container
+	ReadinessProbe     *v1.Probe         // Readiness probe for the container
+	StartupProbe       *v1.Probe         // Startup probe for the container
 }
 
 // ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
@@ -411,13 +414,16 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 		InitContainers:     initContainers,
 		Containers: []v1.Container{
 			{
-				Name:         name,
-				Image:        image,
-				Command:      command,
-				Args:         args,
-				Env:          podEnv,
-				VolumeMounts: containerVolumes,
-				Resources:    resources,
+				Name:           name,
+				Image:          image,
+				Command:        command,
+				Args:           args,
+				Env:            podEnv,
+				VolumeMounts:   containerVolumes,
+				Resources:      resources,
+				LivenessProbe:  spec.LivenessProbe,
+				ReadinessProbe: spec.ReadinessProbe,
+				StartupProbe:   spec.StartupProbe,
 			},
 		},
 		Volumes: podVolumes,
