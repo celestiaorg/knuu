@@ -97,20 +97,21 @@ func (i *Instance) SetImage(image string) error {
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace:      k8s.Namespace(),
-			Name:           i.k8sName,
-			Labels:         i.kubernetesStatefulSet.Labels,
-			Image:          image,
-			Command:        i.command,
-			Args:           i.args,
-			Env:            i.env,
-			Volumes:        i.volumes,
-			MemoryRequest:  i.memoryRequest,
-			MemoryLimit:    i.memoryLimit,
-			CPURequest:     i.cpuRequest,
-			LivenessProbe:  i.livenessProbe,
-			ReadinessProbe: i.readinessProbe,
-			StartupProbe:   i.startupProbe,
+			Namespace:          k8s.Namespace(),
+			Name:               i.k8sName,
+			Labels:             i.kubernetesStatefulSet.Labels,
+			Image:              image,
+			Command:            i.command,
+			Args:               i.args,
+			Env:                i.env,
+			Volumes:            i.volumes,
+			MemoryRequest:      i.memoryRequest,
+			MemoryLimit:        i.memoryLimit,
+			CPURequest:         i.cpuRequest,
+			ServiceAccountName: i.k8sName,
+			LivenessProbe:      i.livenessProbe,
+			ReadinessProbe:     i.readinessProbe,
+			StartupProbe:       i.startupProbe,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -143,20 +144,21 @@ func (i *Instance) SetImageInstant(image string) error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:      k8s.Namespace(),
-		Name:           i.k8sName,
-		Labels:         i.kubernetesStatefulSet.Labels,
-		Image:          image,
-		Command:        i.command,
-		Args:           i.args,
-		Env:            i.env,
-		Volumes:        i.volumes,
-		MemoryRequest:  i.memoryRequest,
-		MemoryLimit:    i.memoryLimit,
-		CPURequest:     i.cpuRequest,
-		LivenessProbe:  i.livenessProbe,
-		ReadinessProbe: i.readinessProbe,
-		StartupProbe:   i.startupProbe,
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             i.kubernetesStatefulSet.Labels,
+		Image:              image,
+		Command:            i.command,
+		Args:               i.args,
+		Env:                i.env,
+		Volumes:            i.volumes,
+		MemoryRequest:      i.memoryRequest,
+		MemoryLimit:        i.memoryLimit,
+		CPURequest:         i.cpuRequest,
+		ServiceAccountName: i.k8sName,
+		LivenessProbe:      i.livenessProbe,
+		ReadinessProbe:     i.readinessProbe,
+		StartupProbe:       i.startupProbe,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
