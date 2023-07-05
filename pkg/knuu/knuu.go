@@ -88,6 +88,7 @@ func handleTimeout() error {
 	if err != nil {
 		return fmt.Errorf("cannot create instance: %s", err)
 	}
+	instance.instanceType = TimeoutHandlerInstance
 	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
 	if err := instance.SetImage("docker.io/bitnami/kubectl:latest"); err != nil {
 		return fmt.Errorf("cannot set image: %s", err)
@@ -100,7 +101,10 @@ func handleTimeout() error {
 	// command to wait for timeout and delete all resources with the identifier
 	var command = []string{"sh", "-c"}
 	// Command runs in-cluster to delete resources post-test. Chosen for simplicity over a separate Go app.
-	cmd := fmt.Sprintf("sleep %d && kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s --wait=false", timeoutSeconds, identifier, k8s.Namespace())
+	wait := fmt.Sprintf("sleep %d", timeoutSeconds)
+	deleteAllTimeOutType := fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.type != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace())
+	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s", identifier, k8s.Namespace())
+	cmd := fmt.Sprintf("%s && %s && %s", wait, deleteAllTimeOutType, deleteAll)
 	command = append(command, cmd)
 
 	if err := instance.SetCommand(command...); err != nil {
