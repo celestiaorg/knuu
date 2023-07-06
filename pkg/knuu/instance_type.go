@@ -7,6 +7,7 @@ type InstanceType int
 const (
 	BasicInstance InstanceType = iota
 	ExecutorInstance
+	TimeoutHandlerInstance
 )
 
 // String returns the string representation of the type
@@ -14,5 +15,5 @@ func (s InstanceType) String() string {
 	if s < 0 || s > 2 {
 		return "Unknown"
 	}
-	return [...]string{"BasicInstance", "ExecutorInstance"}[s]
+	return [...]string{"BasicInstance", "ExecutorInstance", "TimeoutHandlerInstance"}[s]
 }
