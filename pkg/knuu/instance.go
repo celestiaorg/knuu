@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -272,7 +273,8 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
 		}
-		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, command)
+		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
+		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, commandWithShell)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in started instance '%s': %v", command, i.k8sName, err)
 		}
