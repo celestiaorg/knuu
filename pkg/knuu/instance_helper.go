@@ -124,10 +124,8 @@ func (i *Instance) deployPod() error {
 		return fmt.Errorf("failed to get image name: %v", err)
 	}
 
-	serviceAccountName := i.k8sName
-
 	// create a service account for the pod
-	if err := k8s.CreateServiceAccount(k8s.Namespace(), serviceAccountName, labels); err != nil {
+	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
 		return fmt.Errorf("failed to create service account: %v", err)
 	}
 
@@ -136,7 +134,7 @@ func (i *Instance) deployPod() error {
 		if err := k8s.CreateRole(k8s.Namespace(), i.k8sName, labels, i.policyRules); err != nil {
 			return fmt.Errorf("failed to create role: %v", err)
 		}
-		if err := k8s.CreateRoleBinding(k8s.Namespace(), i.k8sName, labels, serviceAccountName, i.k8sName); err != nil {
+		if err := k8s.CreateRoleBinding(k8s.Namespace(), i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
 			return fmt.Errorf("failed to create role binding: %v", err)
 		}
 	}
