@@ -152,7 +152,7 @@ func (i *Instance) deployPod() error {
 		MemoryRequest:      i.memoryRequest,
 		MemoryLimit:        i.memoryLimit,
 		CPURequest:         i.cpuRequest,
-		ServiceAccountName: serviceAccountName,
+		ServiceAccountName: i.k8sName,
 		LivenessProbe:      i.livenessProbe,
 		ReadinessProbe:     i.readinessProbe,
 		StartupProbe:       i.startupProbe,
