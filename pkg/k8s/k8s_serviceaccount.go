@@ -9,7 +9,7 @@ import (
 )
 
 // CreateServiceAccount creates a service account
-func CreateServiceAccount(name, namespace string, labels map[string]string) error {
+func CreateServiceAccount(namespace, name string, labels map[string]string) error {
 
 	serviceAccount := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -33,7 +33,7 @@ func CreateServiceAccount(name, namespace string, labels map[string]string) erro
 }
 
 // DeleteServiceAccount deletes a service account
-func DeleteServiceAccount(name, namespace string) error {
+func DeleteServiceAccount(namespace, name string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

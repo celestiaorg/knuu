@@ -124,6 +124,21 @@ func (i *Instance) deployPod() error {
 		return fmt.Errorf("failed to get image name: %v", err)
 	}
 
+	// create a service account for the pod
+	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
+		return fmt.Errorf("failed to create service account: %v", err)
+	}
+
+	// create a role and role binding for the pod if there are policy rules
+	if len(i.policyRules) > 0 {
+		if err := k8s.CreateRole(k8s.Namespace(), i.k8sName, labels, i.policyRules); err != nil {
+			return fmt.Errorf("failed to create role: %v", err)
+		}
+		if err := k8s.CreateRoleBinding(k8s.Namespace(), i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
+			return fmt.Errorf("failed to create role binding: %v", err)
+		}
+	}
+
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace:          k8s.Namespace(),
@@ -137,7 +152,7 @@ func (i *Instance) deployPod() error {
 		MemoryRequest:      i.memoryRequest,
 		MemoryLimit:        i.memoryLimit,
 		CPURequest:         i.cpuRequest,
-		ServiceAccountName: i.serviceAccountName,
+		ServiceAccountName: i.k8sName,
 		LivenessProbe:      i.livenessProbe,
 		ReadinessProbe:     i.readinessProbe,
 		StartupProbe:       i.startupProbe,
@@ -174,6 +189,20 @@ func (i *Instance) destroyPod() error {
 	err := k8s.DeleteStatefulSetWithGracePeriod(k8s.Namespace(), i.k8sName, &grace)
 	if err != nil {
 		return fmt.Errorf("failed to delete pod: %v", err)
+	}
+
+	// Delete the service account for the pod
+	if err := k8s.DeleteServiceAccount(k8s.Namespace(), i.k8sName); err != nil {
+		return fmt.Errorf("failed to delete service account: %v", err)
+	}
+	// Delete the role and role binding for the pod if there are policy rules
+	if len(i.policyRules) > 0 {
+		if err := k8s.DeleteRole(k8s.Namespace(), i.k8sName); err != nil {
+			return fmt.Errorf("failed to delete role: %v", err)
+		}
+		if err := k8s.DeleteRoleBinding(k8s.Namespace(), i.k8sName); err != nil {
+			return fmt.Errorf("failed to delete role binding: %v", err)
+		}
 	}
 
 	return nil
@@ -219,7 +248,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		memoryRequest:         i.memoryRequest,
 		memoryLimit:           i.memoryLimit,
 		cpuRequest:            i.cpuRequest,
-		serviceAccountName:    i.serviceAccountName,
+		policyRules:           i.policyRules,
 		livenessProbe:         i.livenessProbe,
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,

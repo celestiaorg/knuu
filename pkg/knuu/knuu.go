@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"os"
 	"time"
 )
@@ -111,19 +112,15 @@ func handleTimeout() error {
 		return fmt.Errorf("cannot set command: %s", err)
 	}
 
-	if err := k8s.CreateRole(instance.k8sName, k8s.Namespace(), instance.getLabels(), []string{"*"}, []string{"*"}, []string{"*"}); err != nil {
-		return fmt.Errorf("cannot create role: %s", err)
-	}
-	if err := k8s.CreateServiceAccount(instance.k8sName, k8s.Namespace(), instance.getLabels()); err != nil {
-		return fmt.Errorf("cannot create service account: %s", err)
-	}
-	if err := k8s.CreateRoleBinding(instance.k8sName, k8s.Namespace(), instance.getLabels(), instance.k8sName, instance.k8sName); err != nil {
-		return fmt.Errorf("cannot create role binding: %s", err)
-	}
-	if err := instance.SetServiceAccount(instance.k8sName); err != nil {
-		return fmt.Errorf("cannot set service account: %s", err)
+	rule := rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{"*"},
+		Resources: []string{"*"},
 	}
 
+	if err := instance.AddPolicyRule(rule); err != nil {
+		return fmt.Errorf("cannot add policy rule: %s", err)
+	}
 	if err := instance.Start(); err != nil {
 		return fmt.Errorf("cannot start instance: %s", err)
 	}
