@@ -8,8 +8,10 @@ import (
 	"io"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,6 +34,10 @@ type Instance struct {
 	memoryRequest         string
 	memoryLimit           string
 	cpuRequest            string
+	policyRules           []rbacv1.PolicyRule
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -44,20 +50,24 @@ func NewInstance(name string) (*Instance, error) {
 	}
 	// Create the instance
 	return &Instance{
-		name:          name,
-		k8sName:       k8sName,
-		imageName:     "",
-		state:         None,
-		instanceType:  BasicInstance,
-		portsTCP:      make([]int, 0),
-		portsUDP:      make([]int, 0),
-		command:       make([]string, 0),
-		args:          make([]string, 0),
-		env:           make(map[string]string),
-		volumes:       make([]*k8s.Volume, 0),
-		memoryRequest: "",
-		memoryLimit:   "",
-		cpuRequest:    "",
+		name:           name,
+		k8sName:        k8sName,
+		imageName:      "",
+		state:          None,
+		instanceType:   BasicInstance,
+		portsTCP:       make([]int, 0),
+		portsUDP:       make([]int, 0),
+		command:        make([]string, 0),
+		args:           make([]string, 0),
+		env:            make(map[string]string),
+		volumes:        make([]*k8s.Volume, 0),
+		memoryRequest:  "",
+		memoryLimit:    "",
+		cpuRequest:     "",
+		policyRules:    make([]rbacv1.PolicyRule, 0),
+		livenessProbe:  nil,
+		readinessProbe: nil,
+		startupProbe:   nil,
 	}, nil
 }
 
@@ -87,17 +97,21 @@ func (i *Instance) SetImage(image string) error {
 
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
-			Namespace:     k8s.Namespace(),
-			Name:          i.k8sName,
-			Labels:        i.kubernetesStatefulSet.Labels,
-			Image:         image,
-			Command:       i.command,
-			Args:          i.args,
-			Env:           i.env,
-			Volumes:       i.volumes,
-			MemoryRequest: i.memoryRequest,
-			MemoryLimit:   i.memoryLimit,
-			CPURequest:    i.cpuRequest,
+			Namespace:          k8s.Namespace(),
+			Name:               i.k8sName,
+			Labels:             i.kubernetesStatefulSet.Labels,
+			Image:              image,
+			Command:            i.command,
+			Args:               i.args,
+			Env:                i.env,
+			Volumes:            i.volumes,
+			MemoryRequest:      i.memoryRequest,
+			MemoryLimit:        i.memoryLimit,
+			CPURequest:         i.cpuRequest,
+			ServiceAccountName: i.k8sName,
+			LivenessProbe:      i.livenessProbe,
+			ReadinessProbe:     i.readinessProbe,
+			StartupProbe:       i.startupProbe,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -130,17 +144,21 @@ func (i *Instance) SetImageInstant(image string) error {
 
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:     k8s.Namespace(),
-		Name:          i.k8sName,
-		Labels:        i.kubernetesStatefulSet.Labels,
-		Image:         image,
-		Command:       i.command,
-		Args:          i.args,
-		Env:           i.env,
-		Volumes:       i.volumes,
-		MemoryRequest: i.memoryRequest,
-		MemoryLimit:   i.memoryLimit,
-		CPURequest:    i.cpuRequest,
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             i.kubernetesStatefulSet.Labels,
+		Image:              image,
+		Command:            i.command,
+		Args:               i.args,
+		Env:                i.env,
+		Volumes:            i.volumes,
+		MemoryRequest:      i.memoryRequest,
+		MemoryLimit:        i.memoryLimit,
+		CPURequest:         i.cpuRequest,
+		ServiceAccountName: i.k8sName,
+		LivenessProbe:      i.livenessProbe,
+		ReadinessProbe:     i.readinessProbe,
+		StartupProbe:       i.startupProbe,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -256,7 +274,8 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
 		}
-		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, command)
+		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
+		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, commandWithShell)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in started instance '%s': %v", command, i.k8sName, err)
 		}
@@ -521,6 +540,63 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 		return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
 	}
 	return bytes, nil
+}
+
+// AddPolicyRule adds a policy rule to the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding policy rule is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.policyRules = append(i.policyRules, rule)
+	return nil
+}
+
+// checkStateForProbe checks if the current state is allowed for setting a probe
+func (i *Instance) checkStateForProbe() error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	return nil
+}
+
+// SetLivenessProbe sets the liveness probe of the instance
+// A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
+	if err := i.checkStateForProbe(); err != nil {
+		return err
+	}
+	i.livenessProbe = livenessProbe
+	logrus.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
+	return nil
+}
+
+// SetReadinessProbe sets the readiness probe of the instance
+// A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
+	if err := i.checkStateForProbe(); err != nil {
+		return err
+	}
+	i.readinessProbe = readinessProbe
+	logrus.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
+	return nil
+}
+
+// SetStartupProbe sets the startup probe of the instance
+// A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
+// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
+	if err := i.checkStateForProbe(); err != nil {
+		return err
+	}
+	i.startupProbe = startupProbe
+	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
+	return nil
 }
 
 // Start starts the instance
