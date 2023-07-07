@@ -79,7 +79,7 @@ Simple example:
         identifier := fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
         err := knuu.InitializeWithIdentifier(identifier)
         if err != nil {
-           t.Fatalf("Error initializing knuu: %v:", err)
+           log.Fatalf("Error initializing knuu: %v:", err)
         }
         exitVal := m.Run()
         os.Exit(exitVal)
