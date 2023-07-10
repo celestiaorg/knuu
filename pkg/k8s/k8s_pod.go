@@ -507,18 +507,25 @@ func PortForwardPod(namespace string, podName string, localPort int, remotePort 
 	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
 	logrus.Debugf("Port forwarding stdout: %v", stdout)
 
+	errChan := make(chan error)
+
 	// Start the port forwarding
 	go func() {
 		if err := pf.ForwardPorts(); err != nil {
-			// Handle error
-			logrus.Errorf("Error forwarding ports: %v", err)
+			errChan <- err
+		} else {
+			close(errChan) // if there's no error, close the channel
 		}
 	}()
 
-	// Wait for the port forwarding to be ready
+	// Wait for the port forwarding to be ready or error to occur
 	select {
 	case <-readyChan:
 		// Ready to forward
+		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+	case err := <-errChan:
+		// if there's an error, return it
+		return fmt.Errorf("error forwarding ports: %w", err)
 	case <-time.After(time.Second * 5):
 		return fmt.Errorf("timed out waiting for port forwarding to be ready")
 	}

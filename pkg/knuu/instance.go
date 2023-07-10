@@ -235,9 +235,19 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
 	}
-	err = k8s.PortForwardPod(k8s.Namespace(), pod.Name, localPort, port)
-	if err != nil {
-		return -1, fmt.Errorf("error forwarding port: %v", err)
+	// We need to retry here because the port forwarding might fail as getFreePortTCP() might not free the port fast enough
+	retries := 5
+	wait := 5 * time.Second
+	for r := 0; r < retries; r++ {
+		err = k8s.PortForwardPod(k8s.Namespace(), pod.Name, localPort, port)
+		if err == nil {
+			break
+		}
+		if retries == r+1 {
+			return -1, fmt.Errorf("error forwarding port after %d retries: %v", retries, err)
+		}
+		logrus.Debugf("Forwaring port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, wait, r+1, retries)
+		time.Sleep(wait)
 	}
 	return localPort, nil
 }
