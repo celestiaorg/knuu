@@ -55,7 +55,6 @@ Simple example:
     ```go
     require (
         github.com/celestiaorg/knuu v0.7.0
-        github.com/sirupsen/logrus v1.9.3
         github.com/stretchr/testify v1.8.4
     )
     ```
@@ -70,7 +69,6 @@ Simple example:
     import (
         "fmt"
         "github.com/celestiaorg/knuu/pkg/knuu"
-        "github.com/sirupsen/logrus"
         "os"
         "testing"
         "time"
@@ -81,9 +79,8 @@ Simple example:
         identifier := fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
         err := knuu.InitializeWithIdentifier(identifier)
         if err != nil {
-            logrus.Fatalf("error initializing knuu: %v", err)
+           log.Fatalf("Error initializing knuu: %v:", err)
         }
-        logrus.Infof("Unique identifier: %s", identifier)
         exitVal := m.Run()
         os.Exit(exitVal)
     }
