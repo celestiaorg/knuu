@@ -43,7 +43,8 @@ func Initialize() error {
 		if os.Getenv("KNUU_NAMESPACE") != "" {
 			setNamespace(os.Getenv("KNUU_NAMESPACE"))
 		} else {
-			setNamespace("test")
+			kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+			setNamespace(kubeconfig)
 		}
 	}
 	return nil
