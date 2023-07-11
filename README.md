@@ -54,7 +54,7 @@ Simple example:
 
     ```go
     require (
-        github.com/celestiaorg/knuu v0.7.0
+        github.com/celestiaorg/knuu v0.8.2
         github.com/stretchr/testify v1.8.4
     )
     ```
