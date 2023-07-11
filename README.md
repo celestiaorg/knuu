@@ -19,8 +19,8 @@ Some of the features of knuu are:
 - Initialize an Instance from a Container/Docker image
 - Configure startup commands
 - Configure Networking
-    - What ports to expose
-    - Disable networking to simulate network outages
+  - What ports to expose
+  - Disable networking to simulate network outages
 - Configure Storage
 - Execute Commands
 - Configure HW resources
@@ -75,9 +75,7 @@ Simple example:
     )
 
     func TestMain(m *testing.M) {
-        t := time.Now()
-        identifier := fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
-        err := knuu.InitializeWithIdentifier(identifier)
+        err := knuu.Initialize()
         if err != nil {
            log.Fatalf("Error initializing knuu: %v:", err)
         }
