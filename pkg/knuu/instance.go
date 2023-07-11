@@ -774,9 +774,11 @@ func (i *Instance) Destroy() error {
 			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
 		}
 	}
-	err = i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		err = i.destroyService()
+		if err != nil {
+			return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+		}
 	}
 
 	i.state = Destroyed
