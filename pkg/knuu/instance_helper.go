@@ -314,3 +314,45 @@ func (i *Instance) addFileToBuilder(src string, dest string, chown string) error
 	}
 	return nil
 }
+
+// deployIngress deploys the ingress for the instance
+func (i *Instance) deployIngress() error {
+	ingress := i.ingress
+
+	annotations := map[string]string{}
+
+	if ingress.BackendProtocol != "" {
+		annotations["nginx.ingress.kubernetes.io/backend-protocol"] = ingress.BackendProtocol
+	}
+
+	if ingress.CertManagerEnabled {
+		//annotations["kubernetes.io/tls-acme"] = "true"
+		annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
+	}
+
+	if ingress.SslPassthrough {
+		annotations["nginx.ingress.kubernetes.io/ssl-passthrough"] = "true"
+	}
+
+	if ingress.ForceSslRedirect {
+		annotations["nginx.ingress.kubernetes.io/force-ssl-redirect"] = "true"
+	}
+
+	if ingress.EnableCors {
+		annotations["nginx.ingress.kubernetes.io/enable-cors"] = "true"
+	}
+
+	if err := k8s.CreateIngress(k8s.Namespace(), i.k8sName, i.getLabels(), annotations, ingressClass, ingress.Host, ingress.Path, ingress.PathType, i.k8sName, ingress.Port, ingress.TlsEnabled); err != nil {
+		return fmt.Errorf("failed to create ingress: %v", err)
+	}
+
+	return nil
+}
+
+// destroyIngress destroys the ingress for the instance
+func (i *Instance) destroyIngress() error {
+	k8s.DeleteIngress(k8s.Namespace(), i.k8sName)
+	logrus.Debugf("Destroyed ingress '%s'", i.k8sName)
+
+	return nil
+}
