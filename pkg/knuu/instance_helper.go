@@ -5,6 +5,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"path/filepath"
@@ -80,8 +81,18 @@ func (i *Instance) deployService() error {
 	}
 
 	labels := i.getLabels()
+	var annotations map[string]string
 	selectorMap := i.getLabels()
-	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
+	serviceType := v1.ServiceTypeClusterIP
+
+	if len(i.externalDns) > 0 {
+		annotations = map[string]string{
+			"external-dns.alpha.kubernetes.io/hostname": strings.Join(i.externalDns, ","),
+		}
+		serviceType = v1.ServiceTypeLoadBalancer
+	}
+
+	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, annotations, selectorMap, i.portsTCP, i.portsUDP, serviceType)
 	if err != nil {
 		return fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
 	}
@@ -99,7 +110,7 @@ func (i *Instance) patchService() error {
 		}
 		i.kubernetesService = svc
 	}
-	err := k8s.PatchService(k8s.Namespace(), i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
+	err := k8s.PatchService(k8s.Namespace(), i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.ObjectMeta.Annotations, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP, i.kubernetesService.Spec.Type)
 	if err != nil {
 		return fmt.Errorf("error patching service '%s': %w", i.k8sName, err)
 	}
