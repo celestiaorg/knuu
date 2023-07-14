@@ -60,11 +60,11 @@ func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
 		"app":                          i.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"test-run-id":                  identifier,
-		"test-started":                 startTime,
-		"name":                         i.name,
-		"k8s-name":                     i.k8sName,
-		"type":                         i.instanceType.String(),
+		"knuu.sh/test-run-id":          identifier,
+		"knuu.sh/test-started":         startTime,
+		"knuu.sh/name":                 i.name,
+		"knuu.sh/k8s-name":             i.k8sName,
+		"knuu.sh/type":                 i.instanceType.String(),
 	}
 }
 
