@@ -20,10 +20,15 @@ func NewPreloader() (*Preloader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error generating k8s name for preloader: %w", err)
 	}
-	return &Preloader{
+	preloader := &Preloader{
 		k8sName: k8sName,
 		images:  []string{},
-	}, nil
+	}
+	err = preloader.EmptyImages()
+	if err != nil {
+		return nil, err
+	}
+	return preloader, nil
 }
 
 // Images returns the list of preloaded images
