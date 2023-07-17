@@ -69,6 +69,7 @@ func NewInstance(name string) (*Instance, error) {
 		livenessProbe:  nil,
 		readinessProbe: nil,
 		startupProbe:   nil,
+		ingress:        nil,
 	}, nil
 }
 
