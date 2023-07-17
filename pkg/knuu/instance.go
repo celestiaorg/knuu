@@ -18,30 +18,44 @@ import (
 
 // Instance represents a instance
 type Instance struct {
-	name                  string
-	imageName             string
-	k8sName               string
-	state                 InstanceState
-	instanceType          InstanceType
-	kubernetesService     *v1.Service
-	builderFactory        *container.BuilderFactory
-	kubernetesStatefulSet *appv1.StatefulSet
-	portsTCP              []int
-	portsUDP              []int
-	command               []string
-	args                  []string
-	env                   map[string]string
-	volumes               []*k8s.Volume
-	memoryRequest         string
-	memoryLimit           string
-	cpuRequest            string
-	policyRules           []rbacv1.PolicyRule
-	livenessProbe         *v1.Probe
-	readinessProbe        *v1.Probe
-	startupProbe          *v1.Probe
-	files                 []*k8s.File
-	ingress               *Ingress
-	externalDns           []string
+	name                     string
+	imageName                string
+	k8sName                  string
+	state                    InstanceState
+	instanceType             InstanceType
+	kubernetesService        *v1.Service
+	builderFactory           *container.BuilderFactory
+	kubernetesStatefulSet    *appv1.StatefulSet
+	portsTCP                 []int
+	portsUDP                 []int
+	command                  []string
+	args                     []string
+	env                      map[string]string
+	volumes                  []*k8s.Volume
+	memoryRequest            string
+	memoryLimit              string
+	cpuRequest               string
+	policyRules              []rbacv1.PolicyRule
+	livenessProbe            *v1.Probe
+	readinessProbe           *v1.Probe
+	startupProbe             *v1.Probe
+	files                    []*k8s.File
+	ingress                  *Ingress
+	externalDns              []string
+	isSidecar                bool
+	parentSidecar            *Instance
+	sidecars                 []*Instance
+	otlpPort                 int
+	prometheusPort           int
+	prometheusJobName        string
+	prometheusScrapeInterval string
+	jaegerGrpcPort           int
+	jaegerThriftCompactPort  int
+	jaegerThriftHttpPort     int
+	otlpEndpoint             string
+	otlpUsername             string
+	otlpPassword             string
+	jaegerEndpoint           string
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -54,28 +68,46 @@ func NewInstance(name string) (*Instance, error) {
 	}
 	// Create the instance
 	return &Instance{
-		name:           name,
-		k8sName:        k8sName,
-		imageName:      "",
-		state:          None,
-		instanceType:   BasicInstance,
-		portsTCP:       make([]int, 0),
-		portsUDP:       make([]int, 0),
-		command:        make([]string, 0),
-		args:           make([]string, 0),
-		env:            make(map[string]string),
-		volumes:        make([]*k8s.Volume, 0),
-		memoryRequest:  "",
-		memoryLimit:    "",
-		cpuRequest:     "",
-		policyRules:    make([]rbacv1.PolicyRule, 0),
-		livenessProbe:  nil,
-		readinessProbe: nil,
-		startupProbe:   nil,
-		files:          make([]*k8s.File, 0),
-		ingress:        nil,
-		externalDns:    make([]string, 0),
+		name:                     name,
+		k8sName:                  k8sName,
+		imageName:                "",
+		state:                    None,
+		instanceType:             BasicInstance,
+		portsTCP:                 make([]int, 0),
+		portsUDP:                 make([]int, 0),
+		command:                  make([]string, 0),
+		args:                     make([]string, 0),
+		env:                      make(map[string]string),
+		volumes:                  make([]*k8s.Volume, 0),
+		memoryRequest:            "",
+		memoryLimit:              "",
+		cpuRequest:               "",
+		policyRules:              make([]rbacv1.PolicyRule, 0),
+		livenessProbe:            nil,
+		readinessProbe:           nil,
+		startupProbe:             nil,
+		files:                    make([]*k8s.File, 0),
+		ingress:                  nil,
+		externalDns:              make([]string, 0),
+		sidecars:                 make([]*Instance, 0),
+		isSidecar:                false,
+		otlpPort:                 0,
+		prometheusPort:           0,
+		prometheusJobName:        "",
+		prometheusScrapeInterval: "",
+		jaegerGrpcPort:           0,
+		jaegerThriftCompactPort:  0,
+		jaegerThriftHttpPort:     0,
+		otlpEndpoint:             "",
+		otlpUsername:             "",
+		otlpPassword:             "",
+		jaegerEndpoint:           "",
 	}, nil
+}
+
+// Identifier returns the identifier of the instance
+func (i *Instance) Identifier() string {
+	return i.k8sName
 }
 
 // SetImage sets the image of the instance.
@@ -102,24 +134,53 @@ func (i *Instance) SetImage(image string) error {
 		i.state = Preparing
 	case Started:
 
+		if i.isSidecar {
+			return fmt.Errorf("setting image is not allowed for sidecars")
+		}
+
+		// Generate the container configuration
+		containerConfig := k8s.ContainerConfig{
+			Name:           i.k8sName,
+			Image:          image,
+			Command:        i.command,
+			Args:           i.args,
+			Env:            i.env,
+			Volumes:        i.volumes,
+			MemoryRequest:  i.memoryRequest,
+			MemoryLimit:    i.memoryLimit,
+			CPURequest:     i.cpuRequest,
+			LivenessProbe:  i.livenessProbe,
+			ReadinessProbe: i.readinessProbe,
+			StartupProbe:   i.startupProbe,
+			Files:          i.files,
+		}
+		// Generate the sidecar configurations
+		sidecarConfigs := make([]k8s.ContainerConfig, 0)
+		for _, sidecar := range i.sidecars {
+			sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+				Name:           sidecar.k8sName,
+				Image:          sidecar.imageName,
+				Command:        sidecar.command,
+				Args:           sidecar.args,
+				Env:            sidecar.env,
+				Volumes:        sidecar.volumes,
+				MemoryRequest:  sidecar.memoryRequest,
+				MemoryLimit:    sidecar.memoryLimit,
+				CPURequest:     sidecar.cpuRequest,
+				LivenessProbe:  sidecar.livenessProbe,
+				ReadinessProbe: sidecar.readinessProbe,
+				StartupProbe:   sidecar.startupProbe,
+				Files:          sidecar.files,
+			})
+		}
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
 			Namespace:          k8s.Namespace(),
 			Name:               i.k8sName,
 			Labels:             i.kubernetesStatefulSet.Labels,
-			Image:              image,
-			Command:            i.command,
-			Args:               i.args,
-			Env:                i.env,
-			Volumes:            i.volumes,
-			MemoryRequest:      i.memoryRequest,
-			MemoryLimit:        i.memoryLimit,
-			CPURequest:         i.cpuRequest,
 			ServiceAccountName: i.k8sName,
-			LivenessProbe:      i.livenessProbe,
-			ReadinessProbe:     i.readinessProbe,
-			StartupProbe:       i.startupProbe,
-			Files:              i.files,
+			ContainerConfig:    containerConfig,
+			SidecarConfigs:     sidecarConfigs,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -150,24 +211,54 @@ func (i *Instance) SetImageInstant(image string) error {
 		return fmt.Errorf("setting image is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
 
+	if i.isSidecar {
+		return fmt.Errorf("setting image is not allowed for sidecars")
+	}
+
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          image,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace:          k8s.Namespace(),
 		Name:               i.k8sName,
 		Labels:             i.kubernetesStatefulSet.Labels,
-		Image:              image,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.k8sName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
-		Files:              i.files,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -416,8 +507,8 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 // AddFileBytes adds a file with the given content to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
 	// create a temporary file
@@ -540,7 +631,6 @@ func (i *Instance) SetEnvironmentVariable(key string, value string) error {
 }
 
 // GetIP returns the IP of the instance
-// This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
 	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
 	if svc == nil {
@@ -669,46 +759,124 @@ func (i *Instance) AddExternalDns(dns string) error {
 	return nil
 }
 
-// Start starts the instance
+// SetOtelEndpoint sets the OpenTelemetry endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtelEndpoint(port int) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting OpenTelemetry endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.otlpPort = port
+	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
+	return nil
+}
+
+// SetPrometheusEndpoint sets the Prometheus endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting Prometheus endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.prometheusPort = port
+	i.prometheusJobName = jobName
+	i.prometheusScrapeInterval = scapeInterval
+	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
+	return nil
+}
+
+// SetJaegerEndpoint sets the Jaeger endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting Jaeger endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.jaegerGrpcPort = grpcPort
+	i.jaegerThriftCompactPort = thriftCompactPort
+	i.jaegerThriftHttpPort = thriftHttpPort
+	logrus.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
+	return nil
+}
+
+// SetOtlpExporter sets the OTLP exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting OTLP exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.otlpEndpoint = endpoint
+	i.otlpUsername = username
+	i.otlpPassword = password
+	logrus.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetJaegerExporter sets the Jaeger exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetJaegerExporter(endpoint string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting Jaeger exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.jaegerEndpoint = endpoint
+	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// AddSidecar adds a sidecar to the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) AddSidecar(sidecar *Instance) error {
+
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding sidecar is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if sidecar == nil {
+		return fmt.Errorf("sidecar is nil")
+	}
+	if sidecar == i {
+		return fmt.Errorf("sidecar cannot be the same instance")
+	}
+	if sidecar.state != Committed {
+		return fmt.Errorf("sidecar '%s' is not in state 'Committed'", sidecar.name)
+	}
+	if i.isSidecar {
+		return fmt.Errorf("sidecar '%s' cannot have a sidecar", i.name)
+	}
+	if sidecar.isSidecar {
+		return fmt.Errorf("sidecar '%s' is already a sidecar", sidecar.name)
+	}
+
+	i.sidecars = append(i.sidecars, sidecar)
+	sidecar.isSidecar = true
+	sidecar.parentSidecar = i
+	logrus.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
+	return nil
+}
+
+// StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed'
-func (i *Instance) Start() error {
+func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
 		return fmt.Errorf("starting is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Committed {
-		if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-			logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-			svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-			if svc == nil {
-				err := i.deployService()
-				if err != nil {
-					return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-				}
-			} else if svc != nil {
-				err := i.patchService()
-				if err != nil {
-					return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
-				}
+		// deploy otel collector if observability is enabled
+		if i.isObservabilityEnabled() {
+			otelSidecar, err := i.createOtelCollectorInstance()
+			if err := i.AddSidecar(otelSidecar); err != nil {
+				return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
 			}
-		}
-		if len(i.volumes) != 0 {
-			err := i.deployVolume()
 			if err != nil {
-				return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+				return fmt.Errorf("error deploying otel collector for instance '%s': %w", i.k8sName, err)
 			}
 		}
-		if i.ingress != nil {
-			err := i.deployIngress()
-			if err != nil {
-				return fmt.Errorf("error deploying ingress for instance '%s': %w", i.k8sName, err)
+
+		if err := i.deployResources(); err != nil {
+			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)
+		}
+		for _, sidecar := range i.sidecars {
+			if err := sidecar.deployResources(); err != nil {
+				return fmt.Errorf("error deploying resources for sidecar '%s': %w", sidecar.k8sName, err)
 			}
 		}
-		if len(i.files) != 0 {
-			err := i.deployFiles()
-			if err != nil {
-				return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
-			}
-		}
+
 	}
 	err := i.deployPod()
 	if err != nil {
@@ -717,7 +885,17 @@ func (i *Instance) Start() error {
 	i.state = Started
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
-	err = i.WaitInstanceIsRunning()
+	return nil
+}
+
+// Start starts the instance and waits for it to be ready
+// This function can only be called in the state 'Committed' and 'Stopped'
+func (i *Instance) Start() error {
+	if err := i.StartWithoutWait(); err != nil {
+		return err
+	}
+
+	err := i.WaitInstanceIsRunning()
 	if err != nil {
 		return fmt.Errorf("error waiting for instance '%s' to be running: %w", i.k8sName, err)
 	}
@@ -840,26 +1018,13 @@ func (i *Instance) Destroy() error {
 	if err != nil {
 		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
 	}
-	if len(i.volumes) != 0 {
-		err := i.destroyVolume()
-		if err != nil {
-			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
-		}
+
+	if err := i.destroyResources(); err != nil {
+		return fmt.Errorf("error destroying resources for instance '%s': %w", i.k8sName, err)
 	}
-	if len(i.files) != 0 {
-		err := i.destroyFiles()
-		if err != nil {
-			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
-		}
-	}
-	err = i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
-	}
-	if i.ingress != nil {
-		err = i.destroyIngress()
-		if err != nil {
-			return fmt.Errorf("error destroying ingress for instance '%s': %w", i.k8sName, err)
+	for _, sidecar := range i.sidecars {
+		if err := sidecar.Destroy(); err != nil {
+			return fmt.Errorf("error destroying sidecar '%s' for instance '%s': %w", sidecar.name, i.k8sName, err)
 		}
 	}
 

@@ -152,26 +152,51 @@ func (i *Instance) deployPod() error {
 		}
 	}
 
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          imageName,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace:          k8s.Namespace(),
 		Name:               i.k8sName,
 		Labels:             labels,
-		Image:              imageName,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.k8sName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
-		Files:              i.files,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
 	}
-
+	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
 		Namespace: k8s.Namespace(),
 		Name:      i.k8sName,
@@ -285,33 +310,113 @@ func (i *Instance) destroyFiles() error {
 	return nil
 }
 
+// deployResources deploys the resources for the instance
+func (i *Instance) deployResources() error {
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+		if svc == nil {
+			err := i.deployService()
+			if err != nil {
+				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+			}
+		} else if svc != nil {
+			err := i.patchService()
+			if err != nil {
+				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+			}
+		}
+	}
+	if len(i.volumes) != 0 {
+		err := i.deployVolume()
+		if err != nil {
+			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if i.ingress != nil {
+		err := i.deployIngress()
+		if err != nil {
+			return fmt.Errorf("error deploying ingress for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.deployFiles()
+		if err != nil {
+			return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
+// destroyResources destroys the resources for the instance
+func (i *Instance) destroyResources() error {
+	if len(i.volumes) != 0 {
+		err := i.destroyVolume()
+		if err != nil {
+			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.destroyFiles()
+		if err != nil {
+			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	err := i.destroyService()
+	if err != nil {
+		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	}
+	if i.ingress != nil {
+		err = i.destroyIngress()
+		if err != nil {
+			return fmt.Errorf("error destroying ingress for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	return &Instance{
-		name:                  i.name + suffix,
-		k8sName:               i.k8sName + suffix,
-		imageName:             i.imageName,
-		state:                 i.state,
-		instanceType:          i.instanceType,
-		kubernetesService:     i.kubernetesService,
-		builderFactory:        i.builderFactory,
-		kubernetesStatefulSet: i.kubernetesStatefulSet,
-		portsTCP:              i.portsTCP,
-		portsUDP:              i.portsUDP,
-		command:               i.command,
-		args:                  i.args,
-		env:                   i.env,
-		volumes:               i.volumes,
-		memoryRequest:         i.memoryRequest,
-		memoryLimit:           i.memoryLimit,
-		cpuRequest:            i.cpuRequest,
-		policyRules:           i.policyRules,
-		livenessProbe:         i.livenessProbe,
-		readinessProbe:        i.readinessProbe,
-		startupProbe:          i.startupProbe,
-		files:                 i.files,
-		ingress:               i.ingress,
-		externalDns:           i.externalDns,
+		name:                     i.name + suffix,
+		k8sName:                  i.k8sName + suffix,
+		imageName:                i.imageName,
+		state:                    i.state,
+		instanceType:             i.instanceType,
+		kubernetesService:        i.kubernetesService,
+		builderFactory:           i.builderFactory,
+		kubernetesStatefulSet:    i.kubernetesStatefulSet,
+		portsTCP:                 i.portsTCP,
+		portsUDP:                 i.portsUDP,
+		command:                  i.command,
+		args:                     i.args,
+		env:                      i.env,
+		volumes:                  i.volumes,
+		memoryRequest:            i.memoryRequest,
+		memoryLimit:              i.memoryLimit,
+		cpuRequest:               i.cpuRequest,
+		policyRules:              i.policyRules,
+		livenessProbe:            i.livenessProbe,
+		readinessProbe:           i.readinessProbe,
+		startupProbe:             i.startupProbe,
+		files:                    i.files,
+		ingress:                  i.ingress,
+		externalDns:              i.externalDns,
+		isSidecar:                false,
+		sidecars:                 i.sidecars,
+		otlpPort:                 i.otlpPort,
+		prometheusPort:           i.prometheusPort,
+		prometheusJobName:        i.prometheusJobName,
+		prometheusScrapeInterval: i.prometheusScrapeInterval,
+		jaegerGrpcPort:           i.jaegerGrpcPort,
+		jaegerThriftCompactPort:  i.jaegerThriftCompactPort,
+		jaegerThriftHttpPort:     i.jaegerThriftHttpPort,
+		otlpEndpoint:             i.otlpEndpoint,
+		otlpUsername:             i.otlpUsername,
+		otlpPassword:             i.otlpPassword,
+		jaegerEndpoint:           i.jaegerEndpoint,
 	}
 }
 
@@ -414,4 +519,220 @@ func (i *Instance) destroyIngress() error {
 	logrus.Debugf("Destroyed ingress '%s'", i.k8sName)
 
 	return nil
+}
+
+// isObservabilityEnabled returns true if observability is enabled
+func (i *Instance) isObservabilityEnabled() bool {
+	return i.otlpPort != 0 || i.prometheusPort != 0 || i.jaegerGrpcPort != 0 || i.jaegerThriftCompactPort != 0 || i.jaegerThriftHttpPort != 0
+}
+
+// createOtelCollectorInstance deploys the OpenTelemetry collector
+func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
+	otelAgent, err := NewInstance("otel-agent")
+	if err != nil {
+		return nil, fmt.Errorf("error creating otel-agent instance: %w", err)
+	}
+	if err := otelAgent.SetImage("otel/opentelemetry-collector-contrib:0.71.0"); err != nil {
+		return nil, fmt.Errorf("error setting image for otel-agent instance: %w", err)
+	}
+	if err := otelAgent.AddPortTCP(8888); err != nil {
+		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+	}
+	if err := otelAgent.AddPortTCP(9090); err != nil {
+		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+	}
+	if err := otelAgent.SetCPU("100m"); err != nil {
+		return nil, fmt.Errorf("error setting CPU for otel-agent instance: %w", err)
+	}
+	if err := otelAgent.SetMemory("100Mi", "200Mi"); err != nil {
+		return nil, fmt.Errorf("error setting memory for otel-agent instance: %w", err)
+	}
+	if err := otelAgent.Commit(); err != nil {
+		return nil, fmt.Errorf("error committing otel-agent instance: %w", err)
+	}
+
+	// Specify extensions
+
+	extensions := ""
+
+	if i.otlpEndpoint != "" {
+		extensions = fmt.Sprintf(`
+extensions:
+  basicauth/otlp:
+    client_auth:
+      username: %s
+      password: "%s"
+`, i.otlpUsername, i.otlpPassword)
+	}
+
+	// Specify receivers
+
+	receivers := `
+receivers:
+`
+
+	if i.otlpPort != 0 {
+		receivers += fmt.Sprintf(`
+    otlp:
+      protocols:
+        http:
+          endpoint: "localhost:%d"
+`, i.otlpPort)
+	}
+
+	if i.prometheusPort != 0 {
+		receivers += fmt.Sprintf(`
+    prometheus:
+      config:
+        scrape_configs:
+        - job_name: '%s'
+          scrape_interval: %s
+          static_configs:
+          - targets: ['localhost:%d']
+`, i.prometheusJobName, i.prometheusScrapeInterval, i.prometheusPort)
+	}
+
+	if i.jaegerGrpcPort != 0 {
+		// if grpc is set the others are also set
+		receivers += fmt.Sprintf(`
+    jaeger:
+      protocols:
+        grpc:
+          endpoint: localhost:%d
+        thrift_compact:
+          endpoint: localhost:%d
+        thrift_http:
+          endpoint: localhost:%d
+`, i.jaegerGrpcPort, i.jaegerThriftCompactPort, i.jaegerThriftHttpPort)
+	}
+
+	// Specify exporters
+
+	exporters := ""
+
+	if i.otlpEndpoint != "" {
+		exporters += `
+exporters:
+`
+		if i.otlpEndpoint != "" {
+			exporters += fmt.Sprintf(`
+    otlphttp:
+      auth:
+        authenticator: basicauth/otlp
+      endpoint: %s
+`, i.otlpEndpoint)
+		}
+
+		if i.jaegerEndpoint != "" {
+			exporters += fmt.Sprintf(`
+    jaeger:
+      endpoint: %s
+      tls:
+        insecure: true
+`, i.jaegerEndpoint)
+		}
+	}
+
+	// Specify service
+
+	service := `
+service:
+`
+
+	if i.otlpEndpoint != "" {
+		service += `
+    extensions: [basicauth/otlp]
+`
+	}
+
+	if i.otlpPort != 0 || i.prometheusPort != 0 || i.otlpEndpoint != "" || i.jaegerGrpcPort != 0 {
+		service += `
+    pipelines:
+`
+
+		if i.otlpPort != 0 || i.prometheusPort != 0 || i.otlpEndpoint != "" {
+			service += `
+      metrics:
+`
+			if i.otlpPort != 0 || i.prometheusPort != 0 {
+				service += `
+        receivers:
+ `
+			}
+			if i.otlpPort != 0 {
+				service += `
+        - otlp
+`
+			}
+			if i.prometheusPort != 0 {
+				service += `
+        - prometheus
+`
+			}
+
+			if i.otlpEndpoint != "" {
+				service += `
+        exporters:
+        - otlphttp
+`
+			}
+		}
+
+		if i.jaegerGrpcPort != 0 || i.jaegerThriftCompactPort != 0 || i.jaegerThriftHttpPort != 0 || i.jaegerEndpoint != "" {
+			service += `
+      traces:
+`
+			if i.jaegerGrpcPort != 0 || i.jaegerThriftCompactPort != 0 || i.jaegerThriftHttpPort != 0 {
+				service += `
+        receivers:
+        - jaeger
+`
+			}
+			if i.jaegerEndpoint != "" {
+				service += `
+        exporters:
+        - jaeger
+        processors:
+        - batch
+        - memory_limiter
+`
+			}
+		}
+	}
+
+	// Specify processors
+
+	processors := `
+processors:
+`
+
+	if i.jaegerGrpcPort != 0 {
+		processors += `
+    batch:
+    memory_limiter:
+      # 80 percent of maximum memory up to 2G
+      limit_mib: 400
+      # 25 percent of limit up to 2G
+      spike_limit_mib: 100
+      check_interval: 5s
+`
+	}
+
+	config := fmt.Sprintf(`
+%s
+%s
+%s
+%s
+%s
+`, extensions, receivers, exporters, processors, service)
+
+	bytes := []byte(config)
+	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "root:root"); err != nil {
+		return nil, fmt.Errorf("error adding file to otel-agent instance: %w", err)
+	}
+	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
+		return nil, fmt.Errorf("error setting command for otel-agent instance: %w", err)
+	}
+
+	return otelAgent, nil
 }
