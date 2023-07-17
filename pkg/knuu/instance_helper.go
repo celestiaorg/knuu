@@ -263,6 +263,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		livenessProbe:         i.livenessProbe,
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,
+		externalDns:           i.externalDns,
 	}
 }
 
