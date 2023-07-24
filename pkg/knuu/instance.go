@@ -38,7 +38,7 @@ type Instance struct {
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
-  ingress               *Ingress
+        ingress               *Ingress
 	externalDns           []string
 }
 
@@ -612,7 +612,6 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
 	return nil
 }
-
 
 // SetIngress sets the ingress of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
