@@ -283,6 +283,7 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) ([]v1.Volume, 
 		podVolumes = append(podVolumes, podVolume)
 	}
 
+	// 0777 is used so that the files are usable by any user in the container without needing to change permissions
 	defaultMode := int32(0777)
 
 	if filesAmount != 0 {
