@@ -327,7 +327,6 @@ func (i *Instance) deployIngress() error {
 	}
 
 	if ingress.CertManagerEnabled {
-		//annotations["kubernetes.io/tls-acme"] = "true"
 		annotations["cert-manager.io/cluster-issuer"] = clusterIssuer
 	}
 
