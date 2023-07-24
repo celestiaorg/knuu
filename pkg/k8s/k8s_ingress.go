@@ -5,7 +5,6 @@ import (
 	"fmt"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 // CreateIngress creates a new Ingress resource.
@@ -61,7 +60,7 @@ func CreateIngress(namespace string, name string, labels map[string]string, anno
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	_, err := Clientset().NetworkingV1().Ingresses(namespace).Create(ctx, ingress, metav1.CreateOptions{})
@@ -73,7 +72,7 @@ func CreateIngress(namespace string, name string, labels map[string]string, anno
 
 // DeleteIngress deletes an Ingress resource.
 func DeleteIngress(namespace string, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	err := Clientset().NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
