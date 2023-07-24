@@ -4,19 +4,15 @@ package k8s
 import (
 	"fmt"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	"os"
-	"path/filepath"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"os"
+	"path/filepath"
 )
 
 // Clientset is a global variable that holds a kubernetes clientset.
 var clientset *kubernetes.Clientset
-
-// namespace is the current namespace in use by the Kubernetes client.
-var namespace = ""
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
 func Initialize() error {
@@ -54,19 +50,9 @@ func IsInitialized() bool {
 	return clientset != nil
 }
 
-// Namespace returns the current namespace in use.
-func Namespace() string {
-	return namespace
-}
-
 // Clientset returns the Kubernetes clientset.
 func Clientset() *kubernetes.Clientset {
 	return clientset
-}
-
-// setNamespace updates the namespace to the provided string.
-func setNamespace(newNamespace string) {
-	namespace = newNamespace
 }
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.

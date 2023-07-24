@@ -22,7 +22,7 @@ import (
 // getPod retrieves a pod from the given namespace and logs any errors.
 func getPod(namespace, name string) (*v1.Pod, error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -44,7 +44,7 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 		return nil, fmt.Errorf("error preparing pod: %s", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Try to create the pod
@@ -182,7 +182,7 @@ func RunCommandInPod(namespace, podName, containerName string, cmd []string) (st
 		return "", fmt.Errorf("failed to create Executor: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Execute the command and capture the output and error streams
@@ -213,7 +213,7 @@ func DeletePodWithGracePeriod(namespace, name string, gracePeriodSeconds *int64)
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Delete the pod using the Kubernetes client API

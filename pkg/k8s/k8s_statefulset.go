@@ -14,7 +14,7 @@ import (
 // getStatefulSet retrieves a statefulSet from the given namespace and logs any errors.
 func getStatefulSet(namespace, name string) (*appv1.StatefulSet, error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -36,7 +36,7 @@ func DeployStatefulSet(statefulSetConfig StatefulSetConfig, init bool) (*appv1.S
 		return nil, fmt.Errorf("error preparing pod: %s", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Try to create the statefulSet
@@ -116,7 +116,7 @@ func DeleteStatefulSetWithGracePeriod(namespace, name string, gracePeriodSeconds
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Delete the statefulSet using the Kubernetes client API

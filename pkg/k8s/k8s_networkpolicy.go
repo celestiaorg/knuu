@@ -1,11 +1,10 @@
 package k8s
 
 import (
-	"context"
-	"fmt"
-	v1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
+    "context"
+    "fmt"
+    v1 "k8s.io/api/networking/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateNetworkPolicy creates a new NetworkPolicy resource.
@@ -58,7 +57,7 @@ func CreateNetworkPolicy(namespace string, name string, selectorMap map[string]s
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -74,7 +73,7 @@ func CreateNetworkPolicy(namespace string, name string, selectorMap map[string]s
 
 // DeleteNetworkPolicy removes a NetworkPolicy resource.
 func DeleteNetworkPolicy(namespace string, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
