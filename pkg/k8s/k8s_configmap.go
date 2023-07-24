@@ -5,12 +5,11 @@ import (
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 // GetConfigMap retrieves a configmap
 func GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -26,7 +25,7 @@ func GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
 
 // ConfigMapExists checks if a configmap exists
 func ConfigMapExists(namespace, name string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -59,7 +58,7 @@ func CreateConfigMap(namespace, name string, labels map[string]string, data map[
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -85,7 +84,7 @@ func DeleteConfigMap(namespace, name string) error {
 		return fmt.Errorf("configmap %s does not exist", name)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
