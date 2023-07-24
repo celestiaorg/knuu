@@ -66,12 +66,26 @@ type Volume struct {
 	Owner int64
 }
 
+// File represents a file.
+type File struct {
+	Source string
+	Dest   string
+}
+
 // NewVolume creates a new volume with the given path, size and owner.
 func NewVolume(path, size string, owner int64) *Volume {
 	return &Volume{
 		Path:  path,
 		Size:  size,
 		Owner: owner,
+	}
+}
+
+// NewFile creates a new file with the given source and destination.
+func NewFile(source, dest string) *File {
+	return &File{
+		Source: source,
+		Dest:   dest,
 	}
 }
 
@@ -92,6 +106,7 @@ type PodConfig struct {
 	LivenessProbe      *v1.Probe         // Liveness probe for the container
 	ReadinessProbe     *v1.Probe         // Readiness probe for the container
 	StartupProbe       *v1.Probe         // Startup probe for the container
+	Files              []*File           // Files to add to the Pod
 }
 
 // ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
@@ -247,41 +262,84 @@ func buildEnv(envMap map[string]string) []v1.EnvVar {
 
 // buildPodVolumes generates a volume configuration for a pod based on the given name.
 // If the volumes amount is zero, returns an empty slice.
-func buildPodVolumes(name string, volumesAmount int) ([]v1.Volume, error) {
-	if volumesAmount == 0 {
+func buildPodVolumes(name string, volumesAmount, filesAmount int) ([]v1.Volume, error) {
+	// return empty slice if no volumes or files are specified
+	if volumesAmount == 0 && filesAmount == 0 {
 		return []v1.Volume{}, nil
 	}
 
-	podVolume := v1.Volume{
-		Name: name,
-		VolumeSource: v1.VolumeSource{
-			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-				ClaimName: name,
+	var podVolumes []v1.Volume
+
+	if volumesAmount != 0 {
+		podVolume := v1.Volume{
+			Name: name,
+			VolumeSource: v1.VolumeSource{
+				PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+					ClaimName: name,
+				},
 			},
-		},
+		}
+
+		podVolumes = append(podVolumes, podVolume)
 	}
 
-	return []v1.Volume{podVolume}, nil
+	// 0777 is used so that the files are usable by any user in the container without needing to change permissions
+	defaultMode := int32(0777)
+
+	if filesAmount != 0 {
+		podFiles := v1.Volume{
+			Name: name + "-config",
+			VolumeSource: v1.VolumeSource{
+				ConfigMap: &v1.ConfigMapVolumeSource{
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: name,
+					},
+					DefaultMode: &defaultMode,
+				},
+			},
+		}
+
+		podVolumes = append(podVolumes, podFiles)
+	}
+
+	return podVolumes, nil
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
+func buildContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.VolumeMount, error) {
 	var containerVolumes []v1.VolumeMount
+	var containerFiles []v1.VolumeMount
 
-	if len(volumes) == 0 {
-		return containerVolumes, nil // return empty slice if no volumes are specified
+	// return empty slice if no volumes or files are specified
+	if len(volumes) == 0 && len(files) == 0 {
+		return containerVolumes, nil
 	}
 
-	// iterate over the volumes map, add each volume to the containerVolumes
-	for _, volume := range volumes {
-		containerVolumes = append(containerVolumes, v1.VolumeMount{
-			Name:      name,
-			MountPath: volume.Path,
-			SubPath:   strings.TrimLeft(volume.Path, "/"),
-		})
+	if len(volumes) != 0 {
+		// iterate over the volumes map, add each volume to the containerVolumes
+		for _, volume := range volumes {
+			containerVolumes = append(containerVolumes, v1.VolumeMount{
+				Name:      name,
+				MountPath: volume.Path,
+				SubPath:   strings.TrimLeft(volume.Path, "/"),
+			})
+		}
 	}
 
-	return containerVolumes, nil
+	if len(files) != 0 {
+		// iterate over the files map, add each file to the containerFiles
+		n := 0
+		for _, file := range files {
+			containerFiles = append(containerFiles, v1.VolumeMount{
+				Name:      name + "-config",
+				MountPath: file.Dest,
+				SubPath:   fmt.Sprintf("%d", n),
+			})
+			n++
+		}
+	}
+
+	return append(containerVolumes, containerFiles...), nil
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
@@ -360,18 +418,19 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	args := spec.Args
 	env := spec.Env
 	volumes := spec.Volumes
+	files := spec.Files
 
 	// Build environment variables from the given map
 	podEnv := buildEnv(env)
 
 	// Build pod volumes from the given map
-	podVolumes, err := buildPodVolumes(name, len(volumes))
+	podVolumes, err := buildPodVolumes(name, len(volumes), len(files))
 	if err != nil {
 		return v1.PodSpec{}, fmt.Errorf("failed to build pod volumes: %v", err)
 	}
 
 	// Build container volumes from the given map
-	containerVolumes, err := buildContainerVolumes(name, volumes)
+	containerVolumes, err := buildContainerVolumes(name, volumes, files)
 	if err != nil {
 		return v1.PodSpec{}, fmt.Errorf("failed to build container volumes: %v", err)
 	}

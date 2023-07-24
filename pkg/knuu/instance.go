@@ -38,6 +38,7 @@ type Instance struct {
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
+	files                 []*k8s.File
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -68,6 +69,7 @@ func NewInstance(name string) (*Instance, error) {
 		livenessProbe:  nil,
 		readinessProbe: nil,
 		startupProbe:   nil,
+		files:          make([]*k8s.File, 0),
 	}, nil
 }
 
@@ -112,6 +114,7 @@ func (i *Instance) SetImage(image string) error {
 			LivenessProbe:      i.livenessProbe,
 			ReadinessProbe:     i.readinessProbe,
 			StartupProbe:       i.startupProbe,
+			Files:              i.files,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -159,6 +162,7 @@ func (i *Instance) SetImageInstant(image string) error {
 		LivenessProbe:      i.livenessProbe,
 		ReadinessProbe:     i.readinessProbe,
 		StartupProbe:       i.startupProbe,
+		Files:              i.files,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -300,8 +304,8 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 // AddFile adds a file to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFile(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
 	i.validateFileArgs(src, dest, chown)
@@ -339,7 +343,19 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		return fmt.Errorf("failed to copy from source '%s' to destination '%s': %w", src, dstPath, err)
 	}
 
-	i.addFileToBuilder(src, dest, chown)
+	switch i.state {
+	case Preparing:
+		i.addFileToBuilder(src, dest, chown)
+	case Committed:
+		// only allow files, not folders
+		srcInfo, err := os.Stat(src)
+		if os.IsNotExist(err) || srcInfo.IsDir() {
+			return fmt.Errorf("src '%s' does not exist or is a directory", src)
+		}
+		file := k8s.NewFile(dstPath, dest)
+
+		i.files = append(i.files, file)
+	}
 
 	logrus.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
@@ -637,6 +653,12 @@ func (i *Instance) Start() error {
 				return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
 			}
 		}
+		if len(i.files) != 0 {
+			err := i.deployFiles()
+			if err != nil {
+				return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
+			}
+		}
 	}
 	err := i.deployPod()
 	if err != nil {
@@ -772,6 +794,12 @@ func (i *Instance) Destroy() error {
 		err := i.destroyVolume()
 		if err != nil {
 			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.destroyFiles()
+		if err != nil {
+			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
 		}
 	}
 	err = i.destroyService()
