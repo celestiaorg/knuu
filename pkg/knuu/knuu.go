@@ -15,6 +15,12 @@ var identifier string
 var startTime string
 var timeout time.Duration
 
+// ingressClass is the ingress class to use
+var ingressClass string
+
+// clusterIssuer is the cluster issuer to use
+var clusterIssuer string
+
 // Initialize initializes knuug
 func Initialize() error {
 
@@ -74,6 +80,11 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
+	// TODO: add ingress class to env
+	ingressClass = "nginx"
+	// TODO: add cluster issuer to env
+	clusterIssuer = "letsencrypt-prod"
+
 	return nil
 }
 
@@ -103,8 +114,8 @@ func handleTimeout() error {
 	var command = []string{"sh", "-c"}
 	// Command runs in-cluster to delete resources post-test. Chosen for simplicity over a separate Go app.
 	wait := fmt.Sprintf("sleep %d", timeoutSeconds)
-	deleteAllButTimeOutType := fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.type != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace())
-	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings -l test-run-id=%s -n %s", identifier, k8s.Namespace())
+	deleteAllButTimeOutType := fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,ingresses -l test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.type != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace())
+	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,ingresses -l test-run-id=%s -n %s", identifier, k8s.Namespace())
 	cmd := fmt.Sprintf("%s && %s && %s", wait, deleteAllButTimeOutType, deleteAll)
 	command = append(command, cmd)
 

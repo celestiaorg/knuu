@@ -38,6 +38,7 @@ type Instance struct {
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
+  ingress               *Ingress
 	externalDns           []string
 }
 
@@ -69,6 +70,7 @@ func NewInstance(name string) (*Instance, error) {
 		livenessProbe:  nil,
 		readinessProbe: nil,
 		startupProbe:   nil,
+		ingress:        nil,
 		externalDns:    make([]string, 0),
 	}, nil
 }
@@ -611,6 +613,30 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	return nil
 }
 
+
+// SetIngress sets the ingress of the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) SetIngress(ingress *Ingress) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting ingress is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+
+	if err := ingress.validate(); err != nil {
+		return fmt.Errorf("invalid ingress: %w", err)
+	}
+
+	if err := validatePort(ingress.Port); err != nil {
+		return fmt.Errorf("invalid port '%d': %w", ingress.Port, err)
+	}
+	if !i.isTCPPortRegistered(ingress.Port) {
+		return fmt.Errorf("port '%d' is not registered", ingress.Port)
+	}
+
+	i.ingress = ingress
+	logrus.Debugf("Set ingress to '%s' in instance '%s'", i.ingress, i.name)
+	return nil
+}
+
 // AddExternalDns sets the external DNS of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddExternalDns(dns string) error {
@@ -653,6 +679,12 @@ func (i *Instance) Start() error {
 			err := i.deployVolume()
 			if err != nil {
 				return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+			}
+		}
+		if i.ingress != nil {
+			err := i.deployIngress()
+			if err != nil {
+				return fmt.Errorf("error deploying ingress for instance '%s': %w", i.k8sName, err)
 			}
 		}
 	}
@@ -795,6 +827,12 @@ func (i *Instance) Destroy() error {
 	err = i.destroyService()
 	if err != nil {
 		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	}
+	if i.ingress != nil {
+		err = i.destroyIngress()
+		if err != nil {
+			return fmt.Errorf("error destroying ingress for instance '%s': %w", i.k8sName, err)
+		}
 	}
 
 	i.state = Destroyed
