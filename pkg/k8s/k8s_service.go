@@ -1,13 +1,13 @@
 package k8s
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "github.com/sirupsen/logrus"
-    v1 "k8s.io/api/core/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/apimachinery/pkg/util/intstr"
+	"context"
+	"errors"
+	"fmt"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // GetService retrieves a service.
@@ -26,7 +26,15 @@ func GetService(namespace, name string) (*v1.Service, error) {
 }
 
 // DeployService deploys a service if it does not exist.
-func DeployService(namespace, name string, labels, annotations, selectorMap map[string]string, portsTCP []int, portsUDP []int, serviceType v1.ServiceType) (*v1.Service, error) {
+func DeployService(namespace,
+	name string,
+	labels,
+	annotations,
+	selectorMap map[string]string,
+	portsTCP,
+	portsUDP []int,
+	serviceType v1.ServiceType,
+) (*v1.Service, error) {
 
 	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
 	if err != nil {
@@ -48,7 +56,16 @@ func DeployService(namespace, name string, labels, annotations, selectorMap map[
 }
 
 // PatchService patches an existing service.
-func PatchService(namespace, name string, labels, annotations, selectorMap map[string]string, portsTCP, portsUDP []int, serviceType v1.ServiceType) error {
+func PatchService(
+	namespace,
+	name string,
+	labels,
+	annotations,
+	selectorMap map[string]string,
+	portsTCP,
+	portsUDP []int,
+	serviceType v1.ServiceType,
+) error {
 
 	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
 	if err != nil {
