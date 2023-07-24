@@ -1,11 +1,10 @@
 package k8s
 
 import (
-	"context"
-	"fmt"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
+    "context"
+    "fmt"
+    v1 "k8s.io/api/core/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateServiceAccount creates a service account
@@ -19,7 +18,7 @@ func CreateServiceAccount(namespace, name string, labels map[string]string) erro
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -35,7 +34,7 @@ func CreateServiceAccount(namespace, name string, labels map[string]string) erro
 // DeleteServiceAccount deletes a service account
 func DeleteServiceAccount(namespace, name string) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {

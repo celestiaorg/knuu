@@ -5,7 +5,6 @@ import (
 	"fmt"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 // CreateRole creates a role
@@ -20,7 +19,7 @@ func CreateRole(namespace, name string, labels map[string]string, policyRules []
 		Rules: policyRules,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -36,7 +35,7 @@ func CreateRole(namespace, name string, labels map[string]string, policyRules []
 // DeleteRole deletes a role
 func DeleteRole(namespace, name string) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {

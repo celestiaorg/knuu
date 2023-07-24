@@ -6,6 +6,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -17,6 +18,8 @@ var clientset *kubernetes.Clientset
 
 // namespace is the current namespace in use by the Kubernetes client.
 var namespace = ""
+
+var timeout = 20 * time.Second
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
 func Initialize() error {

@@ -5,8 +5,6 @@ import (
     "errors"
     "fmt"
     "github.com/sirupsen/logrus"
-    "time"
-
     v1 "k8s.io/api/core/v1"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     "k8s.io/apimachinery/pkg/util/intstr"
@@ -14,7 +12,7 @@ import (
 
 // GetService retrieves a service.
 func GetService(namespace, name string) (*v1.Service, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -35,7 +33,7 @@ func DeployService(namespace, name string, labels, selectorMap map[string]string
 		return nil, fmt.Errorf("error preparing service %s: %w", name, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -57,7 +55,7 @@ func PatchService(namespace, name string, labels, selectorMap map[string]string,
 		return fmt.Errorf("error preparing service %s: %w", name, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -74,7 +72,7 @@ func PatchService(namespace, name string, labels, selectorMap map[string]string,
 
 // DeleteService deletes a service if it exists.
 func DeleteService(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	_, err := GetService(namespace, name)

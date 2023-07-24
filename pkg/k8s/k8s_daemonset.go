@@ -1,18 +1,17 @@
 package k8s
 
 import (
-	"context"
-	"fmt"
-	"github.com/sirupsen/logrus"
-	appv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
+    "context"
+    "fmt"
+    "github.com/sirupsen/logrus"
+    appv1 "k8s.io/api/apps/v1"
+    v1 "k8s.io/api/core/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DaemonSetExists checks if a daemonset exists.
 func DaemonSetExists(namespace, name string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -30,7 +29,7 @@ func DaemonSetExists(namespace, name string) (bool, error) {
 
 // GetDaemonSet retrieves a daemonset.
 func GetDaemonSet(namespace, name string) (*appv1.DaemonSet, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -51,7 +50,7 @@ func CreateDaemonSet(namespace, name string, labels map[string]string, initConta
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -73,7 +72,7 @@ func UpdateDaemonSet(namespace, name string, labels map[string]string, initConta
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -89,7 +88,7 @@ func UpdateDaemonSet(namespace, name string, labels map[string]string, initConta
 
 // DeleteDaemonSet deletes an existing daemonset.
 func DeleteDaemonSet(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {

@@ -3,8 +3,6 @@ package k8s
 import (
     "context"
     "fmt"
-    "time"
-
     "github.com/sirupsen/logrus"
     v1 "k8s.io/api/core/v1"
     "k8s.io/apimachinery/pkg/api/resource"
@@ -29,7 +27,7 @@ func createPersistentVolumeClaim(namespace, name string, labels map[string]strin
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -52,7 +50,7 @@ func deletePersistentVolumeClaim(namespace, name string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
@@ -69,7 +67,7 @@ func deletePersistentVolumeClaim(namespace, name string) error {
 // getPersistentVolumeClaim retrieves a PersistentVolumeClaim.
 func getPersistentVolumeClaim(namespace, name string) (*v1.PersistentVolumeClaim, error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
