@@ -23,6 +23,28 @@ func CreateIngress(namespace string, name string, labels map[string]string, anno
 
 	pType := v1.PathType(pathType)
 
+	rule := v1.IngressRule{
+		Host: host,
+		IngressRuleValue: v1.IngressRuleValue{
+			HTTP: &v1.HTTPIngressRuleValue{
+				Paths: []v1.HTTPIngressPath{
+					{
+						Path:     path,
+						PathType: &pType,
+						Backend: v1.IngressBackend{
+							Service: &v1.IngressServiceBackend{
+								Name: serviceName,
+								Port: v1.ServiceBackendPort{
+									Number: int32(servicePort),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
 	ingress := &v1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   namespace,
@@ -34,27 +56,7 @@ func CreateIngress(namespace string, name string, labels map[string]string, anno
 			IngressClassName: &ingressClassName,
 			TLS:              tls,
 			Rules: []v1.IngressRule{
-				{
-					Host: host,
-					IngressRuleValue: v1.IngressRuleValue{
-						HTTP: &v1.HTTPIngressRuleValue{
-							Paths: []v1.HTTPIngressPath{
-								{
-									Path:     path,
-									PathType: &pType,
-									Backend: v1.IngressBackend{
-										Service: &v1.IngressServiceBackend{
-											Name: serviceName,
-											Port: v1.ServiceBackendPort{
-												Number: int32(servicePort),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				rule,
 			},
 		},
 	}
