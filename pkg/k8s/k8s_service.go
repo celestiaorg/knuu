@@ -1,13 +1,13 @@
 package k8s
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "github.com/sirupsen/logrus"
-    v1 "k8s.io/api/core/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/apimachinery/pkg/util/intstr"
+	"context"
+	"errors"
+	"fmt"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // GetService retrieves a service.
@@ -26,9 +26,17 @@ func GetService(namespace, name string) (*v1.Service, error) {
 }
 
 // DeployService deploys a service if it does not exist.
-func DeployService(namespace, name string, labels, selectorMap map[string]string, portsTCP []int, portsUDP []int) (*v1.Service, error) {
+func DeployService(namespace,
+	name string,
+	labels,
+	annotations,
+	selectorMap map[string]string,
+	portsTCP,
+	portsUDP []int,
+	serviceType v1.ServiceType,
+) (*v1.Service, error) {
 
-	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
+	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing service %s: %w", name, err)
 	}
@@ -48,9 +56,18 @@ func DeployService(namespace, name string, labels, selectorMap map[string]string
 }
 
 // PatchService patches an existing service.
-func PatchService(namespace, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) error {
+func PatchService(
+	namespace,
+	name string,
+	labels,
+	annotations,
+	selectorMap map[string]string,
+	portsTCP,
+	portsUDP []int,
+	serviceType v1.ServiceType,
+) error {
 
-	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
+	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
 	if err != nil {
 		return fmt.Errorf("error preparing service %s: %w", name, err)
 	}
@@ -124,8 +141,8 @@ func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
 }
 
 // prepareService constructs a new Service object with the specified parameters.
-func prepareService(namespace, name string, labels, selectorMap map[string]string,
-	tcpPorts, udpPorts []int) (*v1.Service, error) {
+func prepareService(namespace, name string, labels, annotations, selectorMap map[string]string,
+	tcpPorts, udpPorts []int, serviceType v1.ServiceType) (*v1.Service, error) {
 	if namespace == "" {
 		return nil, errors.New("namespace is required")
 	}
@@ -146,14 +163,15 @@ func prepareService(namespace, name string, labels, selectorMap map[string]strin
 
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    labels,
+			Namespace:   namespace,
+			Name:        name,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: v1.ServiceSpec{
 			Ports:    servicePorts,
 			Selector: selectorMap,
-			Type:     v1.ServiceTypeClusterIP,
+			Type:     serviceType,
 		},
 	}
 	return svc, nil

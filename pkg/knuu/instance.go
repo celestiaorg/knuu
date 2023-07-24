@@ -39,6 +39,7 @@ type Instance struct {
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
 	ingress               *Ingress
+	externalDns           []string
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -70,6 +71,7 @@ func NewInstance(name string) (*Instance, error) {
 		readinessProbe: nil,
 		startupProbe:   nil,
 		ingress:        nil,
+		externalDns:    make([]string, 0),
 	}, nil
 }
 
@@ -631,6 +633,22 @@ func (i *Instance) SetIngress(ingress *Ingress) error {
 
 	i.ingress = ingress
 	logrus.Debugf("Set ingress to '%s' in instance '%s'", i.ingress, i.name)
+	return nil
+}
+
+// AddExternalDns sets the external DNS of the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (i *Instance) AddExternalDns(dns string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding external DNS is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	// check if external DNS is already added
+	for _, d := range i.externalDns {
+		if d == dns {
+			return fmt.Errorf("external DNS '%s' is already added", dns)
+		}
+	}
+	i.externalDns = append(i.externalDns, dns)
 	return nil
 }
 
