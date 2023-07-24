@@ -8,7 +8,7 @@ import (
 )
 
 // CreateIngress creates a new Ingress resource.
-func CreateIngress(namespace string, name string, labels map[string]string, annotations map[string]string, ingressClassName string, host string, path string, pathType string, serviceName string, servicePort int, tlsEnabled bool) error {
+func CreateIngress(namespace, name string, labels, annotations map[string]string, ingressClassName, host, path, pathType, serviceName string, servicePort int, tlsEnabled bool) error {
 
 	var tls []v1.IngressTLS
 	if tlsEnabled {
@@ -71,7 +71,7 @@ func CreateIngress(namespace string, name string, labels map[string]string, anno
 }
 
 // DeleteIngress deletes an Ingress resource.
-func DeleteIngress(namespace string, name string) error {
+func DeleteIngress(namespace, name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
