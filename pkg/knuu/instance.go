@@ -38,7 +38,7 @@ type Instance struct {
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
-        ingress               *Ingress
+	ingress               *Ingress
 	externalDns           []string
 }
 
