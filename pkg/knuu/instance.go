@@ -2,17 +2,18 @@ package knuu
 
 import (
 	"fmt"
-	"github.com/celestiaorg/knuu/pkg/container"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/sirupsen/logrus"
 	"io"
-	appv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/celestiaorg/knuu/pkg/container"
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/sirupsen/logrus"
+	appv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 )
 
 // Instance represents a instance
@@ -719,7 +720,7 @@ func (i *Instance) DisableNetwork() error {
 		return fmt.Errorf("disabling network is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
 	executorSelectorMap := map[string]string{
-		"type": ExecutorInstance.String(),
+		"knuu.sh/type": ExecutorInstance.String(),
 	}
 	err := k8s.CreateNetworkPolicy(k8s.Namespace(), i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
