@@ -5,9 +5,11 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"io"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -61,11 +63,11 @@ func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
 		"app":                          i.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"test-run-id":                  identifier,
-		"test-started":                 startTime,
-		"name":                         i.name,
-		"k8s-name":                     i.k8sName,
-		"type":                         i.instanceType.String(),
+		"knuu.sh/test-run-id":          identifier,
+		"knuu.sh/test-started":         startTime,
+		"knuu.sh/name":                 i.name,
+		"knuu.sh/k8s-name":             i.k8sName,
+		"knuu.sh/type":                 i.instanceType.String(),
 	}
 }
 
@@ -167,6 +169,7 @@ func (i *Instance) deployPod() error {
 		LivenessProbe:      i.livenessProbe,
 		ReadinessProbe:     i.readinessProbe,
 		StartupProbe:       i.startupProbe,
+		Files:              i.files,
 	}
 
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -239,6 +242,49 @@ func (i *Instance) destroyVolume() error {
 	return nil
 }
 
+// deployFiles deploys the files for the instance
+func (i *Instance) deployFiles() error {
+
+	data := map[string]string{}
+
+	n := 0
+
+	for _, file := range i.files {
+		// read out file content and assign to variable
+		srcFile, err := os.Open(file.Source)
+		if err != nil {
+			return fmt.Errorf("failed to open file: %v", err)
+		}
+		fileContentBytes, err := io.ReadAll(srcFile)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %v", err)
+		}
+		srcFile.Close()
+		fileContent := string(fileContentBytes)
+
+		keyName := fmt.Sprintf("%d", n)
+
+		data[keyName] = fileContent
+
+		n++
+	}
+
+	// create configmap
+	if _, err := k8s.CreateConfigMap(k8s.Namespace(), i.k8sName, i.getLabels(), data); err != nil {
+		return fmt.Errorf("failed to create configmap: %v", err)
+	}
+
+	return nil
+}
+
+// destroyFiles destroys the files for the instance
+func (i *Instance) destroyFiles() error {
+	if err := k8s.DeleteConfigMap(k8s.Namespace(), i.k8sName); err != nil {
+		return fmt.Errorf("failed to delete configmap: %v", err)
+	}
+	return nil
+}
+
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	return &Instance{
@@ -263,6 +309,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		livenessProbe:         i.livenessProbe,
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,
+		files:                 i.files,
 		ingress:               i.ingress,
 		externalDns:           i.externalDns,
 	}
