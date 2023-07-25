@@ -517,12 +517,10 @@ func (i *Instance) SetEnvironmentVariable(key string, value string) error {
 	logrus.Debugf("Set environment variable '%s' to '%s' in instance '%s'", key, value, i.name)
 	return nil
 }
-
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc == nil {
+	if i.kubernetesService == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService()
 		if err != nil {
