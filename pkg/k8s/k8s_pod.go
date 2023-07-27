@@ -466,7 +466,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 
 	return []v1.Container{
 		{
-			Name:  "volume-whatever",
+			Name:  config.Name,
 			Image: config.Image,
 			SecurityContext: &v1.SecurityContext{
 				RunAsUser: &user,
