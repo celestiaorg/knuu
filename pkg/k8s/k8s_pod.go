@@ -89,24 +89,31 @@ func NewFile(source, dest string) *File {
 	}
 }
 
+// ContainerConfig contains the specifications for creating a new Container object
+type ContainerConfig struct {
+	Name           string            // Name to assign to the Container
+	Image          string            // Name of the container image to use for the container
+	Command        []string          // Command to run in the container
+	Args           []string          // Arguments to pass to the command in the container
+	Env            map[string]string // Environment variables to set in the container
+	Volumes        []*Volume         // Volumes to mount in the Pod
+	MemoryRequest  string            // Memory request for the container
+	MemoryLimit    string            // Memory limit for the container
+	CPURequest     string            // CPU request for the container
+	LivenessProbe  *v1.Probe         // Liveness probe for the container
+	ReadinessProbe *v1.Probe         // Readiness probe for the container
+	StartupProbe   *v1.Probe         // Startup probe for the container
+	Files          []*File           // Files to add to the Pod
+}
+
 // PodConfig contains the specifications for creating a new Pod object
 type PodConfig struct {
 	Namespace          string            // Kubernetes namespace of the Pod
 	Name               string            // Name to assign to the Pod
 	Labels             map[string]string // Labels to apply to the Pod
-	Image              string            // Name of the Docker image to use for the container
-	Command            []string          // Command to run in the container
-	Args               []string          // Arguments to pass to the command in the container
-	Env                map[string]string // Environment variables to set in the container
-	Volumes            []*Volume         // Volumes to mount in the Pod
-	MemoryRequest      string            // Memory request for the container
-	MemoryLimit        string            // Memory limit for the container
-	CPURequest         string            // CPU request for the container
 	ServiceAccountName string            // ServiceAccount to assign to Pod
-	LivenessProbe      *v1.Probe         // Liveness probe for the container
-	ReadinessProbe     *v1.Probe         // Readiness probe for the container
-	StartupProbe       *v1.Probe         // Startup probe for the container
-	Files              []*File           // Files to add to the Pod
+	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
+	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
 }
 
 // ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
@@ -410,82 +417,118 @@ func buildResources(memoryRequest string, memoryLimit string, cpuRequest string)
 	return resources, nil
 }
 
-// preparePodSpec prepares a pod spec configuration.
-func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
-	name := spec.Name
-	image := spec.Image
-	command := spec.Command
-	args := spec.Args
-	env := spec.Env
-	volumes := spec.Volumes
-	files := spec.Files
-
+// prepareContainer creates a v1.Container from a given ContainerConfig.
+func prepareContainer(config ContainerConfig) (v1.Container, error) {
 	// Build environment variables from the given map
-	podEnv := buildEnv(env)
-
-	// Build pod volumes from the given map
-	podVolumes, err := buildPodVolumes(name, len(volumes), len(files))
-	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to build pod volumes: %v", err)
-	}
+	podEnv := buildEnv(config.Env)
 
 	// Build container volumes from the given map
-	containerVolumes, err := buildContainerVolumes(name, volumes, files)
+	containerVolumes, err := buildContainerVolumes(config.Name, config.Volumes, config.Files)
 	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to build container volumes: %v", err)
+		return v1.Container{}, fmt.Errorf("failed to build container volumes: %v", err)
 	}
 
-	var initContainers []v1.Container
-	if len(volumes) > 0 && init {
-		// Build init containers volumes and command from the given map
-		initContainerVolumes, err := buildInitContainerVolumes(name, volumes)
-		if err != nil {
-			return v1.PodSpec{}, fmt.Errorf("failed to build init container volumes: %v", err)
-		}
-		initContainerCommand, err := buildInitContainerCommand(name, volumes)
-		if err != nil {
-			return v1.PodSpec{}, fmt.Errorf("failed to build init container command: %v", err)
-		}
+	resources, err := buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest)
+	if err != nil {
+		return v1.Container{}, fmt.Errorf("failed to build resources: %v", err)
+	}
 
-		user := int64(0)
+	return v1.Container{
+		Name:           config.Name,
+		Image:          config.Image,
+		Command:        config.Command,
+		Args:           config.Args,
+		Env:            podEnv,
+		VolumeMounts:   containerVolumes,
+		Resources:      resources,
+		LivenessProbe:  config.LivenessProbe,
+		ReadinessProbe: config.ReadinessProbe,
+		StartupProbe:   config.StartupProbe,
+	}, nil
+}
 
-		initContainers = []v1.Container{
-			{
-				Name:  "volume-whatever",
-				Image: image,
-				SecurityContext: &v1.SecurityContext{
-					RunAsUser: &user,
-				},
-				Command:      initContainerCommand,
-				VolumeMounts: initContainerVolumes,
+// prepareInitContainers creates a slice of v1.Container as init containers.
+func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, error) {
+	if !init || len(config.Volumes) == 0 {
+		return nil, nil
+	}
+
+	initContainerVolumes, err := buildInitContainerVolumes(config.Name, config.Volumes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build init container volumes: %v", err)
+	}
+	initContainerCommand, err := buildInitContainerCommand(config.Name, config.Volumes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build init container command: %v", err)
+	}
+
+	user := int64(0)
+
+	return []v1.Container{
+		{
+			Name:  "volume-whatever",
+			Image: config.Image,
+			SecurityContext: &v1.SecurityContext{
+				RunAsUser: &user,
 			},
-		}
+			Command:      initContainerCommand,
+			VolumeMounts: initContainerVolumes,
+		},
+	}, nil
+}
+
+// preparePodVolumes prepares pod volumes
+func preparePodVolumes(config ContainerConfig) ([]v1.Volume, error) {
+	podVolumes, err := buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build pod volumes: %v", err)
 	}
 
-	var resources v1.ResourceRequirements
-	resources, err = buildResources(spec.MemoryRequest, spec.MemoryLimit, spec.CPURequest)
+	return podVolumes, nil
+}
+
+func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
+	var err error
+
+	// Prepare main container
+	mainContainer, err := prepareContainer(spec.ContainerConfig)
 	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to build resources: %v", err)
+		return v1.PodSpec{}, fmt.Errorf("failed to prepare main container: %w", err)
+	}
+
+	// Prepare init containers
+	initContainers, err := prepareInitContainers(spec.ContainerConfig, init)
+	if err != nil {
+		return v1.PodSpec{}, fmt.Errorf("failed to prepare init containers: %w", err)
+	}
+
+	// Prepare volumes
+	podVolumes, err := preparePodVolumes(spec.ContainerConfig)
+	if err != nil {
+		return v1.PodSpec{}, fmt.Errorf("failed to prepare pod volumes: %w", err)
 	}
 
 	podSpec := v1.PodSpec{
 		ServiceAccountName: spec.ServiceAccountName,
 		InitContainers:     initContainers,
-		Containers: []v1.Container{
-			{
-				Name:           name,
-				Image:          image,
-				Command:        command,
-				Args:           args,
-				Env:            podEnv,
-				VolumeMounts:   containerVolumes,
-				Resources:      resources,
-				LivenessProbe:  spec.LivenessProbe,
-				ReadinessProbe: spec.ReadinessProbe,
-				StartupProbe:   spec.StartupProbe,
-			},
-		},
-		Volumes: podVolumes,
+		Containers:         []v1.Container{mainContainer},
+		Volumes:            podVolumes,
+	}
+
+	// Prepare sidecar containers and append to the pod spec
+	for _, sidecarConfig := range spec.SidecarConfigs {
+		sidecar, err := prepareContainer(sidecarConfig)
+		if err != nil {
+			return v1.PodSpec{}, fmt.Errorf("failed to prepare sidecar container: %w", err)
+		}
+
+		sidecarVolumes, err := preparePodVolumes(sidecarConfig)
+		if err != nil {
+			return v1.PodSpec{}, fmt.Errorf("failed to prepare sidecar volumes: %w", err)
+		}
+
+		podSpec.Containers = append(podSpec.Containers, sidecar)
+		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}
 
 	return podSpec, nil

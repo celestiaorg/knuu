@@ -40,6 +40,9 @@ type Instance struct {
 	readinessProbe        *v1.Probe
 	startupProbe          *v1.Probe
 	files                 []*k8s.File
+	isSidecar             bool
+	parentInstance        *Instance
+	sidecars              []*Instance
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -71,6 +74,9 @@ func NewInstance(name string) (*Instance, error) {
 		readinessProbe: nil,
 		startupProbe:   nil,
 		files:          make([]*k8s.File, 0),
+		isSidecar:      false,
+		parentInstance: nil,
+		sidecars:       make([]*Instance, 0),
 	}, nil
 }
 
@@ -98,24 +104,53 @@ func (i *Instance) SetImage(image string) error {
 		i.state = Preparing
 	case Started:
 
+		if i.isSidecar {
+			return fmt.Errorf("setting image is not allowed for sidecars when in state 'Started'")
+		}
+
+		// Generate the container configuration
+		containerConfig := k8s.ContainerConfig{
+			Name:           i.k8sName,
+			Image:          image,
+			Command:        i.command,
+			Args:           i.args,
+			Env:            i.env,
+			Volumes:        i.volumes,
+			MemoryRequest:  i.memoryRequest,
+			MemoryLimit:    i.memoryLimit,
+			CPURequest:     i.cpuRequest,
+			LivenessProbe:  i.livenessProbe,
+			ReadinessProbe: i.readinessProbe,
+			StartupProbe:   i.startupProbe,
+			Files:          i.files,
+		}
+		// Generate the sidecar configurations
+		sidecarConfigs := make([]k8s.ContainerConfig, 0)
+		for _, sidecar := range i.sidecars {
+			sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+				Name:           sidecar.k8sName,
+				Image:          sidecar.imageName,
+				Command:        sidecar.command,
+				Args:           sidecar.args,
+				Env:            sidecar.env,
+				Volumes:        sidecar.volumes,
+				MemoryRequest:  sidecar.memoryRequest,
+				MemoryLimit:    sidecar.memoryLimit,
+				CPURequest:     sidecar.cpuRequest,
+				LivenessProbe:  sidecar.livenessProbe,
+				ReadinessProbe: sidecar.readinessProbe,
+				StartupProbe:   sidecar.startupProbe,
+				Files:          sidecar.files,
+			})
+		}
 		// Generate the pod configuration
 		podConfig := k8s.PodConfig{
 			Namespace:          k8s.Namespace(),
 			Name:               i.k8sName,
 			Labels:             i.kubernetesStatefulSet.Labels,
-			Image:              image,
-			Command:            i.command,
-			Args:               i.args,
-			Env:                i.env,
-			Volumes:            i.volumes,
-			MemoryRequest:      i.memoryRequest,
-			MemoryLimit:        i.memoryLimit,
-			CPURequest:         i.cpuRequest,
 			ServiceAccountName: i.k8sName,
-			LivenessProbe:      i.livenessProbe,
-			ReadinessProbe:     i.readinessProbe,
-			StartupProbe:       i.startupProbe,
-			Files:              i.files,
+			ContainerConfig:    containerConfig,
+			SidecarConfigs:     sidecarConfigs,
 		}
 		// Generate the statefulset configuration
 		statefulSetConfig := k8s.StatefulSetConfig{
@@ -146,24 +181,54 @@ func (i *Instance) SetImageInstant(image string) error {
 		return fmt.Errorf("setting image is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
 
+	if i.isSidecar {
+		return fmt.Errorf("setting image is not allowed for sidecars")
+	}
+
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          image,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace:          k8s.Namespace(),
 		Name:               i.k8sName,
 		Labels:             i.kubernetesStatefulSet.Labels,
-		Image:              image,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.k8sName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
-		Files:              i.files,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
 	}
 	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
@@ -626,49 +691,75 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	return nil
 }
 
-// Start starts the instance
+// AddSidecar adds a sidecar to the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) AddSidecar(sidecar *Instance) error {
+
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding sidecar is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if sidecar == nil {
+		return fmt.Errorf("sidecar is nil")
+	}
+	if sidecar == i {
+		return fmt.Errorf("sidecar cannot be the same instance")
+	}
+	if sidecar.state != Committed {
+		return fmt.Errorf("sidecar '%s' is not in state 'Committed'", sidecar.name)
+	}
+	if i.isSidecar {
+		return fmt.Errorf("sidecar '%s' cannot have a sidecar", i.name)
+	}
+	if sidecar.isSidecar {
+		return fmt.Errorf("sidecar '%s' is already a sidecar", sidecar.name)
+	}
+
+	i.sidecars = append(i.sidecars, sidecar)
+	sidecar.isSidecar = true
+	sidecar.parentInstance = i
+	logrus.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
+	return nil
+}
+
+// StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed'
-func (i *Instance) Start() error {
+func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
 		return fmt.Errorf("starting is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Committed {
-		if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-			logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-			svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-			if svc == nil {
-				err := i.deployService()
-				if err != nil {
-					return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-				}
-			} else if svc != nil {
-				err := i.patchService()
-				if err != nil {
-					return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
-				}
+
+		if err := i.deployResources(); err != nil {
+			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)
+		}
+		for _, sidecar := range i.sidecars {
+			if err := sidecar.deployResources(); err != nil {
+				return fmt.Errorf("error deploying resources for sidecar '%s': %w", sidecar.k8sName, err)
 			}
 		}
-		if len(i.volumes) != 0 {
-			err := i.deployVolume()
-			if err != nil {
-				return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
-			}
-		}
-		if len(i.files) != 0 {
-			err := i.deployFiles()
-			if err != nil {
-				return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
-			}
-		}
+
 	}
 	err := i.deployPod()
 	if err != nil {
 		return fmt.Errorf("error deploying pod for instance '%s': %w", i.k8sName, err)
 	}
 	i.state = Started
+	for _, sidecar := range i.sidecars {
+		sidecar.state = Started
+	}
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
-	err = i.WaitInstanceIsRunning()
+	return nil
+}
+
+// Start starts the instance and waits for it to be ready
+// This function can only be called in the state 'Committed' and 'Stopped'
+func (i *Instance) Start() error {
+	if err := i.StartWithoutWait(); err != nil {
+		return err
+	}
+
+	err := i.WaitInstanceIsRunning()
 	if err != nil {
 		return fmt.Errorf("error waiting for instance '%s' to be running: %w", i.k8sName, err)
 	}
@@ -773,6 +864,9 @@ func (i *Instance) Stop() error {
 		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
 	}
 	i.state = Stopped
+	for _, sidecar := range i.sidecars {
+		sidecar.state = Stopped
+	}
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -809,6 +903,9 @@ func (i *Instance) Destroy() error {
 	}
 
 	i.state = Destroyed
+	for _, sidecar := range i.sidecars {
+		sidecar.state = Destroyed
+	}
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil

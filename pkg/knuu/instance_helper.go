@@ -141,26 +141,51 @@ func (i *Instance) deployPod() error {
 		}
 	}
 
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          imageName,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
 		Namespace:          k8s.Namespace(),
 		Name:               i.k8sName,
 		Labels:             labels,
-		Image:              imageName,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
 		ServiceAccountName: i.k8sName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
-		Files:              i.files,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
 	}
-
+	// Generate the statefulset configuration
 	statefulSetConfig := k8s.StatefulSetConfig{
 		Namespace: k8s.Namespace(),
 		Name:      i.k8sName,
@@ -274,8 +299,69 @@ func (i *Instance) destroyFiles() error {
 	return nil
 }
 
+// deployResources deploys the resources for the instance
+func (i *Instance) deployResources() error {
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+		if svc == nil {
+			err := i.deployService()
+			if err != nil {
+				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+			}
+		} else if svc != nil {
+			err := i.patchService()
+			if err != nil {
+				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+			}
+		}
+	}
+	if len(i.volumes) != 0 {
+		err := i.deployVolume()
+		if err != nil {
+			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.deployFiles()
+		if err != nil {
+			return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
+// destroyResources destroys the resources for the instance
+func (i *Instance) destroyResources() error {
+	if len(i.volumes) != 0 {
+		err := i.destroyVolume()
+		if err != nil {
+			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.destroyFiles()
+		if err != nil {
+			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	err := i.destroyService()
+	if err != nil {
+		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	}
+
+	return nil
+}
+
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
+
+	clonedSidecars := make([]*Instance, len(i.sidecars))
+	for i, sidecar := range i.sidecars {
+		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
+	}
+
 	return &Instance{
 		name:                  i.name + suffix,
 		k8sName:               i.k8sName + suffix,
@@ -298,7 +384,9 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		livenessProbe:         i.livenessProbe,
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,
-		files:                 i.files,
+		isSidecar:             false,
+		parentInstance:        i.parentInstance,
+		sidecars:              clonedSidecars,
 	}
 }
 
