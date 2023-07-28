@@ -13,13 +13,13 @@ import (
 
 // getStatefulSet retrieves a statefulSet from the given namespace and logs any errors.
 func getStatefulSet(namespace, name string) (*appv1.StatefulSet, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
 		return nil, fmt.Errorf("knuu is not initialized")
 	}
+
 	statefulset, err := Clientset().AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get statefulSet %s: %w", name, err)

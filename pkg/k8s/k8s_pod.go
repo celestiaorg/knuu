@@ -5,23 +5,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport/spdy"
 )
 
 // getPod retrieves a pod from the given namespace and logs any errors.
 func getPod(namespace, name string) (*v1.Pod, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -162,7 +161,12 @@ func IsPodRunning(namespace, name string) (bool, error) {
 }
 
 // RunCommandInPod runs a command in a container within a pod.
-func RunCommandInPod(namespace, podName, containerName string, cmd []string) (string, error) {
+func RunCommandInPod(
+	namespace,
+	podName,
+	containerName string,
+	cmd []string,
+) (string, error) {
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {
@@ -518,7 +522,12 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 }
 
 // PortForwardPod forwards a local port to a port on a pod.
-func PortForwardPod(namespace string, podName string, localPort int, remotePort int) error {
+func PortForwardPod(
+	namespace,
+	podName string,
+	localPort,
+	remotePort int,
+) error {
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {
