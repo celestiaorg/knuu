@@ -368,7 +368,7 @@ func buildInitContainerCommand(name string, volumes []*Volume) ([]string, error)
 		return []string{}, nil // return empty slice if no volumes are specified
 	}
 
-	var command []string = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
+	var command = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
 	for _, volume := range volumes {
 		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
 		command = append(command, cmd) // add each command to the command slice
