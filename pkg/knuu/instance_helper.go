@@ -121,11 +121,6 @@ func (i *Instance) deployPod() error {
 	// Get labels for the pod
 	labels := i.getLabels()
 
-	imageName, err := i.getImageRegistry()
-	if err != nil {
-		return fmt.Errorf("failed to get image name: %v", err)
-	}
-
 	// create a service account for the pod
 	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
 		return fmt.Errorf("failed to create service account: %v", err)
@@ -141,58 +136,7 @@ func (i *Instance) deployPod() error {
 		}
 	}
 
-	// Generate the container configuration
-	containerConfig := k8s.ContainerConfig{
-		Name:           i.k8sName,
-		Image:          imageName,
-		Command:        i.command,
-		Args:           i.args,
-		Env:            i.env,
-		Volumes:        i.volumes,
-		MemoryRequest:  i.memoryRequest,
-		MemoryLimit:    i.memoryLimit,
-		CPURequest:     i.cpuRequest,
-		LivenessProbe:  i.livenessProbe,
-		ReadinessProbe: i.readinessProbe,
-		StartupProbe:   i.startupProbe,
-		Files:          i.files,
-	}
-	// Generate the sidecar configurations
-	sidecarConfigs := make([]k8s.ContainerConfig, 0)
-	for _, sidecar := range i.sidecars {
-		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:           sidecar.k8sName,
-			Image:          sidecar.imageName,
-			Command:        sidecar.command,
-			Args:           sidecar.args,
-			Env:            sidecar.env,
-			Volumes:        sidecar.volumes,
-			MemoryRequest:  sidecar.memoryRequest,
-			MemoryLimit:    sidecar.memoryLimit,
-			CPURequest:     sidecar.cpuRequest,
-			LivenessProbe:  sidecar.livenessProbe,
-			ReadinessProbe: sidecar.readinessProbe,
-			StartupProbe:   sidecar.startupProbe,
-			Files:          sidecar.files,
-		})
-	}
-	// Generate the pod configuration
-	podConfig := k8s.PodConfig{
-		Namespace:          k8s.Namespace(),
-		Name:               i.k8sName,
-		Labels:             labels,
-		ServiceAccountName: i.k8sName,
-		ContainerConfig:    containerConfig,
-		SidecarConfigs:     sidecarConfigs,
-	}
-	// Generate the statefulset configuration
-	statefulSetConfig := k8s.StatefulSetConfig{
-		Namespace: k8s.Namespace(),
-		Name:      i.k8sName,
-		Labels:    labels,
-		Replicas:  1,
-		PodConfig: podConfig,
-	}
+	statefulSetConfig := i.prepareStatefulSetConfig()
 
 	// Deploy the statefulSet
 	statefulSet, err := k8s.DeployStatefulSet(statefulSetConfig, true)
@@ -351,6 +295,18 @@ func (i *Instance) destroyResources() error {
 		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
 	}
 
+	// enable network when network is disabled
+	disableNetwork, err := i.NetworkIsDisabled()
+	if err != nil {
+		return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+	}
+	if disableNetwork {
+		err := i.EnableNetwork()
+		if err != nil {
+			return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
 	return nil
 }
 
@@ -385,7 +341,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,
 		isSidecar:             false,
-		parentInstance:        i.parentInstance,
+		parentInstance:        nil,
 		sidecars:              clonedSidecars,
 	}
 }
@@ -447,5 +403,79 @@ func (i *Instance) addFileToBuilder(src string, dest string, chown string) error
 	if err != nil {
 		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
 	}
+	return nil
+}
+
+// prepareConfig prepares the config for the instance
+func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          i.imageName,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
+	// Generate the pod configuration
+	podConfig := k8s.PodConfig{
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             i.getLabels(),
+		ServiceAccountName: i.k8sName,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
+	}
+	// Generate the statefulset configuration
+	statefulSetConfig := k8s.StatefulSetConfig{
+		Namespace: k8s.Namespace(),
+		Name:      i.k8sName,
+		Labels:    i.getLabels(),
+		Replicas:  1,
+		PodConfig: podConfig,
+	}
+
+	return statefulSetConfig
+}
+
+// setImageWithGracePeriod sets the image of the instance with a grace period
+func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64) error {
+	i.imageName = imageName
+
+	statefulSetConfig := i.prepareStatefulSetConfig()
+
+	// Replace the pod with a new one, using the given image
+	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, gracePeriod)
+	if err != nil {
+		return fmt.Errorf("error replacing pod: %s", err.Error())
+	}
+	i.WaitInstanceIsRunning()
+
 	return nil
 }

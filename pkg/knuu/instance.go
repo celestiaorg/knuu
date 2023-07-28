@@ -89,8 +89,6 @@ func (i *Instance) SetImage(image string) error {
 		return fmt.Errorf("setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
 	}
 
-	var err error
-
 	// Handle each state accordingly
 	switch i.state {
 	case None:
@@ -108,65 +106,9 @@ func (i *Instance) SetImage(image string) error {
 			return fmt.Errorf("setting image is not allowed for sidecars when in state 'Started'")
 		}
 
-		// Generate the container configuration
-		containerConfig := k8s.ContainerConfig{
-			Name:           i.k8sName,
-			Image:          image,
-			Command:        i.command,
-			Args:           i.args,
-			Env:            i.env,
-			Volumes:        i.volumes,
-			MemoryRequest:  i.memoryRequest,
-			MemoryLimit:    i.memoryLimit,
-			CPURequest:     i.cpuRequest,
-			LivenessProbe:  i.livenessProbe,
-			ReadinessProbe: i.readinessProbe,
-			StartupProbe:   i.startupProbe,
-			Files:          i.files,
+		if err := i.setImageWithGracePeriod(image, nil); err != nil {
+			return err
 		}
-		// Generate the sidecar configurations
-		sidecarConfigs := make([]k8s.ContainerConfig, 0)
-		for _, sidecar := range i.sidecars {
-			sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-				Name:           sidecar.k8sName,
-				Image:          sidecar.imageName,
-				Command:        sidecar.command,
-				Args:           sidecar.args,
-				Env:            sidecar.env,
-				Volumes:        sidecar.volumes,
-				MemoryRequest:  sidecar.memoryRequest,
-				MemoryLimit:    sidecar.memoryLimit,
-				CPURequest:     sidecar.cpuRequest,
-				LivenessProbe:  sidecar.livenessProbe,
-				ReadinessProbe: sidecar.readinessProbe,
-				StartupProbe:   sidecar.startupProbe,
-				Files:          sidecar.files,
-			})
-		}
-		// Generate the pod configuration
-		podConfig := k8s.PodConfig{
-			Namespace:          k8s.Namespace(),
-			Name:               i.k8sName,
-			Labels:             i.kubernetesStatefulSet.Labels,
-			ServiceAccountName: i.k8sName,
-			ContainerConfig:    containerConfig,
-			SidecarConfigs:     sidecarConfigs,
-		}
-		// Generate the statefulset configuration
-		statefulSetConfig := k8s.StatefulSetConfig{
-			Namespace: k8s.Namespace(),
-			Name:      i.k8sName,
-			Labels:    i.kubernetesStatefulSet.Labels,
-			Replicas:  1,
-			PodConfig: podConfig,
-		}
-
-		// Replace the pod with a new one, using the given image
-		_, err = k8s.ReplaceStatefulSet(statefulSetConfig)
-		if err != nil {
-			return fmt.Errorf("error replacing pod: %s", err.Error())
-		}
-		i.WaitInstanceIsRunning()
 	}
 
 	return nil
@@ -185,67 +127,11 @@ func (i *Instance) SetImageInstant(image string) error {
 		return fmt.Errorf("setting image is not allowed for sidecars")
 	}
 
-	// Generate the container configuration
-	containerConfig := k8s.ContainerConfig{
-		Name:           i.k8sName,
-		Image:          image,
-		Command:        i.command,
-		Args:           i.args,
-		Env:            i.env,
-		Volumes:        i.volumes,
-		MemoryRequest:  i.memoryRequest,
-		MemoryLimit:    i.memoryLimit,
-		CPURequest:     i.cpuRequest,
-		LivenessProbe:  i.livenessProbe,
-		ReadinessProbe: i.readinessProbe,
-		StartupProbe:   i.startupProbe,
-		Files:          i.files,
-	}
+	gracePeriod := int64(0)
 
-	// Generate the sidecar configurations
-	sidecarConfigs := make([]k8s.ContainerConfig, 0)
-	for _, sidecar := range i.sidecars {
-		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:           sidecar.k8sName,
-			Image:          sidecar.imageName,
-			Command:        sidecar.command,
-			Args:           sidecar.args,
-			Env:            sidecar.env,
-			Volumes:        sidecar.volumes,
-			MemoryRequest:  sidecar.memoryRequest,
-			MemoryLimit:    sidecar.memoryLimit,
-			CPURequest:     sidecar.cpuRequest,
-			LivenessProbe:  sidecar.livenessProbe,
-			ReadinessProbe: sidecar.readinessProbe,
-			StartupProbe:   sidecar.startupProbe,
-			Files:          sidecar.files,
-		})
+	if err := i.setImageWithGracePeriod(image, &gracePeriod); err != nil {
+		return err
 	}
-	// Generate the pod configuration
-	podConfig := k8s.PodConfig{
-		Namespace:          k8s.Namespace(),
-		Name:               i.k8sName,
-		Labels:             i.kubernetesStatefulSet.Labels,
-		ServiceAccountName: i.k8sName,
-		ContainerConfig:    containerConfig,
-		SidecarConfigs:     sidecarConfigs,
-	}
-	// Generate the statefulset configuration
-	statefulSetConfig := k8s.StatefulSetConfig{
-		Namespace: k8s.Namespace(),
-		Name:      i.k8sName,
-		Labels:    i.kubernetesStatefulSet.Labels,
-		Replicas:  1,
-		PodConfig: podConfig,
-	}
-
-	// Replace the pod with a new one, using the given image
-	gracePeriod := int64(1)
-	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, &gracePeriod)
-	if err != nil {
-		return fmt.Errorf("error replacing pod: %s", err.Error())
-	}
-	i.WaitInstanceIsRunning()
 
 	return nil
 }
@@ -350,28 +236,46 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		}
 		return output, nil
 	} else if i.IsInState(Started) {
-		pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+		instanceName := i.k8sName
+		containerName := i.k8sName
+		if i.isSidecar {
+			instanceName = i.parentInstance.k8sName
+		}
+
+		pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
 		if err != nil {
 			return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
 		}
 		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, i.k8sName, commandWithShell)
+		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, containerName, commandWithShell)
 		if err != nil {
-			return "", fmt.Errorf("error executing command '%s' in started instance '%s': %v", command, i.k8sName, err)
+			if i.isSidecar {
+				return "", fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s': %v", command, i.k8sName, i.parentInstance.k8sName, err)
+			} else {
+				return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.k8sName, err)
+			}
 		}
 		return output, nil
 	} else {
-		return "", fmt.Errorf("cannot execute command '%s' in instance '%s' in state '%s'", command, i.k8sName, i.state.String())
+		return "", fmt.Errorf("")
 	}
 
 	return "", nil
 }
 
+// checkStateForAddingFile checks if the current state allows adding a file
+func (i *Instance) checkStateForAddingFile() error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	return nil
+}
+
 // AddFile adds a file to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFile(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := i.checkStateForAddingFile(); err != nil {
+		return err
 	}
 
 	i.validateFileArgs(src, dest, chown)
@@ -477,8 +381,8 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 // AddFileBytes adds a file with the given content to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding file is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if err := i.checkStateForAddingFile(); err != nil {
+		return err
 	}
 
 	// create a temporary file
@@ -722,10 +626,18 @@ func (i *Instance) AddSidecar(sidecar *Instance) error {
 }
 
 // StartWithoutWait starts the instance without waiting for it to be ready
-// This function can only be called in the state 'Committed'
+// This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
-		return fmt.Errorf("starting is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+		return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state is '%s'", i.state.String())
+	}
+	for _, sidecar := range i.sidecars {
+		if !sidecar.IsInState(Committed, Stopped) {
+			return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s'", sidecar.name, sidecar.state.String())
+		}
+	}
+	if i.isSidecar {
+		return fmt.Errorf("starting a sidecar is not allowed")
 	}
 	if i.state == Committed {
 
@@ -833,6 +745,15 @@ func (i *Instance) EnableNetwork() error {
 	return nil
 }
 
+// NetworkIsDisabled returns true if the network of the instance is disabled
+// This function can only be called in the state 'Started'
+func (i *Instance) NetworkIsDisabled() (bool, error) {
+	if !i.IsInState(Started) {
+		return false, fmt.Errorf("checking if network is disabled is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	return k8s.NetworkPolicyExists(k8s.Namespace(), i.k8sName), nil
+}
+
 // WaitInstanceIsStopped waits until the instance is not running anymore
 // This function can only be called in the state 'Stopped'
 func (i *Instance) WaitInstanceIsStopped() error {
@@ -885,21 +806,13 @@ func (i *Instance) Destroy() error {
 	if err != nil {
 		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
 	}
-	if len(i.volumes) != 0 {
-		err := i.destroyVolume()
-		if err != nil {
-			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
-		}
+	if err := i.destroyResources(); err != nil {
+		return fmt.Errorf("error destroying resources for instance '%s': %w", i.k8sName, err)
 	}
-	if len(i.files) != 0 {
-		err := i.destroyFiles()
-		if err != nil {
-			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
+	for _, sidecar := range i.sidecars {
+		if err := sidecar.destroyResources(); err != nil {
+			return fmt.Errorf("error destroying resources for sidecar '%s': %w", sidecar.k8sName, err)
 		}
-	}
-	err = i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
 	}
 
 	i.state = Destroyed
@@ -913,6 +826,8 @@ func (i *Instance) Destroy() error {
 
 // Clone creates a clone of the instance
 // This function can only be called in the state 'Committed'
+// When cloning an instance that is a sidecar, the clone will be not a sidecar
+// When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) Clone() (*Instance, error) {
 	if !i.IsInState(Committed) {
 		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
