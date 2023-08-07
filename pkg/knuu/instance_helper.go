@@ -72,15 +72,6 @@ func (i *Instance) getLabels() map[string]string {
 
 // deployService deploys the service for the instance
 func (i *Instance) deployService() error {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc != nil {
-		// Service already exists, so we patch it
-		err := i.patchService()
-		if err != nil {
-			return fmt.Errorf("error patching service '%s': %w", i.k8sName, err)
-		}
-	}
-
 	labels := i.getLabels()
 	selectorMap := i.getLabels()
 	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
@@ -180,6 +171,26 @@ func (i *Instance) destroyPod() error {
 	return nil
 }
 
+// deployService deploys the service for the instance
+func (i *Instance) deployOrPatchService() error {
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+		if svc == nil {
+			err := i.deployService()
+			if err != nil {
+				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+			}
+		} else if svc != nil {
+			err := i.patchService()
+			if err != nil {
+				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+			}
+		}
+	}
+	return nil
+}
+
 // deployVolume deploys the volume for the instance
 func (i *Instance) deployVolume() error {
 	size := resource.Quantity{}
@@ -246,29 +257,17 @@ func (i *Instance) destroyFiles() error {
 // deployResources deploys the resources for the instance
 func (i *Instance) deployResources() error {
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-		if svc == nil {
-			err := i.deployService()
-			if err != nil {
-				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-			}
-		} else if svc != nil {
-			err := i.patchService()
-			if err != nil {
-				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
-			}
+		if err := i.deployOrPatchService(); err != nil {
+			return fmt.Errorf("failed to deploy or patch service: %v", err)
 		}
 	}
 	if len(i.volumes) != 0 {
-		err := i.deployVolume()
-		if err != nil {
+		if err := i.deployVolume(); err != nil {
 			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
 		}
 	}
 	if len(i.files) != 0 {
-		err := i.deployFiles()
-		if err != nil {
+		if err := i.deployFiles(); err != nil {
 			return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
 		}
 	}
