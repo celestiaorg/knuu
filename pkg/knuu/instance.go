@@ -236,10 +236,16 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		}
 		return output, nil
 	} else if i.IsInState(Started) {
-		instanceName := i.k8sName
+		var instanceName string
+		var errMsg error
 		containerName := i.k8sName
+
 		if i.isSidecar {
 			instanceName = i.parentInstance.k8sName
+			errMsg = fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s'", command, i.k8sName, i.parentInstance.k8sName)
+		} else {
+			instanceName = i.k8sName
+			errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
 		}
 
 		pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
@@ -248,10 +254,8 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		}
 		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
 		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, containerName, commandWithShell)
-		if i.isSidecar && err != nil {
-			return "", fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s': %v", command, i.k8sName, i.parentInstance.k8sName, err)
-		} else if !i.isSidecar && err != nil {
-			return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.k8sName, err)
+		if err != nil {
+			return "", fmt.Errorf("%v: %v", errMsg, err)
 		}
 		return output, nil
 	} else {
