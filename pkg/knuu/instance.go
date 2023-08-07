@@ -248,12 +248,10 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 		}
 		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
 		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, containerName, commandWithShell)
-		if err != nil {
-			if i.isSidecar {
-				return "", fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s': %v", command, i.k8sName, i.parentInstance.k8sName, err)
-			} else {
-				return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.k8sName, err)
-			}
+		if i.isSidecar && err != nil {
+			return "", fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s': %v", command, i.k8sName, i.parentInstance.k8sName, err)
+		} else if !i.isSidecar && err != nil {
+			return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.k8sName, err)
 		}
 		return output, nil
 	} else {
