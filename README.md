@@ -68,10 +68,11 @@ Simple example:
 
     import (
         "fmt"
-        "github.com/celestiaorg/knuu/pkg/knuu"
         "os"
         "testing"
         "time"
+
+        "github.com/celestiaorg/knuu/pkg/knuu"
     )
 
     func TestMain(m *testing.M) {
@@ -90,10 +91,11 @@ Simple example:
    package main
 
     import (
-        "github.com/celestiaorg/knuu/pkg/knuu"
-        "github.com/stretchr/testify/assert"
         "os"
         "testing"
+
+        "github.com/celestiaorg/knuu/pkg/knuu"
+        "github.com/stretchr/testify/assert"
     )
 
     func TestBasic(t *testing.T) {

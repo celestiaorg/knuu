@@ -3,13 +3,20 @@ package k8s
 import (
 	"context"
 	"fmt"
+  
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateNetworkPolicy creates a new NetworkPolicy resource.
-func CreateNetworkPolicy(namespace string, name string, selectorMap map[string]string, ingressSelectorMap map[string]string, egressSelectorMap map[string]string) error {
+func CreateNetworkPolicy(
+	namespace,
+	name string,
+	selectorMap,
+	ingressSelectorMap,
+	egressSelectorMap map[string]string,
+) error {
 	var ingress []v1.NetworkPolicyIngressRule
 	if ingressSelectorMap != nil {
 		ingress = []v1.NetworkPolicyIngressRule{

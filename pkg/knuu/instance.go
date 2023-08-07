@@ -451,14 +451,14 @@ func (i *Instance) Commit() error {
 // AddVolume adds a volume to the instance
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolume(path string, size string) error {
+func (i *Instance) AddVolume(path, size string) error {
 	i.AddVolumeWithOwner(path, size, 0)
 	return nil
 }
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolumeWithOwner(path string, size string, owner int64) error {
+func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("adding volume is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
@@ -470,7 +470,7 @@ func (i *Instance) AddVolumeWithOwner(path string, size string, owner int64) err
 
 // SetMemory sets the memory of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetMemory(request string, limit string) error {
+func (i *Instance) SetMemory(request, limit string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting memory is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
@@ -493,7 +493,7 @@ func (i *Instance) SetCPU(request string) error {
 
 // SetEnvironmentVariable sets the given environment variable in the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetEnvironmentVariable(key string, value string) error {
+func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting environment variable is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
@@ -714,8 +714,6 @@ func (i *Instance) WaitInstanceIsRunning() error {
 			}
 		}
 	}
-
-	return nil
 }
 
 // DisableNetwork disables the network of the instance

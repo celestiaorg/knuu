@@ -5,23 +5,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport/spdy"
 )
 
 // getPod retrieves a pod from the given namespace and logs any errors.
 func getPod(namespace, name string) (*v1.Pod, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -169,7 +168,12 @@ func IsPodRunning(namespace, name string) (bool, error) {
 }
 
 // RunCommandInPod runs a command in a container within a pod.
-func RunCommandInPod(namespace, podName, containerName string, cmd []string) (string, error) {
+func RunCommandInPod(
+	namespace,
+	podName,
+	containerName string,
+	cmd []string,
+) (string, error) {
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {
@@ -371,7 +375,7 @@ func buildInitContainerCommand(name string, volumes []*Volume) ([]string, error)
 		return []string{}, nil // return empty slice if no volumes are specified
 	}
 
-	var command []string = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
+	var command = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
 	for _, volume := range volumes {
 		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
 		command = append(command, cmd) // add each command to the command slice
@@ -561,7 +565,12 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 }
 
 // PortForwardPod forwards a local port to a port on a pod.
-func PortForwardPod(namespace string, podName string, localPort int, remotePort int) error {
+func PortForwardPod(
+	namespace,
+	podName string,
+	localPort,
+	remotePort int,
+) error {
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {

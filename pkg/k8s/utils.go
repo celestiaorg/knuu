@@ -1,6 +1,8 @@
 package k8s
 
-import "time"
+import (
+	"time"
+)
 
 // namespace is the current namespace in use by the Kubernetes client.
 var namespace = ""

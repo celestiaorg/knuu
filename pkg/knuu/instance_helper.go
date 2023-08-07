@@ -2,15 +2,16 @@ package knuu
 
 import (
 	"fmt"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"io"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // getImageRegistry returns the name of the temporary image registry
@@ -213,7 +214,6 @@ func (i *Instance) destroyVolume() error {
 
 // deployFiles deploys the files for the instance
 func (i *Instance) deployFiles() error {
-
 	data := map[string]string{}
 
 	n := 0
@@ -374,7 +374,7 @@ func (i *Instance) getBuildDir() string {
 }
 
 // validateFileArgs validates the file arguments
-func (i *Instance) validateFileArgs(src string, dest string, chown string) error {
+func (i *Instance) validateFileArgs(src, dest, chown string) error {
 	// check src
 	if src == "" {
 		return fmt.Errorf("src must be set")
@@ -396,7 +396,7 @@ func (i *Instance) validateFileArgs(src string, dest string, chown string) error
 }
 
 // addFileToBuilder adds a file to the builder
-func (i *Instance) addFileToBuilder(src string, dest string, chown string) error {
+func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
 	err := i.builderFactory.AddToBuilder(dest, dest, chown)
 	if err != nil {
