@@ -631,10 +631,13 @@ func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
 		return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state is '%s'", i.state.String())
 	}
-	for _, sidecar := range i.sidecars {
+	if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
 		if !sidecar.IsInState(Committed, Stopped) {
 			return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s'", sidecar.name, sidecar.state.String())
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	if i.isSidecar {
 		return fmt.Errorf("starting a sidecar is not allowed")
@@ -644,10 +647,10 @@ func (i *Instance) StartWithoutWait() error {
 		if err := i.deployResources(); err != nil {
 			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)
 		}
-		for _, sidecar := range i.sidecars {
-			if err := sidecar.deployResources(); err != nil {
-				return fmt.Errorf("error deploying resources for sidecar '%s': %w", sidecar.k8sName, err)
-			}
+		if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
+			return sidecar.deployResources()
+		}); err != nil {
+			return fmt.Errorf("error deploying resources for sidecars of instance '%s': %w", i.k8sName, err)
 		}
 
 	}
@@ -656,9 +659,7 @@ func (i *Instance) StartWithoutWait() error {
 		return fmt.Errorf("error deploying pod for instance '%s': %w", i.k8sName, err)
 	}
 	i.state = Started
-	for _, sidecar := range i.sidecars {
-		sidecar.state = Started
-	}
+	setStateForSidecars(i.sidecars, Started)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -785,9 +786,7 @@ func (i *Instance) Stop() error {
 		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
 	}
 	i.state = Stopped
-	for _, sidecar := range i.sidecars {
-		sidecar.state = Stopped
-	}
+	setStateForSidecars(i.sidecars, Stopped)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -809,16 +808,15 @@ func (i *Instance) Destroy() error {
 	if err := i.destroyResources(); err != nil {
 		return fmt.Errorf("error destroying resources for instance '%s': %w", i.k8sName, err)
 	}
-	for _, sidecar := range i.sidecars {
-		if err := sidecar.destroyResources(); err != nil {
-			return fmt.Errorf("error destroying resources for sidecar '%s': %w", sidecar.k8sName, err)
-		}
+
+	if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
+		return sidecar.destroyResources()
+	}); err != nil {
+		return err
 	}
 
 	i.state = Destroyed
-	for _, sidecar := range i.sidecars {
-		sidecar.state = Destroyed
-	}
+	setStateForSidecars(i.sidecars, Destroyed)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil

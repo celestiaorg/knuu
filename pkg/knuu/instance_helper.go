@@ -475,7 +475,29 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 	if err != nil {
 		return fmt.Errorf("error replacing pod: %s", err.Error())
 	}
-	i.WaitInstanceIsRunning()
+	if err := i.WaitInstanceIsRunning(); err != nil {
+		return fmt.Errorf("error waiting for instance to be running: %w", err)
+	}
 
 	return nil
+}
+
+type SidecarAction func(sidecar Instance) error
+
+// performActionOnSidecars performs an action on all sidecars
+func performActionOnSidecars(sidecars []*Instance, action SidecarAction) error {
+	for _, sidecar := range sidecars {
+		if err := action(*sidecar); err != nil {
+			return fmt.Errorf("error performing action on sidecar '%s': %w", sidecar.name, err)
+		}
+	}
+	return nil
+}
+
+func setStateForSidecars(sidecars []*Instance, state InstanceState) {
+	// We don't handle errors here, as the function can't return an error
+	performActionOnSidecars(sidecars, func(sidecar Instance) error {
+		sidecar.state = state
+		return nil
+	})
 }
