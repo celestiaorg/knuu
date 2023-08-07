@@ -631,7 +631,7 @@ func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
 		return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state is '%s'", i.state.String())
 	}
-	if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
+	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		if !sidecar.IsInState(Committed, Stopped) {
 			return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s'", sidecar.name, sidecar.state.String())
 		}
@@ -647,7 +647,7 @@ func (i *Instance) StartWithoutWait() error {
 		if err := i.deployResources(); err != nil {
 			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)
 		}
-		if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
+		if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 			return sidecar.deployResources()
 		}); err != nil {
 			return fmt.Errorf("error deploying resources for sidecars of instance '%s': %w", i.k8sName, err)
@@ -809,7 +809,7 @@ func (i *Instance) Destroy() error {
 		return fmt.Errorf("error destroying resources for instance '%s': %w", i.k8sName, err)
 	}
 
-	if err := performActionOnSidecars(i.sidecars, func(sidecar Instance) error {
+	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		return sidecar.destroyResources()
 	}); err != nil {
 		return err

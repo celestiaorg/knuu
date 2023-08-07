@@ -481,13 +481,11 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 	return nil
 }
 
-type SidecarAction func(sidecar Instance) error
-
-// performActionOnSidecars performs an action on all sidecars
-func performActionOnSidecars(sidecars []*Instance, action SidecarAction) error {
-	for _, sidecar := range sidecars {
-		if err := action(*sidecar); err != nil {
-			return fmt.Errorf("error performing action on sidecar '%s': %w", sidecar.name, err)
+// applyFunctionToInstances applies a function to all instances
+func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
+	for _, i := range instances {
+		if err := function(*i); err != nil {
+			return fmt.Errorf("error")
 		}
 	}
 	return nil
@@ -495,7 +493,7 @@ func performActionOnSidecars(sidecars []*Instance, action SidecarAction) error {
 
 func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 	// We don't handle errors here, as the function can't return an error
-	performActionOnSidecars(sidecars, func(sidecar Instance) error {
+	applyFunctionToInstances(sidecars, func(sidecar Instance) error {
 		sidecar.state = state
 		return nil
 	})
