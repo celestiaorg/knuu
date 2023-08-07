@@ -11,14 +11,15 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-// Identifier is the identifier of the current knuu instance
-var identifier string
-var startTime string
-var timeout time.Duration
+var (
+	// identifier is the identifier of the current knuu instance
+	identifier string
+	startTime  string
+	timeout    time.Duration
+)
 
 // Initialize initializes knuug
 func Initialize() error {
-
 	t := time.Now()
 	identifier = fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
 	return InitializeWithIdentifier(identifier)
@@ -60,7 +61,6 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
-
 	if timeoutString == "" {
 		timeout = 60 * time.Minute
 	} else {
@@ -85,7 +85,6 @@ func IsInitialized() bool {
 
 // handleTimeout creates a timeout handler that will delete all resources with the identifier after the timeout
 func handleTimeout() error {
-
 	instance, err := NewInstance("timeout-handler")
 	if err != nil {
 		return fmt.Errorf("cannot create instance: %s", err)

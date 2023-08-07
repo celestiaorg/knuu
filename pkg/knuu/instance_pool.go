@@ -2,6 +2,7 @@ package knuu
 
 import (
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 )
 

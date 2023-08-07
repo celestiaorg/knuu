@@ -1,12 +1,13 @@
 package k8s
 
 import (
-    "context"
-    "fmt"
-    "github.com/sirupsen/logrus"
-    appv1 "k8s.io/api/apps/v1"
-    v1 "k8s.io/api/core/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"context"
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+	appv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DaemonSetExists checks if a daemonset exists.
@@ -43,8 +44,13 @@ func GetDaemonSet(namespace, name string) (*appv1.DaemonSet, error) {
 }
 
 // CreateDaemonSet creates a new daemonset.
-func CreateDaemonSet(namespace, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error) {
-
+func CreateDaemonSet(
+	namespace,
+	name string,
+	labels map[string]string,
+	initContainers []v1.Container,
+	containers []v1.Container,
+) (*appv1.DaemonSet, error) {
 	ds, err := prepareDaemonSet(namespace, name, labels, initContainers, containers)
 	if err != nil {
 		return nil, err
@@ -65,8 +71,13 @@ func CreateDaemonSet(namespace, name string, labels map[string]string, initConta
 }
 
 // UpdateDaemonSet updates an existing daemonset.
-func UpdateDaemonSet(namespace, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error) {
-
+func UpdateDaemonSet(
+	namespace,
+	name string,
+	labels map[string]string,
+	initContainers []v1.Container,
+	containers []v1.Container,
+) (*appv1.DaemonSet, error) {
 	ds, err := prepareDaemonSet(namespace, name, labels, initContainers, containers)
 	if err != nil {
 		return nil, err
@@ -102,8 +113,13 @@ func DeleteDaemonSet(namespace, name string) error {
 }
 
 // prepareService constructs a new Service object with the specified parameters.
-func prepareDaemonSet(namespace, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error) {
-
+func prepareDaemonSet(
+	namespace,
+	name string,
+	labels map[string]string,
+	initContainers,
+	containers []v1.Container,
+) (*appv1.DaemonSet, error) {
 	ds := &appv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -127,5 +143,4 @@ func prepareDaemonSet(namespace, name string, labels map[string]string, initCont
 	}
 
 	return ds, nil
-
 }

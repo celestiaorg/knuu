@@ -3,16 +3,26 @@ package k8s
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
-	"path/filepath"
 )
 
-// Clientset is a global variable that holds a kubernetes clientset.
-var clientset *kubernetes.Clientset
+var (
+	// clientset is a global variable that holds a kubernetes clientset.
+	clientset *kubernetes.Clientset
+
+	// namespacePath path in the filesystem to the namespace name
+	namespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// tokenPath path in the filesystem to the service account token
+	tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	// certPath path in the filesystem to the ca.crt
+	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+)
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
 func Initialize() error {
@@ -29,7 +39,7 @@ func Initialize() error {
 	// Check if the program is running in a Kubernetes cluster environment
 	if isClusterEnvironment() {
 		// Read the namespace from the pod's spec
-		namespaceBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		namespaceBytes, err := os.ReadFile(namespacePath)
 		if err != nil {
 			return fmt.Errorf("reading namespace from pod's spec: %w", err)
 		}
@@ -57,9 +67,6 @@ func Clientset() *kubernetes.Clientset {
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
 func isClusterEnvironment() bool {
-	tokenPath := "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	certPath := "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-
 	if _, err := os.Stat(tokenPath); err != nil {
 		return false
 	}
