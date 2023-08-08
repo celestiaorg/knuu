@@ -1,10 +1,10 @@
 package k8s
 
 import (
-    "context"
-    "fmt"
-    rbacv1 "k8s.io/api/rbac/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"context"
+	"fmt"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateRoleBinding creates a roleBinding
