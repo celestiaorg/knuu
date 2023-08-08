@@ -3,7 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
-
+  
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -92,4 +93,31 @@ func DeleteNetworkPolicy(namespace string, name string) error {
 	}
 
 	return nil
+}
+
+// GetNetworkPolicy retrieves a NetworkPolicy resource.
+func GetNetworkPolicy(namespace string, name string) (*v1.NetworkPolicy, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if !IsInitialized() {
+		return nil, fmt.Errorf("knuu is not initialized")
+	}
+	np, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting network policy %s: %w", name, err)
+	}
+
+	return np, nil
+}
+
+// NetworkPolicyExists checks if a NetworkPolicy resource exists.
+func NetworkPolicyExists(namespace string, name string) bool {
+	_, err := GetNetworkPolicy(namespace, name)
+	if err != nil {
+		logrus.Debug("NetworkPolicy does not exist, err: ", err)
+		return false
+	}
+
+	return true
 }
