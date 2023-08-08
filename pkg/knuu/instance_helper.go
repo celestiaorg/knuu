@@ -2,16 +2,17 @@ package knuu
 
 import (
 	"fmt"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"io"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // getImageRegistry returns the name of the temporary image registry
@@ -73,15 +74,6 @@ func (i *Instance) getLabels() map[string]string {
 
 // deployService deploys the service for the instance
 func (i *Instance) deployService() error {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc != nil {
-		// Service already exists, so we patch it
-		err := i.patchService()
-		if err != nil {
-			return fmt.Errorf("error patching service '%s': %w", i.k8sName, err)
-		}
-	}
-
 	labels := i.getLabels()
 	var annotations map[string]string
 	selectorMap := i.getLabels()
@@ -132,11 +124,6 @@ func (i *Instance) deployPod() error {
 	// Get labels for the pod
 	labels := i.getLabels()
 
-	imageName, err := i.getImageRegistry()
-	if err != nil {
-		return fmt.Errorf("failed to get image name: %v", err)
-	}
-
 	// create a service account for the pod
 	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
 		return fmt.Errorf("failed to create service account: %v", err)
@@ -152,33 +139,7 @@ func (i *Instance) deployPod() error {
 		}
 	}
 
-	// Generate the pod configuration
-	podConfig := k8s.PodConfig{
-		Namespace:          k8s.Namespace(),
-		Name:               i.k8sName,
-		Labels:             labels,
-		Image:              imageName,
-		Command:            i.command,
-		Args:               i.args,
-		Env:                i.env,
-		Volumes:            i.volumes,
-		MemoryRequest:      i.memoryRequest,
-		MemoryLimit:        i.memoryLimit,
-		CPURequest:         i.cpuRequest,
-		ServiceAccountName: i.k8sName,
-		LivenessProbe:      i.livenessProbe,
-		ReadinessProbe:     i.readinessProbe,
-		StartupProbe:       i.startupProbe,
-		Files:              i.files,
-	}
-
-	statefulSetConfig := k8s.StatefulSetConfig{
-		Namespace: k8s.Namespace(),
-		Name:      i.k8sName,
-		Labels:    labels,
-		Replicas:  1,
-		PodConfig: podConfig,
-	}
+	statefulSetConfig := i.prepareStatefulSetConfig()
 
 	// Deploy the statefulSet
 	statefulSet, err := k8s.DeployStatefulSet(statefulSetConfig, true)
@@ -222,6 +183,26 @@ func (i *Instance) destroyPod() error {
 	return nil
 }
 
+// deployService deploys the service for the instance
+func (i *Instance) deployOrPatchService() error {
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+		if svc == nil {
+			err := i.deployService()
+			if err != nil {
+				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+			}
+		} else if svc != nil {
+			err := i.patchService()
+			if err != nil {
+				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+			}
+		}
+	}
+	return nil
+}
+
 // deployVolume deploys the volume for the instance
 func (i *Instance) deployVolume() error {
 	size := resource.Quantity{}
@@ -244,7 +225,6 @@ func (i *Instance) destroyVolume() error {
 
 // deployFiles deploys the files for the instance
 func (i *Instance) deployFiles() error {
-
 	data := map[string]string{}
 
 	n := 0
@@ -285,8 +265,75 @@ func (i *Instance) destroyFiles() error {
 	return nil
 }
 
+// deployResources deploys the resources for the instance
+func (i *Instance) deployResources() error {
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		if err := i.deployOrPatchService(); err != nil {
+			return fmt.Errorf("failed to deploy or patch service: %v", err)
+		}
+	}
+	if len(i.volumes) != 0 {
+		if err := i.deployVolume(); err != nil {
+			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		if err := i.deployFiles(); err != nil {
+			return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if i.ingress != nil {
+		err := i.deployIngress()
+		if err != nil {
+			return fmt.Errorf("error deploying ingress for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
+// destroyResources destroys the resources for the instance
+func (i *Instance) destroyResources() error {
+	if len(i.volumes) != 0 {
+		err := i.destroyVolume()
+		if err != nil {
+			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	if len(i.files) != 0 {
+		err := i.destroyFiles()
+		if err != nil {
+			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
+		}
+	}
+	err := i.destroyService()
+	if err != nil {
+		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	}
+
+	// enable network when network is disabled
+	disableNetwork, err := i.NetworkIsDisabled()
+	if err != nil {
+		return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+	}
+	if disableNetwork {
+		err := i.EnableNetwork()
+		if err != nil {
+			return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+		}
+	}
+
+	return nil
+}
+
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
+
+	clonedSidecars := make([]*Instance, len(i.sidecars))
+	for i, sidecar := range i.sidecars {
+		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
+	}
+
 	return &Instance{
 		name:                  i.name + suffix,
 		k8sName:               i.k8sName + suffix,
@@ -309,6 +356,9 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		livenessProbe:         i.livenessProbe,
 		readinessProbe:        i.readinessProbe,
 		startupProbe:          i.startupProbe,
+		isSidecar:             false,
+		parentInstance:        nil,
+		sidecars:              clonedSidecars,
 		files:                 i.files,
 		ingress:               i.ingress,
 		externalDns:           i.externalDns,
@@ -344,7 +394,7 @@ func (i *Instance) getBuildDir() string {
 }
 
 // validateFileArgs validates the file arguments
-func (i *Instance) validateFileArgs(src string, dest string, chown string) error {
+func (i *Instance) validateFileArgs(src, dest, chown string) error {
 	// check src
 	if src == "" {
 		return fmt.Errorf("src must be set")
@@ -366,13 +416,107 @@ func (i *Instance) validateFileArgs(src string, dest string, chown string) error
 }
 
 // addFileToBuilder adds a file to the builder
-func (i *Instance) addFileToBuilder(src string, dest string, chown string) error {
+func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
 	err := i.builderFactory.AddToBuilder(dest, dest, chown)
 	if err != nil {
 		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
 	}
 	return nil
+}
+
+// prepareConfig prepares the config for the instance
+func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
+	// Generate the container configuration
+	containerConfig := k8s.ContainerConfig{
+		Name:           i.k8sName,
+		Image:          i.imageName,
+		Command:        i.command,
+		Args:           i.args,
+		Env:            i.env,
+		Volumes:        i.volumes,
+		MemoryRequest:  i.memoryRequest,
+		MemoryLimit:    i.memoryLimit,
+		CPURequest:     i.cpuRequest,
+		LivenessProbe:  i.livenessProbe,
+		ReadinessProbe: i.readinessProbe,
+		StartupProbe:   i.startupProbe,
+		Files:          i.files,
+	}
+	// Generate the sidecar configurations
+	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	for _, sidecar := range i.sidecars {
+		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
+			Name:           sidecar.k8sName,
+			Image:          sidecar.imageName,
+			Command:        sidecar.command,
+			Args:           sidecar.args,
+			Env:            sidecar.env,
+			Volumes:        sidecar.volumes,
+			MemoryRequest:  sidecar.memoryRequest,
+			MemoryLimit:    sidecar.memoryLimit,
+			CPURequest:     sidecar.cpuRequest,
+			LivenessProbe:  sidecar.livenessProbe,
+			ReadinessProbe: sidecar.readinessProbe,
+			StartupProbe:   sidecar.startupProbe,
+			Files:          sidecar.files,
+		})
+	}
+	// Generate the pod configuration
+	podConfig := k8s.PodConfig{
+		Namespace:          k8s.Namespace(),
+		Name:               i.k8sName,
+		Labels:             i.getLabels(),
+		ServiceAccountName: i.k8sName,
+		ContainerConfig:    containerConfig,
+		SidecarConfigs:     sidecarConfigs,
+	}
+	// Generate the statefulset configuration
+	statefulSetConfig := k8s.StatefulSetConfig{
+		Namespace: k8s.Namespace(),
+		Name:      i.k8sName,
+		Labels:    i.getLabels(),
+		Replicas:  1,
+		PodConfig: podConfig,
+	}
+
+	return statefulSetConfig
+}
+
+// setImageWithGracePeriod sets the image of the instance with a grace period
+func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64) error {
+	i.imageName = imageName
+
+	statefulSetConfig := i.prepareStatefulSetConfig()
+
+	// Replace the pod with a new one, using the given image
+	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, gracePeriod)
+	if err != nil {
+		return fmt.Errorf("error replacing pod: %s", err.Error())
+	}
+	if err := i.WaitInstanceIsRunning(); err != nil {
+		return fmt.Errorf("error waiting for instance to be running: %w", err)
+	}
+
+	return nil
+}
+
+// applyFunctionToInstances applies a function to all instances
+func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
+	for _, i := range instances {
+		if err := function(*i); err != nil {
+			return fmt.Errorf("error")
+		}
+	}
+	return nil
+}
+
+func setStateForSidecars(sidecars []*Instance, state InstanceState) {
+	// We don't handle errors here, as the function can't return an error
+	applyFunctionToInstances(sidecars, func(sidecar Instance) error {
+		sidecar.state = state
+		return nil
+	})
 }
 
 // deployIngress deploys the ingress for the instance

@@ -1,15 +1,21 @@
 package k8s
 
 import (
-    "context"
-    "fmt"
-    rbacv1 "k8s.io/api/rbac/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"context"
+	"fmt"
+
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateRoleBinding creates a roleBinding
-func CreateRoleBinding(namespace, name string, labels map[string]string, role, serviceAccount string) error {
-
+func CreateRoleBinding(
+	namespace,
+	name string,
+	labels map[string]string,
+	role,
+	serviceAccount string,
+) error {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -44,7 +50,6 @@ func CreateRoleBinding(namespace, name string, labels map[string]string, role, s
 
 // DeleteRoleBinding deletes a roleBinding
 func DeleteRoleBinding(namespace, name string) error {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

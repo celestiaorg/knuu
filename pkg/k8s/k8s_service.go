@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +27,8 @@ func GetService(namespace, name string) (*v1.Service, error) {
 }
 
 // DeployService deploys a service if it does not exist.
-func DeployService(namespace,
+func DeployService(
+	namespace,
 	name string,
 	labels,
 	annotations,
@@ -35,7 +37,6 @@ func DeployService(namespace,
 	portsUDP []int,
 	serviceType v1.ServiceType,
 ) (*v1.Service, error) {
-
 	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing service %s: %w", name, err)
@@ -68,6 +69,7 @@ func PatchService(
 ) error {
 
 	svc, err := prepareService(namespace, name, labels, annotations, selectorMap, portsTCP, portsUDP, serviceType)
+
 	if err != nil {
 		return fmt.Errorf("error preparing service %s: %w", name, err)
 	}
@@ -141,8 +143,17 @@ func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
 }
 
 // prepareService constructs a new Service object with the specified parameters.
-func prepareService(namespace, name string, labels, annotations, selectorMap map[string]string,
-	tcpPorts, udpPorts []int, serviceType v1.ServiceType) (*v1.Service, error) {
+
+func prepareService(
+	namespace,
+	name string,
+	labels,
+	annotations,
+	selectorMap map[string]string,
+	tcpPorts,
+	udpPorts []int,
+	serviceType v1.ServiceType,
+) (*v1.Service, error) {
 	if namespace == "" {
 		return nil, errors.New("namespace is required")
 	}

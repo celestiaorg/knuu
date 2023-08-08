@@ -3,13 +3,18 @@ package k8s
 import (
 	"context"
 	"fmt"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CreateRole creates a role
-func CreateRole(namespace, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error {
-
+func CreateRole(
+	namespace,
+	name string,
+	labels map[string]string,
+	policyRules []rbacv1.PolicyRule,
+) error {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -34,7 +39,6 @@ func CreateRole(namespace, name string, labels map[string]string, policyRules []
 
 // DeleteRole deletes a role
 func DeleteRole(namespace, name string) error {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

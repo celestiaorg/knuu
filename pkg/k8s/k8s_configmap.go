@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,8 +43,12 @@ func ConfigMapExists(namespace, name string) (bool, error) {
 }
 
 // CreateConfigMap creates a configmap
-func CreateConfigMap(namespace, name string, labels map[string]string, data map[string]string) (*v1.ConfigMap, error) {
-
+func CreateConfigMap(
+	namespace,
+	name string,
+	labels,
+	data map[string]string,
+) (*v1.ConfigMap, error) {
 	// check if configmap exists
 	exists, err := ConfigMapExists(namespace, name)
 	if err != nil {
@@ -74,7 +79,6 @@ func CreateConfigMap(namespace, name string, labels map[string]string, data map[
 
 // DeleteConfigMap deletes a configmap
 func DeleteConfigMap(namespace, name string) error {
-
 	// check if configmap exists
 	exists, err := ConfigMapExists(namespace, name)
 	if err != nil {
@@ -99,7 +103,12 @@ func DeleteConfigMap(namespace, name string) error {
 }
 
 // prepareConfigMap prepares a configmap
-func prepareConfigMap(namespace, name string, labels map[string]string, data map[string]string) (*v1.ConfigMap, error) {
+func prepareConfigMap(
+	namespace,
+	name string,
+	labels,
+	data map[string]string,
+) (*v1.ConfigMap, error) {
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
