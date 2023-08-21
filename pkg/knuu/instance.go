@@ -888,3 +888,23 @@ func (i *Instance) Clone() (*Instance, error) {
 	ins.k8sName = newK8sName
 	return ins, nil
 }
+
+// CloneWithName creates a clone of the instance with a given name
+// This function can only be called in the state 'Committed'
+// When cloning an instance that is a sidecar, the clone will be not a sidecar
+// When cloning an instance with sidecars, the sidecars will be cloned as well
+func (i *Instance) CloneWithName(name string) (*Instance, error) {
+	if !i.IsInState(Committed) {
+		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+
+	newK8sName, err := generateK8sName(name)
+	if err != nil {
+		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
+	}
+	// Create a new instance with the same attributes as the original instance
+	ins := i.cloneWithSuffix("")
+	ins.name = name
+	ins.k8sName = newK8sName
+	return ins, nil
+}
