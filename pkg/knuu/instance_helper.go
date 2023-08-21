@@ -185,19 +185,16 @@ func (i *Instance) destroyPod() error {
 
 // deployService deploys the service for the instance
 func (i *Instance) deployOrPatchService() error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-		if svc == nil {
-			err := i.deployService()
-			if err != nil {
-				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-			}
-		} else if svc != nil {
-			err := i.patchService()
-			if err != nil {
-				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
-			}
+	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+	if svc == nil {
+		err := i.deployService()
+		if err != nil {
+			return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+		}
+	} else if svc != nil {
+		err := i.patchService()
+		if err != nil {
+			return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
 		}
 	}
 	return nil
@@ -311,15 +308,17 @@ func (i *Instance) destroyResources() error {
 		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
 	}
 
-	// enable network when network is disabled
-	disableNetwork, err := i.NetworkIsDisabled()
-	if err != nil {
-		return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
-	}
-	if disableNetwork {
-		err := i.EnableNetwork()
+	if !i.isSidecar {
+		// enable network when network is disabled
+		disableNetwork, err := i.NetworkIsDisabled()
 		if err != nil {
-			return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+		}
+		if disableNetwork {
+			err := i.EnableNetwork()
+			if err != nil {
+				return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			}
 		}
 	}
 
@@ -335,33 +334,44 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	}
 
 	return &Instance{
-		name:                  i.name + suffix,
-		k8sName:               i.k8sName + suffix,
-		imageName:             i.imageName,
-		state:                 i.state,
-		instanceType:          i.instanceType,
-		kubernetesService:     i.kubernetesService,
-		builderFactory:        i.builderFactory,
-		kubernetesStatefulSet: i.kubernetesStatefulSet,
-		portsTCP:              i.portsTCP,
-		portsUDP:              i.portsUDP,
-		command:               i.command,
-		args:                  i.args,
-		env:                   i.env,
-		volumes:               i.volumes,
-		memoryRequest:         i.memoryRequest,
-		memoryLimit:           i.memoryLimit,
-		cpuRequest:            i.cpuRequest,
-		policyRules:           i.policyRules,
-		livenessProbe:         i.livenessProbe,
-		readinessProbe:        i.readinessProbe,
-		startupProbe:          i.startupProbe,
-		isSidecar:             false,
-		parentInstance:        nil,
-		sidecars:              clonedSidecars,
-		files:                 i.files,
-		ingress:               i.ingress,
-		externalDns:           i.externalDns,
+		name:                     i.name + suffix,
+		k8sName:                  i.k8sName + suffix,
+		imageName:                i.imageName,
+		state:                    i.state,
+		instanceType:             i.instanceType,
+		kubernetesService:        i.kubernetesService,
+		builderFactory:           i.builderFactory,
+		kubernetesStatefulSet:    i.kubernetesStatefulSet,
+		portsTCP:                 i.portsTCP,
+		portsUDP:                 i.portsUDP,
+		command:                  i.command,
+		args:                     i.args,
+		env:                      i.env,
+		volumes:                  i.volumes,
+		memoryRequest:            i.memoryRequest,
+		memoryLimit:              i.memoryLimit,
+		cpuRequest:               i.cpuRequest,
+		policyRules:              i.policyRules,
+		livenessProbe:            i.livenessProbe,
+		readinessProbe:           i.readinessProbe,
+		startupProbe:             i.startupProbe,
+		isSidecar:                false,
+		parentInstance:           nil,
+		sidecars:                 clonedSidecars,
+		files:                    i.files,
+		ingress:                  i.ingress,
+		externalDns:              i.externalDns,
+		otlpPort:                 i.otlpPort,
+		prometheusPort:           i.prometheusPort,
+		prometheusJobName:        i.prometheusJobName,
+		prometheusScrapeInterval: i.prometheusScrapeInterval,
+		jaegerGrpcPort:           i.jaegerGrpcPort,
+		jaegerThriftCompactPort:  i.jaegerThriftCompactPort,
+		jaegerThriftHttpPort:     i.jaegerThriftHttpPort,
+		otlpEndpoint:             i.otlpEndpoint,
+		otlpUsername:             i.otlpUsername,
+		otlpPassword:             i.otlpPassword,
+		jaegerEndpoint:           i.jaegerEndpoint,
 	}
 }
 
@@ -505,7 +515,7 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
 	for _, i := range instances {
 		if err := function(*i); err != nil {
-			return fmt.Errorf("error")
+			return fmt.Errorf("error applying function to instance '%s': %w", i.name, err)
 		}
 	}
 	return nil
@@ -558,4 +568,9 @@ func (i *Instance) destroyIngress() error {
 	logrus.Debugf("Destroyed ingress '%s'", i.k8sName)
 
 	return nil
+}
+
+// isObservabilityEnabled returns true if observability is enabled
+func (i *Instance) isObservabilityEnabled() bool {
+	return i.otlpPort != 0 || i.prometheusPort != 0 || i.jaegerGrpcPort != 0 || i.jaegerThriftCompactPort != 0 || i.jaegerThriftHttpPort != 0
 }
