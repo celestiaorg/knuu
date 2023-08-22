@@ -973,7 +973,7 @@ func (i *Instance) Destroy() error {
 	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		return sidecar.destroyResources()
 	}); err != nil {
-		return fmt.Errorf("error destroying resources for sidecars of instance '%s': %w", i.k8sName, err)
+		return fmt.Errorf("error in destroying resources for sidecars of instance '%s': %w", i.k8sName, err)
 	}
 	if i.ingress != nil {
 		err = i.destroyIngress()
