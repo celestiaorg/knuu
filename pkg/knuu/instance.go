@@ -16,19 +16,35 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
+// ObsyConfig represents the configuration for the obsy sidecar
 type ObsyConfig struct {
-	otelCollectorVersion     string
-	otlpPort                 int
-	prometheusPort           int
-	prometheusJobName        string
+	// otelCollectorVersion is the version of the otel collector to use
+	otelCollectorVersion string
+
+	// prometheusPort is the port on which the prometheus server will be exposed
+	prometheusPort int
+	// prometheusJobName is the name of the prometheus job
+	prometheusJobName string
+	// prometheusScrapeInterval is the scrape interval for the prometheus job
 	prometheusScrapeInterval string
-	jaegerGrpcPort           int
-	jaegerThriftCompactPort  int
-	jaegerThriftHttpPort     int
-	otlpEndpoint             string
-	otlpUsername             string
-	otlpPassword             string
-	jaegerEndpoint           string
+
+	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
+	jaegerGrpcPort int
+	// jaegerThriftCompactPort is the port on which the jaeger thrift compact server is exposed
+	jaegerThriftCompactPort int
+	// jaegerThriftHttpPort is the port on which the jaeger thrift http server is exposed
+	jaegerThriftHttpPort int
+	// jaegerEndpoint is the endpoint of the jaeger collector where spans will be sent to
+	jaegerEndpoint string
+
+	// otlpPort is the port on which the otlp server is exposed
+	otlpPort int
+	// otlpEndpoint is the endpoint of the otlp collector where spans will be sent to
+	otlpEndpoint string
+	// otlpUsername is the username to use for the otlp collector
+	otlpUsername string
+	// otlpPassword is the password to use for the otlp collector
+	otlpPassword string
 }
 
 // Instance represents a instance
