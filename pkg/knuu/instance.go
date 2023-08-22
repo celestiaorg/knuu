@@ -793,12 +793,8 @@ func (i *Instance) StartWithoutWait() error {
 	if i.state == Committed {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
-			otelSidecar, err := i.createOtelCollectorInstance()
-			if err := i.AddSidecar(otelSidecar); err != nil {
-				return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
-			}
-			if err != nil {
-				return fmt.Errorf("error deploying otel collector for instance '%s': %w", i.k8sName, err)
+			if err := i.addOtelCollectorSidecar(); err != nil {
+				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
 			}
 		}
 

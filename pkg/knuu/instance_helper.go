@@ -571,3 +571,14 @@ func (i *Instance) validateStateForObsy(endpoint string) error {
 	}
 	return nil
 }
+
+func (i *Instance) addOtelCollectorSidecar() error {
+	otelSidecar, err := i.createOtelCollectorInstance()
+	if err != nil {
+		return fmt.Errorf("error creating otel collector instance '%s': %w", i.k8sName, err)
+	}
+	if err := i.AddSidecar(otelSidecar); err != nil {
+		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
