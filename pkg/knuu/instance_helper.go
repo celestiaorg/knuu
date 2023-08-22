@@ -565,7 +565,7 @@ func (i *Instance) isObservabilityEnabled() bool {
 	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
 }
 
-func validateStateForObsy(i *Instance, endpoint string) error {
+func (i *Instance) validateStateForObsy(endpoint string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
 	}

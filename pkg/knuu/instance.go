@@ -704,7 +704,7 @@ func (i *Instance) AddExternalDns(dns string) error {
 // SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtelCollectorVersion(version string) error {
-	if err := validateStateForObsy(i, "OpenTelemetry collector version"); err != nil {
+	if err := i.validateStateForObsy("OpenTelemetry collector version"); err != nil {
 		return err
 	}
 	i.obsyConfig.otelCollectorVersion = version
@@ -715,7 +715,7 @@ func (i *Instance) SetOtelCollectorVersion(version string) error {
 // SetOtelEndpoint sets the OpenTelemetry endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtelEndpoint(port int) error {
-	if err := validateStateForObsy(i, "OpenTelemetry endpoint"); err != nil {
+	if err := i.validateStateForObsy("OpenTelemetry endpoint"); err != nil {
 		return err
 	}
 	i.obsyConfig.otlpPort = port
@@ -726,7 +726,7 @@ func (i *Instance) SetOtelEndpoint(port int) error {
 // SetPrometheusEndpoint sets the Prometheus endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
-	if err := validateStateForObsy(i, "Prometheus endpoint"); err != nil {
+	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
 		return err
 	}
 	i.obsyConfig.prometheusPort = port
@@ -739,7 +739,7 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 // SetJaegerEndpoint sets the Jaeger endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
-	if err := validateStateForObsy(i, "Jaeger endpoint"); err != nil {
+	if err := i.validateStateForObsy("Jaeger endpoint"); err != nil {
 		return err
 	}
 	i.obsyConfig.jaegerGrpcPort = grpcPort
@@ -752,7 +752,7 @@ func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort
 // SetOtlpExporter sets the OTLP exporter for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
-	if err := validateStateForObsy(i, "OTLP exporter"); err != nil {
+	if err := i.validateStateForObsy("OTLP exporter"); err != nil {
 		return err
 	}
 	i.obsyConfig.otlpEndpoint = endpoint
@@ -765,7 +765,7 @@ func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
 // SetJaegerExporter sets the Jaeger exporter for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetJaegerExporter(endpoint string) error {
-	if err := validateStateForObsy(i, "Jaeger exporter"); err != nil {
+	if err := i.validateStateForObsy("Jaeger exporter"); err != nil {
 		return err
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
