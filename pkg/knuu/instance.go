@@ -704,8 +704,8 @@ func (i *Instance) AddExternalDns(dns string) error {
 // SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtelCollectorVersion(version string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting OpenTelemetry collector version is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "OpenTelemetry collector version"); err != nil {
+		return err
 	}
 	i.obsyConfig.otelCollectorVersion = version
 	logrus.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
@@ -715,8 +715,8 @@ func (i *Instance) SetOtelCollectorVersion(version string) error {
 // SetOtelEndpoint sets the OpenTelemetry endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtelEndpoint(port int) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting OpenTelemetry endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "OpenTelemetry endpoint"); err != nil {
+		return err
 	}
 	i.obsyConfig.otlpPort = port
 	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
@@ -726,8 +726,8 @@ func (i *Instance) SetOtelEndpoint(port int) error {
 // SetPrometheusEndpoint sets the Prometheus endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting Prometheus endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "Prometheus endpoint"); err != nil {
+		return err
 	}
 	i.obsyConfig.prometheusPort = port
 	i.obsyConfig.prometheusJobName = jobName
@@ -739,8 +739,8 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 // SetJaegerEndpoint sets the Jaeger endpoint for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting Jaeger endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "Jaeger endpoint"); err != nil {
+		return err
 	}
 	i.obsyConfig.jaegerGrpcPort = grpcPort
 	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
@@ -752,8 +752,8 @@ func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort
 // SetOtlpExporter sets the OTLP exporter for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting OTLP exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "OTLP exporter"); err != nil {
+		return err
 	}
 	i.obsyConfig.otlpEndpoint = endpoint
 	i.obsyConfig.otlpUsername = username
@@ -765,8 +765,8 @@ func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
 // SetJaegerExporter sets the Jaeger exporter for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetJaegerExporter(endpoint string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting Jaeger exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if err := validateStateForObsy(i, "Jaeger exporter"); err != nil {
+		return err
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
 	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
