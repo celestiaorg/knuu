@@ -147,7 +147,7 @@ func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 		return nil, fmt.Errorf("error creating otel-agent instance: %w", err)
 	}
 
-	if err := otelAgent.SetImage("otel/opentelemetry-collector-contrib:0.71.0"); err != nil {
+	if err := otelAgent.SetImage(fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
 		return nil, fmt.Errorf("error setting image for otel-agent instance: %w", err)
 	}
 	if err := otelAgent.AddPortTCP(8888); err != nil {

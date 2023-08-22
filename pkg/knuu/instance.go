@@ -17,6 +17,7 @@ import (
 )
 
 type ObsyConfig struct {
+	otelCollectorVersion     string
 	otlpPort                 int
 	prometheusPort           int
 	prometheusJobName        string
@@ -71,6 +72,7 @@ func NewInstance(name string) (*Instance, error) {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
 	}
 	obsyConfig := &ObsyConfig{
+		otelCollectorVersion:     "0.83.0",
 		otlpPort:                 0,
 		prometheusPort:           0,
 		prometheusJobName:        "",
@@ -696,6 +698,17 @@ func (i *Instance) AddExternalDns(dns string) error {
 		}
 	}
 	i.externalDns = append(i.externalDns, dns)
+	return nil
+}
+
+// SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtelCollectorVersion(version string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting OpenTelemetry collector version is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.obsyConfig.otelCollectorVersion = version
+	logrus.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
 	return nil
 }
 
