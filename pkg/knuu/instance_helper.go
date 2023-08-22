@@ -114,7 +114,10 @@ func (i *Instance) patchService() error {
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService() error {
-	k8s.DeleteService(k8s.Namespace(), i.k8sName)
+	err := k8s.DeleteService(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -183,10 +186,13 @@ func (i *Instance) destroyPod() error {
 	return nil
 }
 
-// deployService deploys the service for the instance
+// deployOrPatchService deploys the service for the instance
 func (i *Instance) deployOrPatchService() error {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc == nil {
+	exists, err := k8s.ServiceExists(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		err := i.deployService()
 		if err != nil {
 			return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
@@ -303,9 +309,11 @@ func (i *Instance) destroyResources() error {
 			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
 		}
 	}
-	err := i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		err := i.destroyService()
+		if err != nil {
+			return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+		}
 	}
 
 	if !i.isSidecar {

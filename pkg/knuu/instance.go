@@ -560,8 +560,11 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc == nil {
+	exists, err := k8s.ServiceExists(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return "", fmt.Errorf("error checking if service '%s' exists: %w", i.k8sName, err)
+	}
+	if !exists {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService()
 		if err != nil {
