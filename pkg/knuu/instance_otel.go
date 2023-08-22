@@ -205,73 +205,93 @@ func (i *Instance) createExtensions() Extensions {
 	}
 }
 
-func (i *Instance) createReceivers() Receivers {
-	receivers := Receivers{}
-
-	if i.obsyConfig.otlpPort != 0 {
-		receivers.OTLP = OTLP{
-			Protocols: OTLPProtocols{
-				HTTP: OTLPHTTP{
-					Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.otlpPort),
-				},
+func (i *Instance) createOtlpReceiver() OTLP {
+	return OTLP{
+		Protocols: OTLPProtocols{
+			HTTP: OTLPHTTP{
+				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.otlpPort),
 			},
-		}
+		},
 	}
+}
 
-	if i.obsyConfig.prometheusPort != 0 {
-		receivers.Prometheus = Prometheus{
-			Config: PrometheusConfig{
-				ScrapeConfigs: []ScrapeConfig{
-					{
-						JobName:        i.obsyConfig.prometheusJobName,
-						ScrapeInterval: i.obsyConfig.prometheusScrapeInterval,
-						StaticConfigs: []StaticConfig{
-							{
-								Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusPort)},
-							},
+func (i *Instance) createPrometheusReceiver() Prometheus {
+	return Prometheus{
+		Config: PrometheusConfig{
+			ScrapeConfigs: []ScrapeConfig{
+				{
+					JobName:        i.obsyConfig.prometheusJobName,
+					ScrapeInterval: i.obsyConfig.prometheusScrapeInterval,
+					StaticConfigs: []StaticConfig{
+						{
+							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusPort)},
 						},
 					},
 				},
 			},
-		}
+		},
+	}
+}
+
+func (i *Instance) createJaegerReceiver() Jaeger {
+	return Jaeger{
+		Protocols: JaegerProtocols{
+			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerGrpcPort)},
+			ThriftCompact: JaegerThriftCompact{
+				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftCompactPort),
+			},
+			ThriftHTTP: JaegerThriftHTTP{
+				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftHttpPort),
+			},
+		},
+	}
+}
+
+func (i *Instance) createReceivers() Receivers {
+	receivers := Receivers{}
+
+	if i.obsyConfig.otlpPort != 0 {
+		receivers.OTLP = i.createOtlpReceiver()
+	}
+
+	if i.obsyConfig.prometheusPort != 0 {
+		receivers.Prometheus = i.createPrometheusReceiver()
 	}
 
 	if i.obsyConfig.jaegerGrpcPort != 0 {
-		receivers.Jaeger = Jaeger{
-			Protocols: JaegerProtocols{
-				GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerGrpcPort)},
-				ThriftCompact: JaegerThriftCompact{
-					Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftCompactPort),
-				},
-				ThriftHTTP: JaegerThriftHTTP{
-					Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftHttpPort),
-				},
-			},
-		}
+		receivers.Jaeger = i.createJaegerReceiver()
 	}
 
 	return receivers
+}
+
+func (i *Instance) createOtlpHttpExporter() OTLPHTTPExporter {
+	return OTLPHTTPExporter{
+		Auth: OTLPAuth{
+			Authenticator: "basicauth/otlp",
+		},
+		Endpoint: i.obsyConfig.otlpEndpoint,
+	}
+}
+
+func (i *Instance) createJaegerExporter() JaegerExporter {
+	return JaegerExporter{
+		Endpoint: i.obsyConfig.jaegerEndpoint,
+		TLS: TLS{
+			Insecure: true,
+		},
+	}
 }
 
 func (i *Instance) createExporters() Exporters {
 	exporters := Exporters{}
 
 	if i.obsyConfig.otlpEndpoint != "" {
-		exporters.OTLPHTTP = OTLPHTTPExporter{
-			Auth: OTLPAuth{
-				Authenticator: "basicauth/otlp",
-			},
-			Endpoint: i.obsyConfig.otlpEndpoint,
-		}
+		exporters.OTLPHTTP = i.createOtlpHttpExporter()
 	}
 
 	if i.obsyConfig.jaegerEndpoint != "" {
-		exporters.Jaeger = JaegerExporter{
-			Endpoint: i.obsyConfig.jaegerEndpoint,
-			TLS: TLS{
-				Insecure: true,
-			},
-		}
+		exporters.Jaeger = i.createJaegerExporter()
 	}
 
 	return exporters
