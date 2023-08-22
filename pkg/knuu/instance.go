@@ -16,35 +16,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-// Instance represents a instance
-type Instance struct {
-	name                     string
-	imageName                string
-	k8sName                  string
-	state                    InstanceState
-	instanceType             InstanceType
-	kubernetesService        *v1.Service
-	builderFactory           *container.BuilderFactory
-	kubernetesStatefulSet    *appv1.StatefulSet
-	portsTCP                 []int
-	portsUDP                 []int
-	command                  []string
-	args                     []string
-	env                      map[string]string
-	volumes                  []*k8s.Volume
-	memoryRequest            string
-	memoryLimit              string
-	cpuRequest               string
-	policyRules              []rbacv1.PolicyRule
-	livenessProbe            *v1.Probe
-	readinessProbe           *v1.Probe
-	startupProbe             *v1.Probe
-	files                    []*k8s.File
-	isSidecar                bool
-	parentInstance           *Instance
-	sidecars                 []*Instance
-	ingress                  *Ingress
-	externalDns              []string
+type ObsyConfig struct {
 	otlpPort                 int
 	prometheusPort           int
 	prometheusJobName        string
@@ -58,6 +30,38 @@ type Instance struct {
 	jaegerEndpoint           string
 }
 
+// Instance represents a instance
+type Instance struct {
+	name                  string
+	imageName             string
+	k8sName               string
+	state                 InstanceState
+	instanceType          InstanceType
+	kubernetesService     *v1.Service
+	builderFactory        *container.BuilderFactory
+	kubernetesStatefulSet *appv1.StatefulSet
+	portsTCP              []int
+	portsUDP              []int
+	command               []string
+	args                  []string
+	env                   map[string]string
+	volumes               []*k8s.Volume
+	memoryRequest         string
+	memoryLimit           string
+	cpuRequest            string
+	policyRules           []rbacv1.PolicyRule
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
+	files                 []*k8s.File
+	isSidecar             bool
+	parentInstance        *Instance
+	sidecars              []*Instance
+	ingress               *Ingress
+	externalDns           []string
+	obsyConfig            *ObsyConfig
+}
+
 // NewInstance creates a new instance of the Instance struct
 func NewInstance(name string) (*Instance, error) {
 	// Generate a UUID for this instance
@@ -66,32 +70,7 @@ func NewInstance(name string) (*Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
 	}
-	// Create the instance
-	return &Instance{
-		name:                     name,
-		k8sName:                  k8sName,
-		imageName:                "",
-		state:                    None,
-		instanceType:             BasicInstance,
-		portsTCP:                 make([]int, 0),
-		portsUDP:                 make([]int, 0),
-		command:                  make([]string, 0),
-		args:                     make([]string, 0),
-		env:                      make(map[string]string),
-		volumes:                  make([]*k8s.Volume, 0),
-		memoryRequest:            "",
-		memoryLimit:              "",
-		cpuRequest:               "",
-		policyRules:              make([]rbacv1.PolicyRule, 0),
-		livenessProbe:            nil,
-		readinessProbe:           nil,
-		startupProbe:             nil,
-		files:                    make([]*k8s.File, 0),
-		isSidecar:                false,
-		parentInstance:           nil,
-		sidecars:                 make([]*Instance, 0),
-		ingress:                  nil,
-		externalDns:              make([]string, 0),
+	obsyConfig := &ObsyConfig{
 		otlpPort:                 0,
 		prometheusPort:           0,
 		prometheusJobName:        "",
@@ -103,6 +82,34 @@ func NewInstance(name string) (*Instance, error) {
 		otlpUsername:             "",
 		otlpPassword:             "",
 		jaegerEndpoint:           "",
+	}
+	// Create the instance
+	return &Instance{
+		name:           name,
+		k8sName:        k8sName,
+		imageName:      "",
+		state:          None,
+		instanceType:   BasicInstance,
+		portsTCP:       make([]int, 0),
+		portsUDP:       make([]int, 0),
+		command:        make([]string, 0),
+		args:           make([]string, 0),
+		env:            make(map[string]string),
+		volumes:        make([]*k8s.Volume, 0),
+		memoryRequest:  "",
+		memoryLimit:    "",
+		cpuRequest:     "",
+		policyRules:    make([]rbacv1.PolicyRule, 0),
+		livenessProbe:  nil,
+		readinessProbe: nil,
+		startupProbe:   nil,
+		files:          make([]*k8s.File, 0),
+		isSidecar:      false,
+		parentInstance: nil,
+		sidecars:       make([]*Instance, 0),
+		ingress:        nil,
+		externalDns:    make([]string, 0),
+		obsyConfig:     obsyConfig,
 	}, nil
 }
 
@@ -698,7 +705,7 @@ func (i *Instance) SetOtelEndpoint(port int) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting OpenTelemetry endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.otlpPort = port
+	i.obsyConfig.otlpPort = port
 	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
@@ -709,9 +716,9 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting Prometheus endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.prometheusPort = port
-	i.prometheusJobName = jobName
-	i.prometheusScrapeInterval = scapeInterval
+	i.obsyConfig.prometheusPort = port
+	i.obsyConfig.prometheusJobName = jobName
+	i.obsyConfig.prometheusScrapeInterval = scapeInterval
 	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
@@ -722,9 +729,9 @@ func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting Jaeger endpoint is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.jaegerGrpcPort = grpcPort
-	i.jaegerThriftCompactPort = thriftCompactPort
-	i.jaegerThriftHttpPort = thriftHttpPort
+	i.obsyConfig.jaegerGrpcPort = grpcPort
+	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
+	i.obsyConfig.jaegerThriftHttpPort = thriftHttpPort
 	logrus.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
 	return nil
 }
@@ -735,9 +742,9 @@ func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting OTLP exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.otlpEndpoint = endpoint
-	i.otlpUsername = username
-	i.otlpPassword = password
+	i.obsyConfig.otlpEndpoint = endpoint
+	i.obsyConfig.otlpUsername = username
+	i.obsyConfig.otlpPassword = password
 	logrus.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
@@ -748,7 +755,7 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting Jaeger exporter is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	i.jaegerEndpoint = endpoint
+	i.obsyConfig.jaegerEndpoint = endpoint
 	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
