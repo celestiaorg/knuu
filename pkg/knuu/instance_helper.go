@@ -191,7 +191,7 @@ func (i *Instance) deployOrPatchService() error {
 		if err != nil {
 			return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
 		}
-	} else if svc != nil {
+	} else {
 		err := i.patchService()
 		if err != nil {
 			return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
