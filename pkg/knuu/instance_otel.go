@@ -297,6 +297,37 @@ func (i *Instance) createExporters() Exporters {
 	return exporters
 }
 
+func (i *Instance) prepareMetricsForServicePipeline() Metrics {
+	metrics := Metrics{}
+	if i.obsyConfig.otlpPort != 0 {
+		metrics.Receivers = append(metrics.Receivers, "otlp")
+	}
+	if i.obsyConfig.prometheusPort != 0 {
+		metrics.Receivers = append(metrics.Receivers, "prometheus")
+	}
+	if i.obsyConfig.otlpEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, "otlphttp")
+	}
+	return metrics
+}
+
+func (i *Instance) prepareTracesForServicePipeline() Traces {
+	traces := Traces{}
+	if i.obsyConfig.otlpPort != 0 {
+		traces.Receivers = append(traces.Receivers, "otlp")
+	}
+	if i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0 {
+		traces.Receivers = append(traces.Receivers, "jaeger")
+	}
+	if i.obsyConfig.otlpEndpoint != "" {
+		traces.Exporters = append(traces.Exporters, "otlphttp")
+	}
+	if i.obsyConfig.jaegerEndpoint != "" {
+		traces.Exporters = append(traces.Exporters, "jaeger")
+	}
+	return traces
+}
+
 func (i *Instance) createService() Service {
 	var extensions []string
 	if i.obsyConfig.otlpEndpoint != "" {
@@ -304,35 +335,8 @@ func (i *Instance) createService() Service {
 	}
 
 	pipelines := Pipelines{}
-	if i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.otlpEndpoint != "" {
-		metrics := Metrics{}
-		if i.obsyConfig.otlpPort != 0 {
-			metrics.Receivers = append(metrics.Receivers, "otlp")
-		}
-		if i.obsyConfig.prometheusPort != 0 {
-			metrics.Receivers = append(metrics.Receivers, "prometheus")
-		}
-		if i.obsyConfig.otlpEndpoint != "" {
-			metrics.Exporters = append(metrics.Exporters, "otlphttp")
-		}
-		pipelines.Metrics = metrics
-	}
-	if i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0 || i.obsyConfig.jaegerEndpoint != "" {
-		traces := Traces{}
-		if i.obsyConfig.otlpPort != 0 {
-			traces.Receivers = append(traces.Receivers, "otlp")
-		}
-		if i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0 {
-			traces.Receivers = append(traces.Receivers, "jaeger")
-		}
-		if i.obsyConfig.otlpEndpoint != "" {
-			traces.Exporters = append(traces.Exporters, "otlphttp")
-		}
-		if i.obsyConfig.jaegerEndpoint != "" {
-			traces.Exporters = append(traces.Exporters, "jaeger")
-		}
-		pipelines.Traces = traces
-	}
+	pipelines.Metrics = i.prepareMetricsForServicePipeline()
+	pipelines.Traces = i.prepareTracesForServicePipeline()
 
 	return Service{
 		Extensions: extensions,
