@@ -25,6 +25,9 @@ Some of the features of knuu are:
 - Execute Commands
 - Configure HW resources
 - Create a pool of Instances and control them as a group
+- Allow AddFile after Commit via ConfigMap
+- Implement a TTL value for Pod cleanup
+- Add a timeout variable
 - See this issue for more upcoming features: [#91](https://github.com/celestiaorg/knuu/issues/91)
 
 > If you have feedback on the framework, want to report a bug, or suggest an improvement, please create an issue [here](https://github.com/celestiaorg/knuu/issues/new/choose).

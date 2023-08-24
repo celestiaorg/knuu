@@ -37,6 +37,17 @@ func (i *Instance) CreatePool(amount int) (*InstancePool, error) {
 	}, nil
 }
 
+// StartWithoutWait starts all instances in the instance pool without waiting for them to be running
+func (i *InstancePool) StartWithoutWait() error {
+	for _, instance := range i.instances {
+		err := instance.StartWithoutWait()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Start starts all instances in the instance pool
 func (i *InstancePool) Start() error {
 	for _, instance := range i.instances {
