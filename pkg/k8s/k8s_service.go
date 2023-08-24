@@ -26,6 +26,18 @@ func GetService(namespace, name string) (*v1.Service, error) {
 	return svc, nil
 }
 
+// ServiceExists checks if a service exists.
+func ServiceExists(namespace, name string) (bool, error) {
+	_, err := GetService(namespace, name)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("error getting service %s: %w", name, err)
+	}
+	return true, nil
+}
+
 // DeployService deploys a service if it does not exist.
 func DeployService(
 	namespace,

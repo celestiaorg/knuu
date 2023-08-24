@@ -114,7 +114,10 @@ func (i *Instance) patchService() error {
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService() error {
-	k8s.DeleteService(k8s.Namespace(), i.k8sName)
+	err := k8s.DeleteService(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -183,21 +186,21 @@ func (i *Instance) destroyPod() error {
 	return nil
 }
 
-// deployService deploys the service for the instance
+// deployOrPatchService deploys the service for the instance
 func (i *Instance) deployOrPatchService() error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-		if svc == nil {
-			err := i.deployService()
-			if err != nil {
-				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
-			}
-		} else if svc != nil {
-			err := i.patchService()
-			if err != nil {
-				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
-			}
+	exists, err := k8s.ServiceExists(k8s.Namespace(), i.k8sName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		err := i.deployService()
+		if err != nil {
+			return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+		}
+	} else {
+		err := i.patchService()
+		if err != nil {
+			return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
 		}
 	}
 	return nil
@@ -306,20 +309,24 @@ func (i *Instance) destroyResources() error {
 			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
 		}
 	}
-	err := i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+		err := i.destroyService()
+		if err != nil {
+			return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+		}
 	}
 
-	// enable network when network is disabled
-	disableNetwork, err := i.NetworkIsDisabled()
-	if err != nil {
-		return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
-	}
-	if disableNetwork {
-		err := i.EnableNetwork()
+	if !i.isSidecar {
+		// enable network when network is disabled
+		disableNetwork, err := i.NetworkIsDisabled()
 		if err != nil {
-			return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+		}
+		if disableNetwork {
+			err := i.EnableNetwork()
+			if err != nil {
+				return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			}
 		}
 	}
 
@@ -362,6 +369,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		files:                 i.files,
 		ingress:               i.ingress,
 		externalDns:           i.externalDns,
+		obsyConfig:            i.obsyConfig,
 	}
 }
 
@@ -505,7 +513,7 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
 	for _, i := range instances {
 		if err := function(*i); err != nil {
-			return fmt.Errorf("error")
+			return fmt.Errorf("error applying function to instance '%s': %w", i.name, err)
 		}
 	}
 	return nil
@@ -557,5 +565,28 @@ func (i *Instance) destroyIngress() error {
 	k8s.DeleteIngress(k8s.Namespace(), i.k8sName)
 	logrus.Debugf("Destroyed ingress '%s'", i.k8sName)
 
+	return nil
+}
+
+// isObservabilityEnabled returns true if observability is enabled
+func (i *Instance) isObservabilityEnabled() bool {
+	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
+}
+
+func (i *Instance) validateStateForObsy(endpoint string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
+	}
+	return nil
+}
+
+func (i *Instance) addOtelCollectorSidecar() error {
+	otelSidecar, err := i.createOtelCollectorInstance()
+	if err != nil {
+		return fmt.Errorf("error creating otel collector instance '%s': %w", i.k8sName, err)
+	}
+	if err := i.AddSidecar(otelSidecar); err != nil {
+		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+	}
 	return nil
 }
