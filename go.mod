@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/sirupsen/logrus v1.9.3
 	k8s.io/api v0.28.0
-	k8s.io/apimachinery v0.28.0
+	k8s.io/apimachinery v0.28.1
 	k8s.io/client-go v0.28.0
 )
 
