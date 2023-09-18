@@ -157,7 +157,7 @@ Simple example:
 You can find more examples in the following repositories:
 
 - [celestiaorg/knuu-example](https://github.com/celestiaorg/knuu-example)
-- [celestiaorg/celestia-app](https://github.com/celestiaorg/celestia-app/tree/cal/e2e-test/test/e2e)
+- [celestiaorg/celestia-app](https://github.com/celestiaorg/celestia-app/tree/main/test/e2e)
 
 ### Running Tests
 
