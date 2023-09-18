@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ type Instance struct {
 	isSidecar             bool
 	parentInstance        *Instance
 	sidecars              []*Instance
+	fsGroup               int64
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -162,7 +164,10 @@ func (i *Instance) AddPortTCP(port int) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	validatePort(port)
+	err := validatePort(port)
+	if err != nil {
+		return err
+	}
 	if i.isTCPPortRegistered(port) {
 		return fmt.Errorf("TCP port '%d' is already in registered", port)
 	}
@@ -177,7 +182,10 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 	if !i.IsInState(Started) {
 		return -1, fmt.Errorf("random port forwarding is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	validatePort(port)
+	err := validatePort(port)
+	if err != nil {
+		return 0, err
+	}
 	if !i.isTCPPortRegistered(port) {
 		return -1, fmt.Errorf("TCP port '%d' is not registered", port)
 	}
@@ -214,7 +222,10 @@ func (i *Instance) AddPortUDP(port int) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
-	validatePort(port)
+	err := validatePort(port)
+	if err != nil {
+		return err
+	}
 	if i.isUDPPortRegistered(port) {
 		return fmt.Errorf("UDP port '%d' is already in registered", port)
 	}
@@ -280,7 +291,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		return err
 	}
 
-	i.validateFileArgs(src, dest, chown)
+	err := i.validateFileArgs(src, dest, chown)
+	if err != nil {
+		return err
+	}
 
 	// check if src exists (either as file or as folder)
 	if _, err := os.Stat(src); os.IsNotExist(err) {
@@ -291,7 +305,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	dstPath := filepath.Join(i.getBuildDir(), dest)
 
 	// make sure dir exists
-	err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
+	err = os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("error creating directory: %w", err)
 	}
@@ -317,7 +331,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 
 	switch i.state {
 	case Preparing:
-		i.addFileToBuilder(src, dest, chown)
+		err := i.addFileToBuilder(src, dest, chown)
+		if err != nil {
+			return err
+		}
 	case Committed:
 		// only allow files, not folders
 		srcInfo, err := os.Stat(src)
@@ -325,6 +342,25 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 			return fmt.Errorf("src '%s' does not exist or is a directory", src)
 		}
 		file := k8s.NewFile(dstPath, dest)
+
+		parts := strings.Split(chown, ":")
+
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid format")
+		}
+
+		group, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to convert to int64: %s", err)
+		}
+
+		if i.fsGroup == 0 {
+			i.fsGroup = group
+		} else {
+			if i.fsGroup != group {
+				return fmt.Errorf("all files must have the same group")
+			}
+		}
 
 		i.files = append(i.files, file)
 	}

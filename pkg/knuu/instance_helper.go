@@ -448,6 +448,7 @@ func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
 		Name:               i.k8sName,
 		Labels:             i.getLabels(),
 		ServiceAccountName: i.k8sName,
+		FsGroup:            i.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 	}
@@ -493,8 +494,11 @@ func applyFunctionToInstances(instances []*Instance, function func(sidecar Insta
 
 func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 	// We don't handle errors here, as the function can't return an error
-	applyFunctionToInstances(sidecars, func(sidecar Instance) error {
+	err := applyFunctionToInstances(sidecars, func(sidecar Instance) error {
 		sidecar.state = state
 		return nil
 	})
+	if err != nil {
+		return
+	}
 }
