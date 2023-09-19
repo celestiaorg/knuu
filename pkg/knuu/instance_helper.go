@@ -476,6 +476,7 @@ func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
 		Name:               i.k8sName,
 		Labels:             i.getLabels(),
 		ServiceAccountName: i.k8sName,
+		FsGroup:            i.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 	}
