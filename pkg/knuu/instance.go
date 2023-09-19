@@ -343,21 +343,22 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		}
 		file := k8s.NewFile(dstPath, dest)
 
+		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
-
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid format")
 		}
 
+		// second part of array, base of number is 10, and we want a 64-bit integer
 		group, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to convert to int64: %s", err)
 		}
 
-                 if i.fsGroup != 0 && i.fsGroup != group {
-		    return fmt.Errorf("all files must have the same group")
+		if i.fsGroup != 0 && i.fsGroup != group {
+			return fmt.Errorf("all files must have the same group")
 		} else {
-		    i.fsGroup = group
+			i.fsGroup = group
 		}
 
 		i.files = append(i.files, file)
@@ -532,7 +533,10 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 		return fmt.Errorf("setting environment variable is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 	if i.state == Preparing {
-		i.builderFactory.SetEnvVar(key, value)
+		err := i.builderFactory.SetEnvVar(key, value)
+		if err != nil {
+			return err
+		}
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
