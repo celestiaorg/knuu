@@ -111,6 +111,7 @@ type PodConfig struct {
 	Name               string            // Name to assign to the Pod
 	Labels             map[string]string // Labels to apply to the Pod
 	ServiceAccountName string            // ServiceAccount to assign to Pod
+	FsGroup            int64             // FSGroup to apply to the Pod
 	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
 	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
 }
@@ -494,6 +495,11 @@ func preparePodVolumes(config ContainerConfig) ([]v1.Volume, error) {
 func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	var err error
 
+	// Prepare security context
+	securityContext := v1.PodSecurityContext{
+		FSGroup: &spec.FsGroup,
+	}
+
 	// Prepare main container
 	mainContainer, err := prepareContainer(spec.ContainerConfig)
 	if err != nil {
@@ -514,6 +520,7 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 
 	podSpec := v1.PodSpec{
 		ServiceAccountName: spec.ServiceAccountName,
+		SecurityContext:    &securityContext,
 		InitContainers:     initContainers,
 		Containers:         []v1.Container{mainContainer},
 		Volumes:            podVolumes,
