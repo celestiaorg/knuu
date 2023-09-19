@@ -494,11 +494,8 @@ func applyFunctionToInstances(instances []*Instance, function func(sidecar Insta
 
 func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 	// We don't handle errors here, as the function can't return an error
-	err := applyFunctionToInstances(sidecars, func(sidecar Instance) error {
+	applyFunctionToInstances(sidecars, func(sidecar Instance) error {
 		sidecar.state = state
 		return nil
 	})
-	if err != nil {
-		return
-	}
 }
