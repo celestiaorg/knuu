@@ -354,12 +354,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 			return fmt.Errorf("failed to convert to int64: %s", err)
 		}
 
-		if i.fsGroup == 0 {
-			i.fsGroup = group
+                 if i.fsGroup != 0 && i.fsGroup != group {
+		    return fmt.Errorf("all files must have the same group")
 		} else {
-			if i.fsGroup != group {
-				return fmt.Errorf("all files must have the same group")
-			}
+		    i.fsGroup = group
 		}
 
 		i.files = append(i.files, file)
