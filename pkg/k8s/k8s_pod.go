@@ -496,8 +496,10 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	var err error
 
 	// Prepare security context
+	podFSGroupChangePolicy := v1.FSGroupChangeOnRootMismatch
 	securityContext := v1.PodSecurityContext{
-		FSGroup: &spec.FsGroup,
+		FSGroup:             &spec.FsGroup,
+		FSGroupChangePolicy: &podFSGroupChangePolicy,
 	}
 
 	// Prepare main container
