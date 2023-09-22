@@ -179,7 +179,7 @@ func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 		return nil, fmt.Errorf("error marshaling YAML: %w", err)
 	}
 
-	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "root:root"); err != nil {
+	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
 		return nil, fmt.Errorf("error adding otel-agent config file: %w", err)
 	}
 
