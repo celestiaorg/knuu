@@ -17,6 +17,37 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
+// ObsyConfig represents the configuration for the obsy sidecar
+type ObsyConfig struct {
+	// otelCollectorVersion is the version of the otel collector to use
+	otelCollectorVersion string
+
+	// prometheusPort is the port on which the prometheus server will be exposed
+	prometheusPort int
+	// prometheusJobName is the name of the prometheus job
+	prometheusJobName string
+	// prometheusScrapeInterval is the scrape interval for the prometheus job
+	prometheusScrapeInterval string
+
+	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
+	jaegerGrpcPort int
+	// jaegerThriftCompactPort is the port on which the jaeger thrift compact server is exposed
+	jaegerThriftCompactPort int
+	// jaegerThriftHttpPort is the port on which the jaeger thrift http server is exposed
+	jaegerThriftHttpPort int
+	// jaegerEndpoint is the endpoint of the jaeger collector where spans will be sent to
+	jaegerEndpoint string
+
+	// otlpPort is the port on which the otlp server is exposed
+	otlpPort int
+	// otlpEndpoint is the endpoint of the otlp collector where spans will be sent to
+	otlpEndpoint string
+	// otlpUsername is the username to use for the otlp collector
+	otlpUsername string
+	// otlpPassword is the password to use for the otlp collector
+	otlpPassword string
+}
+
 // Instance represents a instance
 type Instance struct {
 	name                  string
@@ -45,6 +76,7 @@ type Instance struct {
 	parentInstance        *Instance
 	sidecars              []*Instance
 	fsGroup               int64
+	obsyConfig            *ObsyConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -54,6 +86,20 @@ func NewInstance(name string) (*Instance, error) {
 	k8sName, err := generateK8sName(name)
 	if err != nil {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
+	}
+	obsyConfig := &ObsyConfig{
+		otelCollectorVersion:     "0.83.0",
+		otlpPort:                 0,
+		prometheusPort:           0,
+		prometheusJobName:        "",
+		prometheusScrapeInterval: "",
+		jaegerGrpcPort:           0,
+		jaegerThriftCompactPort:  0,
+		jaegerThriftHttpPort:     0,
+		otlpEndpoint:             "",
+		otlpUsername:             "",
+		otlpPassword:             "",
+		jaegerEndpoint:           "",
 	}
 	// Create the instance
 	return &Instance{
@@ -79,6 +125,7 @@ func NewInstance(name string) (*Instance, error) {
 		isSidecar:      false,
 		parentInstance: nil,
 		sidecars:       make([]*Instance, 0),
+		obsyConfig:     obsyConfig,
 	}, nil
 }
 
@@ -665,6 +712,78 @@ func (i *Instance) AddSidecar(sidecar *Instance) error {
 	return nil
 }
 
+// SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtelCollectorVersion(version string) error {
+	if err := i.validateStateForObsy("OpenTelemetry collector version"); err != nil {
+		return err
+	}
+	i.obsyConfig.otelCollectorVersion = version
+	logrus.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
+	return nil
+}
+
+// SetOtelEndpoint sets the OpenTelemetry endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtelEndpoint(port int) error {
+	if err := i.validateStateForObsy("OpenTelemetry endpoint"); err != nil {
+		return err
+	}
+	i.obsyConfig.otlpPort = port
+	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
+	return nil
+}
+
+// SetPrometheusEndpoint sets the Prometheus endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
+	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusPort = port
+	i.obsyConfig.prometheusJobName = jobName
+	i.obsyConfig.prometheusScrapeInterval = scapeInterval
+	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
+	return nil
+}
+
+// SetJaegerEndpoint sets the Jaeger endpoint for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
+	if err := i.validateStateForObsy("Jaeger endpoint"); err != nil {
+		return err
+	}
+	i.obsyConfig.jaegerGrpcPort = grpcPort
+	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
+	i.obsyConfig.jaegerThriftHttpPort = thriftHttpPort
+	logrus.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
+	return nil
+}
+
+// SetOtlpExporter sets the OTLP exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
+	if err := i.validateStateForObsy("OTLP exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.otlpEndpoint = endpoint
+	i.obsyConfig.otlpUsername = username
+	i.obsyConfig.otlpPassword = password
+	logrus.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetJaegerExporter sets the Jaeger exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetJaegerExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Jaeger exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.jaegerEndpoint = endpoint
+	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait() error {
@@ -683,6 +802,12 @@ func (i *Instance) StartWithoutWait() error {
 		return fmt.Errorf("starting a sidecar is not allowed")
 	}
 	if i.state == Committed {
+		// deploy otel collector if observability is enabled
+		if i.isObservabilityEnabled() {
+			if err := i.addOtelCollectorSidecar(); err != nil {
+				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
+			}
+		}
 
 		if err := i.deployResources(); err != nil {
 			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)

@@ -499,3 +499,26 @@ func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 		return nil
 	})
 }
+
+// isObservabilityEnabled returns true if observability is enabled
+func (i *Instance) isObservabilityEnabled() bool {
+	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
+}
+
+func (i *Instance) validateStateForObsy(endpoint string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
+	}
+	return nil
+}
+
+func (i *Instance) addOtelCollectorSidecar() error {
+	otelSidecar, err := i.createOtelCollectorInstance()
+	if err != nil {
+		return fmt.Errorf("error creating otel collector instance '%s': %w", i.k8sName, err)
+	}
+	if err := i.AddSidecar(otelSidecar); err != nil {
+		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
