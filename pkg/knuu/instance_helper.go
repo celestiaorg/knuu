@@ -294,15 +294,20 @@ func (i *Instance) destroyResources() error {
 		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
 	}
 
-	// enable network when network is disabled
-	disableNetwork, err := i.NetworkIsDisabled()
-	if err != nil {
-		return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
-	}
-	if disableNetwork {
-		err := i.EnableNetwork()
+	// disable network only for non-sidecar instances
+	if !i.isSidecar {
+		// enable network when network is disabled
+		disableNetwork, err := i.NetworkIsDisabled()
 		if err != nil {
-			return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			logrus.Debugf("error checking network status for instance")
+			return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+		}
+		if disableNetwork {
+			err := i.EnableNetwork()
+			if err != nil {
+				logrus.Debugf("error enabling network for instance")
+				return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+			}
 		}
 	}
 
@@ -486,7 +491,7 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
 	for _, i := range instances {
 		if err := function(*i); err != nil {
-			return fmt.Errorf("error")
+			return fmt.Errorf("error applying function to instance '%s': %w", i.k8sName, err)
 		}
 	}
 	return nil
@@ -494,10 +499,13 @@ func applyFunctionToInstances(instances []*Instance, function func(sidecar Insta
 
 func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 	// We don't handle errors here, as the function can't return an error
-	applyFunctionToInstances(sidecars, func(sidecar Instance) error {
+	err := applyFunctionToInstances(sidecars, func(sidecar Instance) error {
 		sidecar.state = state
 		return nil
 	})
+	if err != nil {
+		return
+	}
 }
 
 // isObservabilityEnabled returns true if observability is enabled

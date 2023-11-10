@@ -973,9 +973,10 @@ func (i *Instance) Destroy() error {
 	}
 
 	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
+		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
 		return sidecar.destroyResources()
 	}); err != nil {
-		return err
+		return fmt.Errorf("error destroying resources for sidecars of instance '%s': %w", i.k8sName, err)
 	}
 
 	i.state = Destroyed
