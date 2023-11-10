@@ -347,6 +347,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		isSidecar:             false,
 		parentInstance:        nil,
 		sidecars:              clonedSidecars,
+		obsyConfig:            i.obsyConfig,
 	}
 }
 
