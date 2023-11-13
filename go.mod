@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/docker/docker v24.0.7+incompatible
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.4.0
 	github.com/sirupsen/logrus v1.9.3
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.28.3
