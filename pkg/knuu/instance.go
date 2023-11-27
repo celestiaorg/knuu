@@ -48,6 +48,30 @@ type ObsyConfig struct {
 	otlpPassword string
 }
 
+// SecurityContext represents the security settings for a container
+type SecurityContext struct {
+	// Privileged indicates whether the container should be run in privileged mode
+	privileged bool
+
+	// CapabilitiesAdd is the list of capabilities to add to the container
+	capabilitiesAdd []string
+}
+
+// NetworkConfig represents the configuration for the network
+type NetworkConfig struct {
+	// bandwidth is the bandwidth limit in bps (e.g. 1000 for 1Kbps)
+	bandwidth int
+
+	// jitter is the network jitter in milliseconds (e.g. 10 for 10ms)
+	jitter int
+
+	// latency is the network latency in milliseconds (e.g. 100 for 100ms)
+	latency int
+
+	// packetLoss is the network packet loss rate (e.g. 10 for 10% packet loss)
+	packetLoss int
+}
+
 // Instance represents a instance
 type Instance struct {
 	name                  string
@@ -77,6 +101,8 @@ type Instance struct {
 	sidecars              []*Instance
 	fsGroup               int64
 	obsyConfig            *ObsyConfig
+	securityContext       *SecurityContext
+	networkConfig         *NetworkConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -101,31 +127,43 @@ func NewInstance(name string) (*Instance, error) {
 		otlpPassword:             "",
 		jaegerEndpoint:           "",
 	}
+	securityContext := &SecurityContext{
+		privileged:      false,
+		capabilitiesAdd: make([]string, 0),
+	}
+	networkConfig := &NetworkConfig{
+		bandwidth:  0,
+		jitter:     0,
+		latency:    0,
+		packetLoss: 0,
+	}
 	// Create the instance
 	return &Instance{
-		name:           name,
-		k8sName:        k8sName,
-		imageName:      "",
-		state:          None,
-		instanceType:   BasicInstance,
-		portsTCP:       make([]int, 0),
-		portsUDP:       make([]int, 0),
-		command:        make([]string, 0),
-		args:           make([]string, 0),
-		env:            make(map[string]string),
-		volumes:        make([]*k8s.Volume, 0),
-		memoryRequest:  "",
-		memoryLimit:    "",
-		cpuRequest:     "",
-		policyRules:    make([]rbacv1.PolicyRule, 0),
-		livenessProbe:  nil,
-		readinessProbe: nil,
-		startupProbe:   nil,
-		files:          make([]*k8s.File, 0),
-		isSidecar:      false,
-		parentInstance: nil,
-		sidecars:       make([]*Instance, 0),
-		obsyConfig:     obsyConfig,
+		name:            name,
+		k8sName:         k8sName,
+		imageName:       "",
+		state:           None,
+		instanceType:    BasicInstance,
+		portsTCP:        make([]int, 0),
+		portsUDP:        make([]int, 0),
+		command:         make([]string, 0),
+		args:            make([]string, 0),
+		env:             make(map[string]string),
+		volumes:         make([]*k8s.Volume, 0),
+		memoryRequest:   "",
+		memoryLimit:     "",
+		cpuRequest:      "",
+		policyRules:     make([]rbacv1.PolicyRule, 0),
+		livenessProbe:   nil,
+		readinessProbe:  nil,
+		startupProbe:    nil,
+		files:           make([]*k8s.File, 0),
+		isSidecar:       false,
+		parentInstance:  nil,
+		sidecars:        make([]*Instance, 0),
+		obsyConfig:      obsyConfig,
+		securityContext: securityContext,
+		networkConfig:   networkConfig,
 	}, nil
 }
 
@@ -784,6 +822,41 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 	return nil
 }
 
+// SetPrivileged sets the privileged status for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrivileged(privileged bool) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("setting privileged is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.securityContext.privileged = privileged
+	logrus.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
+	return nil
+}
+
+// AddCapability adds a capability to the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) AddCapability(capability string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding capability is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
+	logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+	return nil
+}
+
+// AddCapabilities adds multiple capabilities to the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) AddCapabilities(capabilities []string) error {
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding capabilities is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	}
+	for _, capability := range capabilities {
+		i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
+		logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+	}
+	return nil
+}
+
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait() error {
@@ -806,6 +879,12 @@ func (i *Instance) StartWithoutWait() error {
 		if i.isObservabilityEnabled() {
 			if err := i.addOtelCollectorSidecar(); err != nil {
 				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
+			}
+		}
+		// check if networking is configured and if so, add the corresponding sidecar
+		if i.isNetworkConfigSet() {
+			if err := i.addNetworkConfigSidecar(); err != nil {
+				return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
 			}
 		}
 
@@ -893,6 +972,70 @@ func (i *Instance) DisableNetwork() error {
 	if err != nil {
 		return fmt.Errorf("error disabling network for instance '%s': %w", i.k8sName, err)
 	}
+	return nil
+}
+
+// SetBandwidthLimit sets the bandwidth limit of the instance
+// bandwidth limit in bps (e.g. 1000 for 1Kbps)
+// Currently, only one of bandwidth, jitter, latency or packet loss can be set
+// This function can only be called in the state 'Commited'
+func (i *Instance) SetBandwidthLimit(limit int) error {
+	if !i.IsInState(Committed) {
+		return fmt.Errorf("setting bandwidth limit is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if i.isNetworkConfigSet() {
+		return fmt.Errorf("setting bandwidth limit is not allowed if network config is already set")
+	}
+	i.networkConfig.bandwidth = limit
+	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
+	return nil
+}
+
+// SetJitter sets the jitter of the instance
+// jitter in ms (e.g. 1000 for 1s)
+// Currently, only one of bandwidth, jitter, latency or packet loss can be set
+// This function can only be called in the state 'Commited'
+func (i *Instance) SetJitter(jitter int) error {
+	if !i.IsInState(Committed) {
+		return fmt.Errorf("setting jitter is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if i.isNetworkConfigSet() {
+		return fmt.Errorf("setting jitter is not allowed if network config is already set")
+	}
+	i.networkConfig.jitter = jitter
+	logrus.Debugf("Set jitter to '%d' in instance '%s'", jitter, i.name)
+	return nil
+}
+
+// SetLatency sets the latency of the instance
+// latency in ms (e.g. 1000 for 1s)
+// Currently, only one of bandwidth, jitter, latency or packet loss can be set
+// This function can only be called in the state 'Commited'
+func (i *Instance) SetLatency(latency int) error {
+	if !i.IsInState(Committed) {
+		return fmt.Errorf("setting latency is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if i.isNetworkConfigSet() {
+		return fmt.Errorf("setting latency is not allowed if network config is already set")
+	}
+	i.networkConfig.latency = latency
+	logrus.Debugf("Set latency to '%d' in instance '%s'", latency, i.name)
+	return nil
+}
+
+// SetPacketLoss sets the packet loss of the instance
+// packet loss in percent (e.g. 10 for 10%)
+// Currently, only one of bandwidth, jitter, latency or packet loss can be set
+// This function can only be called in the state 'Commited'
+func (i *Instance) SetPacketLoss(packetLoss int) error {
+	if !i.IsInState(Committed) {
+		return fmt.Errorf("setting packet loss is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	}
+	if i.isNetworkConfigSet() {
+		return fmt.Errorf("setting packet loss is not allowed if network config is already set")
+	}
+	i.networkConfig.packetLoss = packetLoss
+	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
 	return nil
 }
 

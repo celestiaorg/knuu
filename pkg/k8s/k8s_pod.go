@@ -90,19 +90,20 @@ func NewFile(source, dest string) *File {
 
 // ContainerConfig contains the specifications for creating a new Container object
 type ContainerConfig struct {
-	Name           string            // Name to assign to the Container
-	Image          string            // Name of the container image to use for the container
-	Command        []string          // Command to run in the container
-	Args           []string          // Arguments to pass to the command in the container
-	Env            map[string]string // Environment variables to set in the container
-	Volumes        []*Volume         // Volumes to mount in the Pod
-	MemoryRequest  string            // Memory request for the container
-	MemoryLimit    string            // Memory limit for the container
-	CPURequest     string            // CPU request for the container
-	LivenessProbe  *v1.Probe         // Liveness probe for the container
-	ReadinessProbe *v1.Probe         // Readiness probe for the container
-	StartupProbe   *v1.Probe         // Startup probe for the container
-	Files          []*File           // Files to add to the Pod
+	Name            string              // Name to assign to the Container
+	Image           string              // Name of the container image to use for the container
+	Command         []string            // Command to run in the container
+	Args            []string            // Arguments to pass to the command in the container
+	Env             map[string]string   // Environment variables to set in the container
+	Volumes         []*Volume           // Volumes to mount in the Pod
+	MemoryRequest   string              // Memory request for the container
+	MemoryLimit     string              // Memory limit for the container
+	CPURequest      string              // CPU request for the container
+	LivenessProbe   *v1.Probe           // Liveness probe for the container
+	ReadinessProbe  *v1.Probe           // Readiness probe for the container
+	StartupProbe    *v1.Probe           // Startup probe for the container
+	Files           []*File             // Files to add to the Pod
+	SecurityContext *v1.SecurityContext // Security context for the container
 }
 
 // PodConfig contains the specifications for creating a new Pod object
@@ -439,16 +440,17 @@ func prepareContainer(config ContainerConfig) (v1.Container, error) {
 	}
 
 	return v1.Container{
-		Name:           config.Name,
-		Image:          config.Image,
-		Command:        config.Command,
-		Args:           config.Args,
-		Env:            podEnv,
-		VolumeMounts:   containerVolumes,
-		Resources:      resources,
-		LivenessProbe:  config.LivenessProbe,
-		ReadinessProbe: config.ReadinessProbe,
-		StartupProbe:   config.StartupProbe,
+		Name:            config.Name,
+		Image:           config.Image,
+		Command:         config.Command,
+		Args:            config.Args,
+		Env:             podEnv,
+		VolumeMounts:    containerVolumes,
+		Resources:       resources,
+		LivenessProbe:   config.LivenessProbe,
+		ReadinessProbe:  config.ReadinessProbe,
+		StartupProbe:    config.StartupProbe,
+		SecurityContext: config.SecurityContext,
 	}, nil
 }
 

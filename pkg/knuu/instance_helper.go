@@ -11,6 +11,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
@@ -322,6 +323,12 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
 	}
 
+	// Deep copy of networkConfig to ensure cloned instance has its own copy
+	clonedNetworkConfig := *i.networkConfig
+
+	// Deep copy of securityContext to ensure cloned instance has its own copy
+	clonedSecurityContext := *i.securityContext
+
 	return &Instance{
 		name:                  i.name + suffix,
 		k8sName:               i.k8sName + suffix,
@@ -348,6 +355,8 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		parentInstance:        nil,
 		sidecars:              clonedSidecars,
 		obsyConfig:            i.obsyConfig,
+		securityContext:       &clonedSecurityContext,
+		networkConfig:         &clonedNetworkConfig,
 	}
 }
 
@@ -411,41 +420,66 @@ func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 	return nil
 }
 
+// prepareSecurityContext creates a v1.SecurityContext from a given SecurityContext.
+func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
+	securityContext := &v1.SecurityContext{}
+
+	if config != nil {
+		if config.privileged {
+			securityContext.Privileged = &config.privileged
+		}
+		if len(config.capabilitiesAdd) > 0 {
+			capabilities := make([]v1.Capability, len(config.capabilitiesAdd))
+			for i, cap := range config.capabilitiesAdd {
+				capabilities[i] = v1.Capability(cap)
+			}
+			securityContext.Capabilities = &v1.Capabilities{
+				Add: capabilities,
+			}
+		}
+	}
+
+	return securityContext
+}
+
 // prepareConfig prepares the config for the instance
 func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
+
 	// Generate the container configuration
 	containerConfig := k8s.ContainerConfig{
-		Name:           i.k8sName,
-		Image:          i.imageName,
-		Command:        i.command,
-		Args:           i.args,
-		Env:            i.env,
-		Volumes:        i.volumes,
-		MemoryRequest:  i.memoryRequest,
-		MemoryLimit:    i.memoryLimit,
-		CPURequest:     i.cpuRequest,
-		LivenessProbe:  i.livenessProbe,
-		ReadinessProbe: i.readinessProbe,
-		StartupProbe:   i.startupProbe,
-		Files:          i.files,
+		Name:            i.k8sName,
+		Image:           i.imageName,
+		Command:         i.command,
+		Args:            i.args,
+		Env:             i.env,
+		Volumes:         i.volumes,
+		MemoryRequest:   i.memoryRequest,
+		MemoryLimit:     i.memoryLimit,
+		CPURequest:      i.cpuRequest,
+		LivenessProbe:   i.livenessProbe,
+		ReadinessProbe:  i.readinessProbe,
+		StartupProbe:    i.startupProbe,
+		Files:           i.files,
+		SecurityContext: prepareSecurityContext(i.securityContext),
 	}
 	// Generate the sidecar configurations
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:           sidecar.k8sName,
-			Image:          sidecar.imageName,
-			Command:        sidecar.command,
-			Args:           sidecar.args,
-			Env:            sidecar.env,
-			Volumes:        sidecar.volumes,
-			MemoryRequest:  sidecar.memoryRequest,
-			MemoryLimit:    sidecar.memoryLimit,
-			CPURequest:     sidecar.cpuRequest,
-			LivenessProbe:  sidecar.livenessProbe,
-			ReadinessProbe: sidecar.readinessProbe,
-			StartupProbe:   sidecar.startupProbe,
-			Files:          sidecar.files,
+			Name:            sidecar.k8sName,
+			Image:           sidecar.imageName,
+			Command:         sidecar.command,
+			Args:            sidecar.args,
+			Env:             sidecar.env,
+			Volumes:         sidecar.volumes,
+			MemoryRequest:   sidecar.memoryRequest,
+			MemoryLimit:     sidecar.memoryLimit,
+			CPURequest:      sidecar.cpuRequest,
+			LivenessProbe:   sidecar.livenessProbe,
+			ReadinessProbe:  sidecar.readinessProbe,
+			StartupProbe:    sidecar.startupProbe,
+			Files:           sidecar.files,
+			SecurityContext: prepareSecurityContext(sidecar.securityContext),
 		})
 	}
 	// Generate the pod configuration
@@ -514,6 +548,11 @@ func (i *Instance) isObservabilityEnabled() bool {
 	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
 }
 
+// isNetworkConfigSet returns true if any network config value is set
+func (i *Instance) isNetworkConfigSet() bool {
+	return i.networkConfig.bandwidth != 0 || i.networkConfig.jitter != 0 || i.networkConfig.latency != 0 || i.networkConfig.packetLoss != 0
+}
+
 func (i *Instance) validateStateForObsy(endpoint string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
@@ -528,6 +567,46 @@ func (i *Instance) addOtelCollectorSidecar() error {
 	}
 	if err := i.AddSidecar(otelSidecar); err != nil {
 		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
+
+func (i *Instance) createNetworkConfigInstance() (*Instance, error) {
+	networkConfigInstance, err := NewInstance("network-config")
+	if err != nil {
+		return nil, fmt.Errorf("error creating network-config instance: %w", err)
+	}
+	if err := networkConfigInstance.SetImage("ttl.sh/41838c59-c02e-4cac-9284-e3f47d32391d:latest"); err != nil {
+		return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
+	}
+	if err := networkConfigInstance.Commit(); err != nil {
+		return nil, fmt.Errorf("error committing network-config instance: %w", err)
+	}
+	return networkConfigInstance, nil
+}
+
+func (i *Instance) addNetworkConfigSidecar() error {
+	networkConfigSidecar, err := i.createNetworkConfigInstance()
+	if err != nil {
+		return fmt.Errorf("error creating network config instance '%s': %w", i.k8sName, err)
+	}
+	bittwisterCmd := []string{"./bittwister", "start", "-d", "eth0"}
+	switch {
+	case i.networkConfig.bandwidth != 0:
+		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-b", fmt.Sprintf("%d", i.networkConfig.bandwidth))...)
+		networkConfigSidecar.SetPrivileged(true)
+	case i.networkConfig.jitter != 0:
+		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-j", fmt.Sprintf("%d", i.networkConfig.jitter))...)
+		networkConfigSidecar.AddCapability("NET_ADMIN")
+	case i.networkConfig.latency != 0:
+		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-l", fmt.Sprintf("%d", i.networkConfig.latency))...)
+		networkConfigSidecar.AddCapability("NET_ADMIN")
+	case i.networkConfig.packetLoss != 0:
+		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-p", fmt.Sprintf("%d", i.networkConfig.packetLoss))...)
+		networkConfigSidecar.SetPrivileged(true)
+	}
+	if err := i.AddSidecar(networkConfigSidecar); err != nil {
+		return fmt.Errorf("error adding network config sidecar to instance '%s': %w", i.k8sName, err)
 	}
 	return nil
 }
