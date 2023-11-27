@@ -576,7 +576,7 @@ func (i *Instance) createNetworkConfigInstance() (*Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating network-config instance: %w", err)
 	}
-	if err := networkConfigInstance.SetImage("ttl.sh/41838c59-c02e-4cac-9284-e3f47d32391d:latest"); err != nil {
+	if err := networkConfigInstance.SetImage("ghcr.io/celestiaorg/bittwister:b6e321c"); err != nil {
 		return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
 	}
 	if err := networkConfigInstance.Commit(); err != nil {
