@@ -104,9 +104,7 @@ func (i *Instance) patchService() error {
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService() error {
-	k8s.DeleteService(k8s.Namespace(), i.k8sName)
-
-	return nil
+	return k8s.DeleteService(k8s.Namespace(), i.k8sName)
 }
 
 // deployPod deploys the pod for the instance
@@ -323,9 +321,6 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
 	}
 
-	// Deep copy of networkConfig to ensure cloned instance has its own copy
-	clonedNetworkConfig := *i.networkConfig
-
 	// Deep copy of securityContext to ensure cloned instance has its own copy
 	clonedSecurityContext := *i.securityContext
 
@@ -356,7 +351,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		sidecars:              clonedSidecars,
 		obsyConfig:            i.obsyConfig,
 		securityContext:       &clonedSecurityContext,
-		networkConfig:         &clonedNetworkConfig,
+		btClient:              nil, // Set it to nil as it points to the current instance, will create a new one on commit
 	}
 }
 
@@ -548,11 +543,6 @@ func (i *Instance) isObservabilityEnabled() bool {
 	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
 }
 
-// isNetworkConfigSet returns true if any network config value is set
-func (i *Instance) isNetworkConfigSet() bool {
-	return i.networkConfig.bandwidth != 0 || i.networkConfig.jitter != 0 || i.networkConfig.latency != 0 || i.networkConfig.packetLoss != 0
-}
-
 func (i *Instance) validateStateForObsy(endpoint string) error {
 	if !i.IsInState(Preparing, Committed) {
 		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
@@ -576,9 +566,14 @@ func (i *Instance) createNetworkConfigInstance() (*Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating network-config instance: %w", err)
 	}
-	if err := networkConfigInstance.SetImage("ghcr.io/celestiaorg/bittwister:b6e321c"); err != nil {
+	if err := networkConfigInstance.SetImage(btDefaultImage); err != nil {
 		return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
 	}
+
+	if err := networkConfigInstance.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", btDefaultPort)); err != nil {
+		return nil, fmt.Errorf("error setting environment variable for network-config instance: %w", err)
+	}
+
 	if err := networkConfigInstance.Commit(); err != nil {
 		return nil, fmt.Errorf("error committing network-config instance: %w", err)
 	}
@@ -590,21 +585,15 @@ func (i *Instance) addNetworkConfigSidecar() error {
 	if err != nil {
 		return fmt.Errorf("error creating network config instance '%s': %w", i.k8sName, err)
 	}
-	bittwisterCmd := []string{"./bittwister", "start", "-d", "eth0"}
-	switch {
-	case i.networkConfig.bandwidth != 0:
-		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-b", fmt.Sprintf("%d", i.networkConfig.bandwidth))...)
-		networkConfigSidecar.SetPrivileged(true)
-	case i.networkConfig.jitter != 0:
-		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-j", fmt.Sprintf("%d", i.networkConfig.jitter))...)
-		networkConfigSidecar.AddCapability("NET_ADMIN")
-	case i.networkConfig.latency != 0:
-		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-l", fmt.Sprintf("%d", i.networkConfig.latency))...)
-		networkConfigSidecar.AddCapability("NET_ADMIN")
-	case i.networkConfig.packetLoss != 0:
-		networkConfigSidecar.SetCommand(append(bittwisterCmd, "-p", fmt.Sprintf("%d", i.networkConfig.packetLoss))...)
-		networkConfigSidecar.SetPrivileged(true)
+
+	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
+		return fmt.Errorf("error setting privileged for network config instance '%s': %w", i.k8sName, err)
 	}
+
+	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
+		return fmt.Errorf("error adding capability for network config instance '%s': %w", i.k8sName, err)
+	}
+
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {
 		return fmt.Errorf("error adding network config sidecar to instance '%s': %w", i.k8sName, err)
 	}

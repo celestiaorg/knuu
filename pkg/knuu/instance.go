@@ -9,12 +9,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+)
+
+const (
+	// BitTwister default port
+	btDefaultPort = 9009
+
+	// BitTwister default image
+	btDefaultImage = "ghcr.io/celestiaorg/bittwister:b6e321c"
+
+	// Default network interface name inside the pod
+	btDefaultNetworkInterface = "eth0"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -57,21 +69,6 @@ type SecurityContext struct {
 	capabilitiesAdd []string
 }
 
-// NetworkConfig represents the configuration for the network
-type NetworkConfig struct {
-	// bandwidth is the bandwidth limit in bps (e.g. 1000 for 1Kbps)
-	bandwidth int
-
-	// jitter is the network jitter in milliseconds (e.g. 10 for 10ms)
-	jitter int
-
-	// latency is the network latency in milliseconds (e.g. 100 for 100ms)
-	latency int
-
-	// packetLoss is the network packet loss rate (e.g. 10 for 10% packet loss)
-	packetLoss int
-}
-
 // Instance represents a instance
 type Instance struct {
 	name                  string
@@ -102,7 +99,7 @@ type Instance struct {
 	fsGroup               int64
 	obsyConfig            *ObsyConfig
 	securityContext       *SecurityContext
-	networkConfig         *NetworkConfig
+	btClient              *sdk.Client
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -131,12 +128,7 @@ func NewInstance(name string) (*Instance, error) {
 		privileged:      false,
 		capabilitiesAdd: make([]string, 0),
 	}
-	networkConfig := &NetworkConfig{
-		bandwidth:  0,
-		jitter:     0,
-		latency:    0,
-		packetLoss: 0,
-	}
+
 	// Create the instance
 	return &Instance{
 		name:            name,
@@ -163,7 +155,6 @@ func NewInstance(name string) (*Instance, error) {
 		sidecars:        make([]*Instance, 0),
 		obsyConfig:      obsyConfig,
 		securityContext: securityContext,
-		networkConfig:   networkConfig,
 	}, nil
 }
 
@@ -565,6 +556,15 @@ func (i *Instance) Commit() error {
 	i.state = Committed
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
+	ip, err := i.GetIP()
+	if err != nil {
+		return fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
+	}
+	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+	btAddress := fmt.Sprintf("%s:%d", ip, btDefaultPort)
+	logrus.Debugf("BitTwister address '%s'", btAddress)
+	i.btClient = sdk.NewClient(btAddress)
+
 	return nil
 }
 
@@ -881,11 +881,9 @@ func (i *Instance) StartWithoutWait() error {
 				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
 			}
 		}
-		// check if networking is configured and if so, add the corresponding sidecar
-		if i.isNetworkConfigSet() {
-			if err := i.addNetworkConfigSidecar(); err != nil {
-				return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
-			}
+		// gholi
+		if err := i.addNetworkConfigSidecar(); err != nil {
+			return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
 		}
 
 		if err := i.deployResources(); err != nil {
@@ -979,47 +977,58 @@ func (i *Instance) DisableNetwork() error {
 // bandwidth limit in bps (e.g. 1000 for 1Kbps)
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
-func (i *Instance) SetBandwidthLimit(limit int) error {
+func (i *Instance) SetBandwidthLimit(limit int64) error {
 	if !i.IsInState(Committed) {
 		return fmt.Errorf("setting bandwidth limit is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
-	if i.isNetworkConfigSet() {
-		return fmt.Errorf("setting bandwidth limit is not allowed if network config is already set")
-	}
-	i.networkConfig.bandwidth = limit
-	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
-	return nil
-}
 
-// SetJitter sets the jitter of the instance
-// jitter in ms (e.g. 1000 for 1s)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
-func (i *Instance) SetJitter(jitter int) error {
-	if !i.IsInState(Committed) {
-		return fmt.Errorf("setting jitter is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	// We first need to stop it, otherwise we get an error
+	if err := i.btClient.BandwidthStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
+			return fmt.Errorf("error stopping bandwidth limit for instance '%s': %w", i.k8sName, err)
+		}
 	}
-	if i.isNetworkConfigSet() {
-		return fmt.Errorf("setting jitter is not allowed if network config is already set")
+
+	err := i.btClient.BandwidthStart(sdk.BandwidthStartRequest{
+		NetworkInterfaceName: btDefaultNetworkInterface,
+		Limit:                limit,
+	})
+
+	if err != nil {
+		return fmt.Errorf("error setting bandwidth limit for instance '%s': %w", i.k8sName, err)
 	}
-	i.networkConfig.jitter = jitter
-	logrus.Debugf("Set jitter to '%d' in instance '%s'", jitter, i.name)
+
+	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
 	return nil
 }
 
 // SetLatency sets the latency of the instance
 // latency in ms (e.g. 1000 for 1s)
+// jitter in ms (e.g. 1000 for 1s)
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
-func (i *Instance) SetLatency(latency int) error {
+func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 	if !i.IsInState(Committed) {
-		return fmt.Errorf("setting latency is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+		return fmt.Errorf("setting latency/jitter is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
-	if i.isNetworkConfigSet() {
-		return fmt.Errorf("setting latency is not allowed if network config is already set")
+
+	// We first need to stop it, otherwise we get an error
+	if err := i.btClient.LatencyStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
+			return fmt.Errorf("error stopping latency/jitter for instance '%s': %w", i.k8sName, err)
+		}
 	}
-	i.networkConfig.latency = latency
-	logrus.Debugf("Set latency to '%d' in instance '%s'", latency, i.name)
+
+	err := i.btClient.LatencyStart(sdk.LatencyStartRequest{
+		NetworkInterfaceName: btDefaultImage,
+		Latency:              latency,
+		Jitter:               jitter,
+	})
+	if err != nil {
+		return fmt.Errorf("error setting latency/jitter for instance '%s': %w", i.k8sName, err)
+	}
+
+	logrus.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
 	return nil
 }
 
@@ -1027,14 +1036,26 @@ func (i *Instance) SetLatency(latency int) error {
 // packet loss in percent (e.g. 10 for 10%)
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
-func (i *Instance) SetPacketLoss(packetLoss int) error {
+func (i *Instance) SetPacketLoss(packetLoss int32) error {
 	if !i.IsInState(Committed) {
 		return fmt.Errorf("setting packet loss is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
-	if i.isNetworkConfigSet() {
-		return fmt.Errorf("setting packet loss is not allowed if network config is already set")
+
+	// We first need to stop it, otherwise we get an error
+	if err := i.btClient.PacketlossStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
+			return fmt.Errorf("error stopping packetLoss for instance '%s': %w", i.k8sName, err)
+		}
 	}
-	i.networkConfig.packetLoss = packetLoss
+
+	err := i.btClient.PacketlossStart(sdk.PacketLossStartRequest{
+		NetworkInterfaceName: btDefaultNetworkInterface,
+		PacketLossRate:       packetLoss,
+	})
+	if err != nil {
+		return fmt.Errorf("error setting packet loss for instance '%s': %w", i.k8sName, err)
+	}
+
 	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
 	return nil
 }
