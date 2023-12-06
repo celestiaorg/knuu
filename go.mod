@@ -3,7 +3,7 @@ module github.com/celestiaorg/knuu
 go 1.21.0
 
 require (
-	github.com/celestiaorg/bittwister v0.0.0-20231206153416-6973bcf6b7de
+	github.com/celestiaorg/bittwister v0.0.0-20231206180026-b04bbe8f7ba8
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/google/uuid v1.3.1
 	github.com/sirupsen/logrus v1.9.3
