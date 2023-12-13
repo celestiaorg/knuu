@@ -1,6 +1,7 @@
 package knuu
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,17 +17,6 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-)
-
-const (
-	// BitTwister default port
-	btDefaultPort = 9009
-
-	// BitTwister default image
-	btDefaultImage = "ghcr.io/celestiaorg/bittwister:b6e321c"
-
-	// Default network interface name inside the pod
-	btDefaultNetworkInterface = "eth0"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -99,7 +89,7 @@ type Instance struct {
 	fsGroup               int64
 	obsyConfig            *ObsyConfig
 	securityContext       *SecurityContext
-	btClient              *sdk.Client
+	BitTwister            *btConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -155,7 +145,24 @@ func NewInstance(name string) (*Instance, error) {
 		sidecars:        make([]*Instance, 0),
 		obsyConfig:      obsyConfig,
 		securityContext: securityContext,
+		BitTwister:      getBitTwisterDefaultConfig(),
 	}, nil
+}
+
+func (i *Instance) EnableBitTwister() error {
+	if i.IsInState(Started) {
+		return fmt.Errorf("enabling BitTwister is not allowed in state 'Started'")
+	}
+	i.BitTwister.enable()
+	return nil
+}
+
+func (i *Instance) DisableBitTwister() error {
+	// if !i.IsInState(Preparing) {
+	// 	return fmt.Errorf("disabling BitTwister is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	// }
+	i.BitTwister.disable()
+	return nil
 }
 
 // SetImage sets the image of the instance.
@@ -313,43 +320,53 @@ func (i *Instance) AddPortUDP(port int) error {
 // ExecuteCommand executes the given command in the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) ExecuteCommand(command ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), k8s.Timeout())
+	defer cancel()
+
+	return i.ExecuteCommandWithContext(ctx, command...)
+}
+
+// ExecuteCommandWithContext executes the given command in the instance
+// This function can only be called in the states 'Preparing' and 'Started'
+// The context can be used to cancel the command and it is only possible in start state
+func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
 	if !i.IsInState(Preparing, Started) {
 		return "", fmt.Errorf("executing command is only allowed in state 'Preparing' or 'Started'. Current state is '%s'", i.state.String())
 	}
+
 	if i.IsInState(Preparing) {
 		output, err := i.builderFactory.ExecuteCmdInBuilder(command)
 		if err != nil {
 			return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.name, err)
 		}
 		return output, nil
-	} else if i.IsInState(Started) {
-		var instanceName string
-		var errMsg error
-		containerName := i.k8sName
-
-		if i.isSidecar {
-			instanceName = i.parentInstance.k8sName
-			errMsg = fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s'", command, i.k8sName, i.parentInstance.k8sName)
-		} else {
-			instanceName = i.k8sName
-			errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
-		}
-
-		pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
-		if err != nil {
-			return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
-		}
-		commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-		output, err := k8s.RunCommandInPod(k8s.Namespace(), pod.Name, containerName, commandWithShell)
-		if err != nil {
-			return "", fmt.Errorf("%v: %v", errMsg, err)
-		}
-		return output, nil
-	} else {
-		return "", fmt.Errorf("")
 	}
 
-	return "", nil
+	var (
+		instanceName  string
+		errMsg        error
+		containerName = i.k8sName
+	)
+
+	if i.isSidecar {
+		instanceName = i.parentInstance.k8sName
+		errMsg = fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s'", command, i.k8sName, i.parentInstance.k8sName)
+	} else {
+		instanceName = i.k8sName
+		errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
+	}
+
+	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
+	if err != nil {
+		return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+	}
+
+	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
+	output, err := k8s.RunCommandInPod(ctx, k8s.Namespace(), pod.Name, containerName, commandWithShell)
+	if err != nil {
+		return "", fmt.Errorf("%v: %v", errMsg, err)
+	}
+	return output, nil
 }
 
 // checkStateForAddingFile checks if the current state allows adding a file
@@ -555,15 +572,6 @@ func (i *Instance) Commit() error {
 	}
 	i.state = Committed
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
-
-	ip, err := i.GetIP()
-	if err != nil {
-		return fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
-	}
-	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
-	btAddress := fmt.Sprintf("%s:%d", ip, btDefaultPort)
-	logrus.Debugf("BitTwister address '%s'", btAddress)
-	i.btClient = sdk.NewClient(btAddress)
 
 	return nil
 }
@@ -874,6 +882,7 @@ func (i *Instance) StartWithoutWait() error {
 	if i.isSidecar {
 		return fmt.Errorf("starting a sidecar is not allowed")
 	}
+
 	if i.state == Committed {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
@@ -881,9 +890,11 @@ func (i *Instance) StartWithoutWait() error {
 				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
 			}
 		}
-		// gholi
-		if err := i.addNetworkConfigSidecar(); err != nil {
-			return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
+
+		if i.BitTwister.Enabled() || i.isObservabilityEnabled() {
+			if err := i.addNetworkConfigSidecar(); err != nil {
+				return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
+			}
 		}
 
 		if err := i.deployResources(); err != nil {
@@ -894,8 +905,8 @@ func (i *Instance) StartWithoutWait() error {
 		}); err != nil {
 			return fmt.Errorf("error deploying resources for sidecars of instance '%s': %w", i.k8sName, err)
 		}
-
 	}
+
 	err := i.deployPod()
 	if err != nil {
 		return fmt.Errorf("error deploying pod for instance '%s': %w", i.k8sName, err)
@@ -978,22 +989,26 @@ func (i *Instance) DisableNetwork() error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetBandwidthLimit(limit int64) error {
-	if !i.IsInState(Committed) {
-		return fmt.Errorf("setting bandwidth limit is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Started) {
+		return fmt.Errorf("setting bandwidth limit is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	if !i.BitTwister.Enabled() {
+		return fmt.Errorf("setting bandwidth limit is only allowed if BitTwister is enabled")
 	}
 
 	// We first need to stop it, otherwise we get an error
-	if err := i.btClient.BandwidthStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
+	if err := i.BitTwister.Client().BandwidthStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) &&
+			!sdk.IsErrorServiceNotReady(err) &&
+			!sdk.IsErrorServiceNotStarted(err) {
 			return fmt.Errorf("error stopping bandwidth limit for instance '%s': %w", i.k8sName, err)
 		}
 	}
 
-	err := i.btClient.BandwidthStart(sdk.BandwidthStartRequest{
-		NetworkInterfaceName: btDefaultNetworkInterface,
+	err := i.BitTwister.Client().BandwidthStart(sdk.BandwidthStartRequest{
+		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
 		Limit:                limit,
 	})
-
 	if err != nil {
 		return fmt.Errorf("error setting bandwidth limit for instance '%s': %w", i.k8sName, err)
 	}
@@ -1008,19 +1023,24 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
-	if !i.IsInState(Committed) {
-		return fmt.Errorf("setting latency/jitter is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Started) {
+		return fmt.Errorf("setting latency/jitter is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	if !i.BitTwister.Enabled() {
+		return fmt.Errorf("setting latency/jitter is only allowed if BitTwister is enabled")
 	}
 
 	// We first need to stop it, otherwise we get an error
-	if err := i.btClient.LatencyStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
+	if err := i.BitTwister.Client().LatencyStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) &&
+			!sdk.IsErrorServiceNotReady(err) &&
+			!sdk.IsErrorServiceNotStarted(err) {
 			return fmt.Errorf("error stopping latency/jitter for instance '%s': %w", i.k8sName, err)
 		}
 	}
 
-	err := i.btClient.LatencyStart(sdk.LatencyStartRequest{
-		NetworkInterfaceName: btDefaultImage,
+	err := i.BitTwister.Client().LatencyStart(sdk.LatencyStartRequest{
+		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
 		Latency:              latency,
 		Jitter:               jitter,
 	})
@@ -1037,23 +1057,28 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetPacketLoss(packetLoss int32) error {
-	if !i.IsInState(Committed) {
-		return fmt.Errorf("setting packet loss is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Started) {
+		return fmt.Errorf("setting packetloss is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+	if !i.BitTwister.Enabled() {
+		return fmt.Errorf("setting packetloss is only allowed if BitTwister is enabled")
 	}
 
 	// We first need to stop it, otherwise we get an error
-	if err := i.btClient.PacketlossStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) && !sdk.IsErrorServiceNotReady(err) {
-			return fmt.Errorf("error stopping packetLoss for instance '%s': %w", i.k8sName, err)
+	if err := i.BitTwister.Client().PacketlossStop(); err != nil {
+		if !sdk.IsErrorServiceNotInitialized(err) &&
+			!sdk.IsErrorServiceNotReady(err) &&
+			!sdk.IsErrorServiceNotStarted(err) {
+			return fmt.Errorf("error stopping packetloss for instance '%s': %w", i.k8sName, err)
 		}
 	}
 
-	err := i.btClient.PacketlossStart(sdk.PacketLossStartRequest{
-		NetworkInterfaceName: btDefaultNetworkInterface,
+	err := i.BitTwister.Client().PacketlossStart(sdk.PacketLossStartRequest{
+		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
 		PacketLossRate:       packetLoss,
 	})
 	if err != nil {
-		return fmt.Errorf("error setting packet loss for instance '%s': %w", i.k8sName, err)
+		return fmt.Errorf("error setting packetloss for instance '%s': %w", i.k8sName, err)
 	}
 
 	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)

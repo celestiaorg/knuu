@@ -315,7 +315,6 @@ func (i *Instance) destroyResources() error {
 
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
-
 	clonedSidecars := make([]*Instance, len(i.sidecars))
 	for i, sidecar := range i.sidecars {
 		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
@@ -323,6 +322,9 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 
 	// Deep copy of securityContext to ensure cloned instance has its own copy
 	clonedSecurityContext := *i.securityContext
+
+	clonedBitTwister := *i.BitTwister
+	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
 
 	return &Instance{
 		name:                  i.name + suffix,
@@ -351,7 +353,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		sidecars:              clonedSidecars,
 		obsyConfig:            i.obsyConfig,
 		securityContext:       &clonedSecurityContext,
-		btClient:              nil, // Set it to nil as it points to the current instance, will create a new one on commit
+		BitTwister:            &clonedBitTwister,
 	}
 }
 
@@ -566,17 +568,33 @@ func (i *Instance) createNetworkConfigInstance() (*Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating network-config instance: %w", err)
 	}
-	if err := networkConfigInstance.SetImage(btDefaultImage); err != nil {
-		return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
-	}
 
-	if err := networkConfigInstance.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", btDefaultPort)); err != nil {
-		return nil, fmt.Errorf("error setting environment variable for network-config instance: %w", err)
+	if i.BitTwister.Enabled() {
+		if err := networkConfigInstance.SetImage(i.BitTwister.Image()); err != nil {
+			return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
+		}
+
+		if err := networkConfigInstance.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
+			return nil, fmt.Errorf("error setting environment variable for network-config instance: %w", err)
+		}
+
+		// We need to add the port here so the instance will get an IP
+		if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+			return nil, fmt.Errorf("error adding BitTwister port: %w", err)
+		}
+		ip, err := i.GetIP()
+		if err != nil {
+			return nil, fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
+		}
+		logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+
+		i.BitTwister.SetNewClientByIPAddr("http://" + ip)
 	}
 
 	if err := networkConfigInstance.Commit(); err != nil {
 		return nil, fmt.Errorf("error committing network-config instance: %w", err)
 	}
+
 	return networkConfigInstance, nil
 }
 
@@ -586,12 +604,14 @@ func (i *Instance) addNetworkConfigSidecar() error {
 		return fmt.Errorf("error creating network config instance '%s': %w", i.k8sName, err)
 	}
 
-	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
-		return fmt.Errorf("error setting privileged for network config instance '%s': %w", i.k8sName, err)
-	}
+	if i.BitTwister.Enabled() {
+		if err := networkConfigSidecar.SetPrivileged(true); err != nil {
+			return fmt.Errorf("error setting privileged for network config instance '%s': %w", i.k8sName, err)
+		}
 
-	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
-		return fmt.Errorf("error adding capability for network config instance '%s': %w", i.k8sName, err)
+		if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
+			return fmt.Errorf("error adding capability for network config instance '%s': %w", i.k8sName, err)
+		}
 	}
 
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {

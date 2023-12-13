@@ -169,8 +169,9 @@ func IsPodRunning(namespace, name string) (bool, error) {
 	return true, nil
 }
 
-// RunCommandInPod runs a command in a container within a pod.
+// RunCommandInPod runs a command in a container within a pod with a context.
 func RunCommandInPod(
+	ctx context.Context,
 	namespace,
 	podName,
 	containerName string,
@@ -210,9 +211,6 @@ func RunCommandInPod(
 		return "", fmt.Errorf("failed to create Executor: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
 	// Execute the command and capture the output and error streams
 	var stdout, stderr bytes.Buffer
 	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
@@ -220,6 +218,7 @@ func RunCommandInPod(
 		Stderr: &stderr,
 		Tty:    false,
 	})
+
 	if err != nil {
 		return "", fmt.Errorf("failed to execute command: %v", err)
 	}
