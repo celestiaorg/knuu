@@ -573,10 +573,6 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 		return nil, fmt.Errorf("error setting image for bit-twister instance: %w", err)
 	}
 
-	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
-		return nil, fmt.Errorf("error setting environment variable for bit-twister instance: %w", err)
-	}
-
 	// We need to add the port here so the instance will get an IP
 	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, fmt.Errorf("error adding BitTwister port: %w", err)
@@ -591,6 +587,10 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 
 	if err := bt.Commit(); err != nil {
 		return nil, fmt.Errorf("error committing bit-twister instance: %w", err)
+	}
+
+	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
+		return nil, fmt.Errorf("error setting environment variable for bit-twister instance: %w", err)
 	}
 
 	return bt, nil
