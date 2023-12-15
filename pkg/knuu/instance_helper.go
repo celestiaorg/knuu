@@ -563,59 +563,55 @@ func (i *Instance) addOtelCollectorSidecar() error {
 	return nil
 }
 
-func (i *Instance) createNetworkConfigInstance() (*Instance, error) {
-	networkConfigInstance, err := NewInstance("network-config")
+func (i *Instance) createBitTwisterInstance() (*Instance, error) {
+	bt, err := NewInstance("bit-twister")
 	if err != nil {
-		return nil, fmt.Errorf("error creating network-config instance: %w", err)
+		return nil, fmt.Errorf("error creating bit-twister instance: %w", err)
 	}
 
-	if i.BitTwister.Enabled() {
-		if err := networkConfigInstance.SetImage(i.BitTwister.Image()); err != nil {
-			return nil, fmt.Errorf("error setting image for network-config instance: %w", err)
-		}
-
-		if err := networkConfigInstance.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
-			return nil, fmt.Errorf("error setting environment variable for network-config instance: %w", err)
-		}
-
-		// We need to add the port here so the instance will get an IP
-		if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
-			return nil, fmt.Errorf("error adding BitTwister port: %w", err)
-		}
-		ip, err := i.GetIP()
-		if err != nil {
-			return nil, fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
-		}
-		logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
-
-		i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+	if err := bt.SetImage(i.BitTwister.Image()); err != nil {
+		return nil, fmt.Errorf("error setting image for bit-twister instance: %w", err)
 	}
 
-	if err := networkConfigInstance.Commit(); err != nil {
-		return nil, fmt.Errorf("error committing network-config instance: %w", err)
+	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
+		return nil, fmt.Errorf("error setting environment variable for bit-twister instance: %w", err)
 	}
 
-	return networkConfigInstance, nil
+	// We need to add the port here so the instance will get an IP
+	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+		return nil, fmt.Errorf("error adding BitTwister port: %w", err)
+	}
+	ip, err := i.GetIP()
+	if err != nil {
+		return nil, fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
+	}
+	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+
+	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+
+	if err := bt.Commit(); err != nil {
+		return nil, fmt.Errorf("error committing bit-twister instance: %w", err)
+	}
+
+	return bt, nil
 }
 
-func (i *Instance) addNetworkConfigSidecar() error {
-	networkConfigSidecar, err := i.createNetworkConfigInstance()
+func (i *Instance) addBitTwisterSidecar() error {
+	networkConfigSidecar, err := i.createBitTwisterInstance()
 	if err != nil {
-		return fmt.Errorf("error creating network config instance '%s': %w", i.k8sName, err)
+		return fmt.Errorf("error creating bit-twister instance '%s': %w", i.k8sName, err)
 	}
 
-	if i.BitTwister.Enabled() {
-		if err := networkConfigSidecar.SetPrivileged(true); err != nil {
-			return fmt.Errorf("error setting privileged for network config instance '%s': %w", i.k8sName, err)
-		}
+	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
+		return fmt.Errorf("error setting privileged for bit-twister instance '%s': %w", i.k8sName, err)
+	}
 
-		if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
-			return fmt.Errorf("error adding capability for network config instance '%s': %w", i.k8sName, err)
-		}
+	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
+		return fmt.Errorf("error adding capability for bit-twister instance '%s': %w", i.k8sName, err)
 	}
 
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {
-		return fmt.Errorf("error adding network config sidecar to instance '%s': %w", i.k8sName, err)
+		return fmt.Errorf("error adding bit-twister sidecar to instance '%s': %w", i.k8sName, err)
 	}
 	return nil
 }

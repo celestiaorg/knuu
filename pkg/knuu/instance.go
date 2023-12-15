@@ -891,8 +891,8 @@ func (i *Instance) StartWithoutWait() error {
 			}
 		}
 
-		if i.BitTwister.Enabled() || i.isObservabilityEnabled() {
-			if err := i.addNetworkConfigSidecar(); err != nil {
+		if i.BitTwister.Enabled() {
+			if err := i.addBitTwisterSidecar(); err != nil {
 				return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
 			}
 		}
