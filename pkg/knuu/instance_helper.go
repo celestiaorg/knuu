@@ -11,6 +11,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
@@ -103,9 +104,7 @@ func (i *Instance) patchService() error {
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService() error {
-	k8s.DeleteService(k8s.Namespace(), i.k8sName)
-
-	return nil
+	return k8s.DeleteService(k8s.Namespace(), i.k8sName)
 }
 
 // deployPod deploys the pod for the instance
@@ -316,11 +315,16 @@ func (i *Instance) destroyResources() error {
 
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) cloneWithSuffix(suffix string) *Instance {
-
 	clonedSidecars := make([]*Instance, len(i.sidecars))
 	for i, sidecar := range i.sidecars {
 		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
 	}
+
+	// Deep copy of securityContext to ensure cloned instance has its own copy
+	clonedSecurityContext := *i.securityContext
+
+	clonedBitTwister := *i.BitTwister
+	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
 
 	return &Instance{
 		name:                  i.name + suffix,
@@ -348,6 +352,8 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		parentInstance:        nil,
 		sidecars:              clonedSidecars,
 		obsyConfig:            i.obsyConfig,
+		securityContext:       &clonedSecurityContext,
+		BitTwister:            &clonedBitTwister,
 	}
 }
 
@@ -411,41 +417,66 @@ func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 	return nil
 }
 
+// prepareSecurityContext creates a v1.SecurityContext from a given SecurityContext.
+func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
+	securityContext := &v1.SecurityContext{}
+
+	if config != nil {
+		if config.privileged {
+			securityContext.Privileged = &config.privileged
+		}
+		if len(config.capabilitiesAdd) > 0 {
+			capabilities := make([]v1.Capability, len(config.capabilitiesAdd))
+			for i, cap := range config.capabilitiesAdd {
+				capabilities[i] = v1.Capability(cap)
+			}
+			securityContext.Capabilities = &v1.Capabilities{
+				Add: capabilities,
+			}
+		}
+	}
+
+	return securityContext
+}
+
 // prepareConfig prepares the config for the instance
 func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
+
 	// Generate the container configuration
 	containerConfig := k8s.ContainerConfig{
-		Name:           i.k8sName,
-		Image:          i.imageName,
-		Command:        i.command,
-		Args:           i.args,
-		Env:            i.env,
-		Volumes:        i.volumes,
-		MemoryRequest:  i.memoryRequest,
-		MemoryLimit:    i.memoryLimit,
-		CPURequest:     i.cpuRequest,
-		LivenessProbe:  i.livenessProbe,
-		ReadinessProbe: i.readinessProbe,
-		StartupProbe:   i.startupProbe,
-		Files:          i.files,
+		Name:            i.k8sName,
+		Image:           i.imageName,
+		Command:         i.command,
+		Args:            i.args,
+		Env:             i.env,
+		Volumes:         i.volumes,
+		MemoryRequest:   i.memoryRequest,
+		MemoryLimit:     i.memoryLimit,
+		CPURequest:      i.cpuRequest,
+		LivenessProbe:   i.livenessProbe,
+		ReadinessProbe:  i.readinessProbe,
+		StartupProbe:    i.startupProbe,
+		Files:           i.files,
+		SecurityContext: prepareSecurityContext(i.securityContext),
 	}
 	// Generate the sidecar configurations
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:           sidecar.k8sName,
-			Image:          sidecar.imageName,
-			Command:        sidecar.command,
-			Args:           sidecar.args,
-			Env:            sidecar.env,
-			Volumes:        sidecar.volumes,
-			MemoryRequest:  sidecar.memoryRequest,
-			MemoryLimit:    sidecar.memoryLimit,
-			CPURequest:     sidecar.cpuRequest,
-			LivenessProbe:  sidecar.livenessProbe,
-			ReadinessProbe: sidecar.readinessProbe,
-			StartupProbe:   sidecar.startupProbe,
-			Files:          sidecar.files,
+			Name:            sidecar.k8sName,
+			Image:           sidecar.imageName,
+			Command:         sidecar.command,
+			Args:            sidecar.args,
+			Env:             sidecar.env,
+			Volumes:         sidecar.volumes,
+			MemoryRequest:   sidecar.memoryRequest,
+			MemoryLimit:     sidecar.memoryLimit,
+			CPURequest:      sidecar.cpuRequest,
+			LivenessProbe:   sidecar.livenessProbe,
+			ReadinessProbe:  sidecar.readinessProbe,
+			StartupProbe:    sidecar.startupProbe,
+			Files:           sidecar.files,
+			SecurityContext: prepareSecurityContext(sidecar.securityContext),
 		})
 	}
 	// Generate the pod configuration
@@ -528,6 +559,59 @@ func (i *Instance) addOtelCollectorSidecar() error {
 	}
 	if err := i.AddSidecar(otelSidecar); err != nil {
 		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+	}
+	return nil
+}
+
+func (i *Instance) createBitTwisterInstance() (*Instance, error) {
+	bt, err := NewInstance("bit-twister")
+	if err != nil {
+		return nil, fmt.Errorf("error creating bit-twister instance: %w", err)
+	}
+
+	if err := bt.SetImage(i.BitTwister.Image()); err != nil {
+		return nil, fmt.Errorf("error setting image for bit-twister instance: %w", err)
+	}
+
+	// We need to add the port here so the instance will get an IP
+	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+		return nil, fmt.Errorf("error adding BitTwister port: %w", err)
+	}
+	ip, err := i.GetIP()
+	if err != nil {
+		return nil, fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
+	}
+	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+
+	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+
+	if err := bt.Commit(); err != nil {
+		return nil, fmt.Errorf("error committing bit-twister instance: %w", err)
+	}
+
+	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
+		return nil, fmt.Errorf("error setting environment variable for bit-twister instance: %w", err)
+	}
+
+	return bt, nil
+}
+
+func (i *Instance) addBitTwisterSidecar() error {
+	networkConfigSidecar, err := i.createBitTwisterInstance()
+	if err != nil {
+		return fmt.Errorf("error creating bit-twister instance '%s': %w", i.k8sName, err)
+	}
+
+	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
+		return fmt.Errorf("error setting privileged for bit-twister instance '%s': %w", i.k8sName, err)
+	}
+
+	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
+		return fmt.Errorf("error adding capability for bit-twister instance '%s': %w", i.k8sName, err)
+	}
+
+	if err := i.AddSidecar(networkConfigSidecar); err != nil {
+		return fmt.Errorf("error adding bit-twister sidecar to instance '%s': %w", i.k8sName, err)
 	}
 	return nil
 }

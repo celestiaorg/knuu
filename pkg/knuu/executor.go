@@ -1,6 +1,9 @@
 package knuu
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type Executor struct {
 	instances *Instance
@@ -47,6 +50,10 @@ func NewExecutor() (*Executor, error) {
 
 func (e *Executor) ExecuteCommand(command ...string) (string, error) {
 	return e.instances.ExecuteCommand(command...)
+}
+
+func (e *Executor) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
+	return e.instances.ExecuteCommandWithContext(ctx, command...)
 }
 
 func (e *Executor) Destroy() error {
