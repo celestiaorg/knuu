@@ -288,9 +288,11 @@ func (i *Instance) destroyResources() error {
 			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
 		}
 	}
-	err := i.destroyService()
-	if err != nil {
-		return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+	if i.kubernetesService != nil {
+		err := i.destroyService()
+		if err != nil {
+			return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+		}
 	}
 
 	// disable network only for non-sidecar instances
