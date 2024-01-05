@@ -640,21 +640,34 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
-	svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
-	if svc == nil {
-		// Service does not exist, so we need to deploy it
-		err := i.deployService()
-		if err != nil {
-			return "", fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
-		}
-	}
+    // Check if i.kubernetesService already has the IP
+    if i.kubernetesService != nil && i.kubernetesService.Spec.ClusterIP != "" {
+        return i.kubernetesService.Spec.ClusterIP, nil
+    }
 
-	ip, err := k8s.GetServiceIP(k8s.Namespace(), i.k8sName)
-	if err != nil {
-		return "", fmt.Errorf("error getting IP of service '%s': %w", i.k8sName, err)
-	}
+    // If not, proceed with the existing logic to deploy the service and get the IP
+    svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
+    if err != nil || svc == nil {
+        // Service does not exist, so we need to deploy it
+        err := i.deployService()
+        if err != nil {
+            return "", fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
+        }
+        svc, err = k8s.GetService(k8s.Namespace(), i.k8sName)
+        if err != nil {
+            return "", fmt.Errorf("error retrieving deployed service '%s': %w", i.k8sName, err)
+        }
+    }
 
-	return ip, nil
+    ip := svc.Spec.ClusterIP
+    if ip == "" {
+        return "", fmt.Errorf("IP address is not available for service '%s'", i.k8sName)
+    }
+
+    // Update i.kubernetesService for future reference
+    i.kubernetesService = svc
+
+    return ip, nil
 }
 
 // GetFileBytes returns the content of the given file
