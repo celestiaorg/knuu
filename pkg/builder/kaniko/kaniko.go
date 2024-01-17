@@ -172,7 +172,7 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 	}
 
 	oneInt32 := int32(1)
-	fiveInt32 := int32(1)
+	fiveInt32 := int32(5)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jobName,
