@@ -18,6 +18,9 @@ const (
 	kanikoImage         = "gcr.io/kaniko-project/executor:debug" // debug has a shell
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
+
+	DefaultParallelism  = int32(5)
+	DefaultBackoffLimit = int32(5)
 )
 
 type Kaniko struct {
@@ -171,15 +174,15 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 		return nil, ErrGeneratingUUID.Wrap(err)
 	}
 
-	oneInt32 := int32(1)
-	fiveInt32 := int32(5)
+	parallelism := DefaultParallelism
+	backoffLimit := DefaultBackoffLimit
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jobName,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism:  &oneInt32,  // Set parallelism to 1 to ensure only one Pod
-			BackoffLimit: &fiveInt32, // Retry the Job at most 5 times
+			Parallelism:  &parallelism,  // Set parallelism to 1 to ensure only one Pod
+			BackoffLimit: &backoffLimit, // Retry the Job at most 5 times
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
