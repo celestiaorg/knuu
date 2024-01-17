@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+const (
+	regexpGitRepoProtocol = `^(https?|git|ssh|ftp)://`
+	regexpGitRepoDotGit   = `\.git$`
+	gitProtocol           = "git://"
+)
+
 type GitContext struct {
 	Repo     string
 	Commit   string
@@ -12,24 +18,24 @@ type GitContext struct {
 	Password string
 }
 
-func GetGitBuildContext(g *GitContext) (string, error) {
+func (g *GitContext) BuildContext() (string, error) {
 	bCtx := ""
 
 	// cleaning the repo url
-	rgx, err := regexp.Compile(`^(https?|git|ssh|ftp)://`)
+	rgx, err := regexp.Compile(regexpGitRepoProtocol)
 	if err != nil {
 		return "", err
 	}
 	g.Repo = rgx.ReplaceAllString(g.Repo, "")
 
-	rgx, err = regexp.Compile(`\.git$`)
+	rgx, err = regexp.Compile(regexpGitRepoDotGit)
 	if err != nil {
 		return "", err
 	}
 	g.Repo = rgx.ReplaceAllString(g.Repo, "")
 	g.Repo = strings.TrimSuffix(g.Repo, "/")
 
-	bCtx += "git://"
+	bCtx += gitProtocol
 	if g.Username != "" {
 		bCtx += g.Username
 		if g.Password != "" {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/google/uuid"
+	"github.com/celestiaorg/knuu/pkg/names"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,70 +21,51 @@ const (
 )
 
 type Kaniko struct {
-	k8sClientset kubernetes.Interface
-	k8sNamespace string
+	K8sClientset kubernetes.Interface
+	K8sNamespace string
 }
 
 var _ builder.Builder = &Kaniko{}
 
-func NewKaniko(k8sClientset kubernetes.Interface, namespace string) *Kaniko {
-	return &Kaniko{
-		k8sClientset: k8sClientset,
-		k8sNamespace: namespace,
-	}
-}
-
 func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs string, err error) {
 	job, err := prepareJob(b)
 	if err != nil {
-		return "", fmt.Errorf("error preparing Job: %w", err)
+		return "", ErrPreparingJob.Wrap(err)
 	}
 
-	fmt.Printf("Creating Job: %s\n", job.Name)
-
-	cJob, err := k.k8sClientset.BatchV1().Jobs(k.k8sNamespace).Create(ctx, job, metav1.CreateOptions{})
+	cJob, err := k.K8sClientset.BatchV1().Jobs(k.K8sNamespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
-		return "", fmt.Errorf("error creating Job: %w", err)
+		return "", ErrCreatingJob.Wrap(err)
 	}
-
-	fmt.Printf("Waiting for Job completion: %s\n", cJob.Name)
 
 	kJob, err := k.waitForJobCompletion(ctx, cJob)
 	if err != nil {
-		return "", fmt.Errorf("error waiting for Job completion: %w", err)
+		return "", ErrWaitingJobCompletion.Wrap(err)
 	}
 
-	fmt.Printf("Getting Pod from Job: %s\n", kJob.Name)
-
-	pod, err := k.getFirstPodFromJob(ctx, kJob)
+	pod, err := k.firstPodFromJob(ctx, kJob)
 	if err != nil {
-		return "", fmt.Errorf("error getting Pod from Job: %w", err)
+		return "", ErrGettingPodFromJob.Wrap(err)
 	}
 
-	fmt.Printf("Getting container logs from Pod: %s\n", pod.Name)
-
-	logs, err = k.getContainerLogs(ctx, pod)
+	logs, err = k.containerLogs(ctx, pod)
 	if err != nil {
-		return "", fmt.Errorf("error getting container logs: %w", err)
+		return "", ErrGettingContainerLogs.Wrap(err)
 	}
-
-	fmt.Printf("Cleaning up Job: %s\n", kJob.Name)
 
 	if err := k.cleanup(ctx, kJob); err != nil {
-		return "", fmt.Errorf("error cleaning up: %w", err)
+		return "", ErrCleaningUp.Wrap(err)
 	}
-
-	fmt.Printf("Build completed successfully\n")
 
 	return logs, nil
 }
 
 func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
-	watcher, err := k.k8sClientset.BatchV1().Jobs(k.k8sNamespace).Watch(ctx, metav1.ListOptions{
+	watcher, err := k.K8sClientset.BatchV1().Jobs(k.K8sNamespace).Watch(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", job.Name),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error watching Job: %w", err)
+		return nil, ErrWatchingJob.Wrap(err)
 	}
 	defer watcher.Stop()
 
@@ -92,7 +73,7 @@ func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*b
 		select {
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
-				return nil, fmt.Errorf("watch channel closed unexpectedly")
+				return nil, ErrWatchingChannelCloseUnexpectedly
 			}
 
 			j, ok := event.Object.(*batchv1.Job)
@@ -105,30 +86,29 @@ func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*b
 				return j, nil
 			}
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context cancelled")
+			return nil, ErrContextCancelled
 		}
 	}
 }
 
-func (k *Kaniko) getFirstPodFromJob(ctx context.Context, job *batchv1.Job) (*v1.Pod, error) {
-	// Assuming there's only one Pod template in the Job
-	podList, err := k.k8sClientset.CoreV1().Pods(k.k8sNamespace).List(ctx, metav1.ListOptions{
+func (k *Kaniko) firstPodFromJob(ctx context.Context, job *batchv1.Job) (*v1.Pod, error) {
+	podList, err := k.K8sClientset.CoreV1().Pods(k.K8sNamespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("job-name=%s", job.Name),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error listing Pods: %w", err)
+		return nil, ErrListingPods.Wrap(err)
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("no Pods found for the Job: %s", job.Name)
+		return nil, ErrNoPodsFound.Wrap(fmt.Errorf("job: %s", job.Name))
 	}
 
 	return &podList.Items[0], nil
 }
 
-func (k *Kaniko) getContainerLogs(ctx context.Context, pod *v1.Pod) (string, error) {
+func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error) {
 	if len(pod.Spec.Containers) == 0 {
-		return "", fmt.Errorf("no containers found in Pod: %s", pod.Name)
+		return "", ErrNoContainersFound.Wrap(fmt.Errorf("pod: %s", pod.Name))
 	}
 
 	containerName := pod.Spec.Containers[0].Name
@@ -137,39 +117,39 @@ func (k *Kaniko) getContainerLogs(ctx context.Context, pod *v1.Pod) (string, err
 		Container: containerName,
 	}
 
-	req := k.k8sClientset.CoreV1().Pods(k.k8sNamespace).GetLogs(pod.Name, &logOptions)
+	req := k.K8sClientset.CoreV1().Pods(k.K8sNamespace).GetLogs(pod.Name, &logOptions)
 	logs, err := req.DoRaw(ctx)
 	if err != nil {
-		return "", fmt.Errorf("error retrieving container logs: %w", err)
+		return "", err
 	}
 
 	return string(logs), nil
 }
 
 func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
-	err := k.k8sClientset.BatchV1().Jobs(k.k8sNamespace).
+	err := k.K8sClientset.BatchV1().Jobs(k.K8sNamespace).
 		Delete(ctx, job.Name, metav1.DeleteOptions{
 			PropagationPolicy: &[]metav1.DeletionPropagation{metav1.DeletePropagationBackground}[0],
 		})
 	if err != nil {
-		return fmt.Errorf("error deleting Job: %w", err)
+		return ErrDeletingJob.Wrap(err)
 	}
 
 	// Delete the associated Pods
-	err = k.k8sClientset.CoreV1().Pods(k.k8sNamespace).
+	err = k.K8sClientset.CoreV1().Pods(k.K8sNamespace).
 		DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("job-name=%s", job.Name),
 		})
 	if err != nil {
-		return fmt.Errorf("error deleting Pods: %w", err)
+		return ErrDeletingPods.Wrap(err)
 	}
 
 	return nil
 }
 
-func GetDefaultCacheOptions(buildContext string) (*builder.CacheOptions, error) {
+func DefaultCacheOptions(buildContext string) (*builder.CacheOptions, error) {
 	if buildContext == "" {
-		return nil, fmt.Errorf("build context cannot be empty")
+		return nil, ErrBuildContextEmpty
 	}
 	hash := sha256.New()
 	_, err := hash.Write([]byte(buildContext))
@@ -186,18 +166,20 @@ func GetDefaultCacheOptions(buildContext string) (*builder.CacheOptions, error) 
 }
 
 func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
-	jobName, err := generateK8sName(kanikoJobNamePrefix)
+	jobName, err := names.NewRandomK8(kanikoJobNamePrefix)
 	if err != nil {
-		return nil, fmt.Errorf("error generating Job name: %w", err)
+		return nil, ErrGeneratingUUID.Wrap(err)
 	}
 
 	oneInt32 := int32(1)
+	fiveInt32 := int32(1)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jobName,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism: &oneInt32, // Set parallelism to 1 to ensure only one Pod
+			Parallelism:  &oneInt32,  // Set parallelism to 1 to ensure only one Pod
+			BackoffLimit: &fiveInt32, // Retry the Job at most 5 times
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
@@ -214,7 +196,7 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 							},
 						},
 					},
-					RestartPolicy: "IfFailed",
+					RestartPolicy: "Never", // Ensure that the Pod does not restart
 				},
 			},
 		},
@@ -237,12 +219,4 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 
 	return job, nil
 
-}
-
-func generateK8sName(name string) (string, error) {
-	uuid, err := uuid.NewRandom()
-	if err != nil {
-		return "", fmt.Errorf("error generating UUID: %w", err)
-	}
-	return fmt.Sprintf("%s-%s", name, uuid.String()[:8]), nil
 }

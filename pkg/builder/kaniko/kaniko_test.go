@@ -21,13 +21,16 @@ const (
 
 func TestKanikoBuilder(t *testing.T) {
 	k8sCS := fake.NewSimpleClientset()
-	kb := NewKaniko(k8sCS, k8sNamespace)
+	kb := &Kaniko{
+		K8sClientset: k8sCS,
+		K8sNamespace: k8sNamespace,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	t.Run("BuildSuccess", func(t *testing.T) {
 		blCtx := "git://github.com/mojtaba-esk/sample-docker"
-		cacheOpts, err := GetDefaultCacheOptions(blCtx)
+		cacheOpts, err := DefaultCacheOptions(blCtx)
 		require.NoError(t, err, "GetDefaultCacheOptions should succeed")
 
 		buildOptions := &builder.BuilderOptions{
@@ -142,7 +145,7 @@ func TestGetDefaultCacheOptions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.buildContext, func(t *testing.T) {
-			cacheOptions, err := GetDefaultCacheOptions(test.buildContext)
+			cacheOptions, err := DefaultCacheOptions(test.buildContext)
 
 			if test.expectedError {
 				assert.Error(t, err, "Expected an error, but got none")
