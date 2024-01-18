@@ -25,7 +25,7 @@ func (i *Instance) getImageRegistry() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error generating UUID: %w", err)
 	}
-	imageName := fmt.Sprintf("ttl.sh/%s:1h", uuid.String())
+	imageName := fmt.Sprintf("ttl.sh/%s:24h", uuid.String())
 	return imageName, nil
 }
 
