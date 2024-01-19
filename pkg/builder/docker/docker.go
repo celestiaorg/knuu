@@ -44,7 +44,7 @@ func (d *Docker) Build(_ context.Context, b *builder.BuilderOptions) (logs strin
 		logrus.Debug("created new docker builder instance")
 	}
 
-	logrus.Debug("building docker image: ", b.Destination, " context:", b.BuildContext)
+	logrus.Debug("building docker image: ", b.Destination)
 
 	buildContext := builder.GetDirFromBuildContext(b.BuildContext)
 
@@ -70,7 +70,6 @@ func (d *Docker) Build(_ context.Context, b *builder.BuilderOptions) (logs strin
 	if err := os.RemoveAll(b.BuildContext); err != nil {
 		return "", ErrFailedToRemoveContextDir.Wrap(err)
 	}
-	logrus.Debug("removed build context directory: ", b.BuildContext)
 
 	return logs, nil
 }
