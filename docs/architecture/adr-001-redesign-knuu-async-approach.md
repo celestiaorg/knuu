@@ -18,10 +18,16 @@ The current synchronous model necessitates exposing the target instance's addres
 
 Embrace a distributed playbook model similar to Testground, allowing asynchronous orchestration and execution of test scenarios:
 
-1. **Test Scenario Definition:** Users define test scenarios in a descriptive language (e.g., Golang).
+1. **Test Scenario Definition:** Users define test scenarios in a descriptive language such as [Cue](https://cuelang.org/), which provides more dynamism compared to HCL.
 2. **Knuu Instance Initiation:** Knuu initiates instances and assigns specific playbooks to each instance.
 3. **BitTwister Sidecar with Playbook Understanding:** BitTwister runs alongside instances with added functionality to interpret and execute the playbook's instructions.
 4. **Dynamic Traffic Shaping:** BitTwister adjusts traffic shaping based on predefined events or triggers from the target instance, eliminating the need for continuous centralized control.
+
+##### CI/CD Integration
+
+To enable the execution of tests as cron jobs and verification pipelines for upcoming releases, a CI/CD gateway should be implemented. This gateway will facilitate the integration of Knuu with the CI/CD system, allowing contributors to define and automate test scenarios as part of their release workflows.
+
+Contributors can easily trigger tests, monitor their execution, and receive feedback on the test results. This ensures that the artifacts produced by contributors are thoroughly tested before being released.
 
 ### Advantages
 
