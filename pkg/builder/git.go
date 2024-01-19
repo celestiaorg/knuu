@@ -1,4 +1,4 @@
-package kaniko
+package builder
 
 import (
 	"regexp"
@@ -13,11 +13,14 @@ const (
 
 type GitContext struct {
 	Repo     string
+	Branch   string
 	Commit   string
 	Username string
 	Password string
 }
 
+// This build context follows Kaniko build context pattern
+// ref: https://github.com/GoogleContainerTools/kaniko#kaniko-build-contexts
 func (g *GitContext) BuildContext() (string, error) {
 	bCtx := ""
 
@@ -45,9 +48,17 @@ func (g *GitContext) BuildContext() (string, error) {
 	}
 
 	bCtx += g.Repo
+	if g.Branch != "" {
+		bCtx += "#refs/heads/" + g.Branch
+	}
+
 	if g.Commit != "" {
 		bCtx += "#" + g.Commit
 	}
 
 	return bCtx, nil
+}
+
+func IsGitContext(ctx string) bool {
+	return strings.HasPrefix(ctx, gitProtocol)
 }
