@@ -30,7 +30,8 @@ func TestKanikoBuilder(t *testing.T) {
 
 	t.Run("BuildSuccess", func(t *testing.T) {
 		blCtx := "git://github.com/mojtaba-esk/sample-docker"
-		cacheOpts, err := DefaultCacheOptions(blCtx)
+		cacheOpts := &builder.CacheOptions{}
+		cacheOpts, err := cacheOpts.Default(blCtx)
 		require.NoError(t, err, "GetDefaultCacheOptions should succeed")
 
 		buildOptions := &builder.BuilderOptions{
@@ -134,7 +135,7 @@ func createPodFromJob(job *batchv1.Job) *v1.Pod {
 func TestGetDefaultCacheOptions(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	tt := []struct {
 		buildContext  string
 		expectedRepo  string
 		expectedError bool
@@ -143,17 +144,18 @@ func TestGetDefaultCacheOptions(t *testing.T) {
 		{"", "", true},
 	}
 
-	for _, test := range tests {
-		t.Run(test.buildContext, func(t *testing.T) {
-			cacheOptions, err := DefaultCacheOptions(test.buildContext)
+	for _, tc := range tt {
+		t.Run(tc.buildContext, func(t *testing.T) {
+			cacheOptions := &builder.CacheOptions{}
+			cacheOptions, err := cacheOptions.Default(tc.buildContext)
 
-			if test.expectedError {
+			if tc.expectedError {
 				assert.Error(t, err, "Expected an error, but got none")
 				assert.Nil(t, cacheOptions, "Cache options should be nil on error")
 			} else {
 				assert.NoError(t, err, "Unexpected error")
 				assert.NotNil(t, cacheOptions, "Cache options should not be nil")
-				assert.Equal(t, test.expectedRepo, cacheOptions.Repo, "Unexpected cache repo value")
+				assert.Equal(t, tc.expectedRepo, cacheOptions.Repo, "Unexpected cache repo value")
 			}
 		})
 	}

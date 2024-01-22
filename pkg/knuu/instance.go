@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/celestiaorg/bittwister/sdk"
+	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
@@ -178,8 +179,7 @@ func (i *Instance) SetImage(image string) error {
 	switch i.state {
 	case None:
 		// Use the builder to build a new image
-		factory, err := container.NewBuilderFactory(image, i.getBuildDir())
-		//builder, storage, err := container.NewBuilder(context, image)
+		factory, err := container.NewBuilderFactory(image, i.getBuildDir(), ImageBuilder())
 		if err != nil {
 			return fmt.Errorf("error creating builder: %s", err.Error())
 		}
@@ -197,6 +197,32 @@ func (i *Instance) SetImage(image string) error {
 	}
 
 	return nil
+}
+
+// SetGitRepo builds the image from the given git repo, pushes it
+// to the registry under the given name and sets the image of the instance.
+func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
+	if !i.IsInState(None) {
+		return fmt.Errorf("setting git repo is only allowed in state 'None'. Current state is '%s'", i.state.String())
+	}
+
+	bCtx, err := gitContext.BuildContext()
+	if err != nil {
+		return fmt.Errorf("error getting build context: %w", err)
+	}
+	imageName, err := builder.DefaultImageName(bCtx)
+	if err != nil {
+		return fmt.Errorf("error getting image name: %w", err)
+	}
+
+	factory, err := container.NewBuilderFactory(imageName, i.getBuildDir(), ImageBuilder())
+	if err != nil {
+		return fmt.Errorf("error creating builder: %s", err.Error())
+	}
+	i.builderFactory = factory
+	i.state = Preparing
+
+	return i.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
 }
 
 // SetImageInstant sets the image of the instance without a grace period.
@@ -640,34 +666,34 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) GetIP() (string, error) {
-    // Check if i.kubernetesService already has the IP
-    if i.kubernetesService != nil && i.kubernetesService.Spec.ClusterIP != "" {
-        return i.kubernetesService.Spec.ClusterIP, nil
-    }
+	// Check if i.kubernetesService already has the IP
+	if i.kubernetesService != nil && i.kubernetesService.Spec.ClusterIP != "" {
+		return i.kubernetesService.Spec.ClusterIP, nil
+	}
 
-    // If not, proceed with the existing logic to deploy the service and get the IP
-    svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
-    if err != nil || svc == nil {
-        // Service does not exist, so we need to deploy it
-        err := i.deployService()
-        if err != nil {
-            return "", fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
-        }
-        svc, err = k8s.GetService(k8s.Namespace(), i.k8sName)
-        if err != nil {
-            return "", fmt.Errorf("error retrieving deployed service '%s': %w", i.k8sName, err)
-        }
-    }
+	// If not, proceed with the existing logic to deploy the service and get the IP
+	svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
+	if err != nil || svc == nil {
+		// Service does not exist, so we need to deploy it
+		err := i.deployService()
+		if err != nil {
+			return "", fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
+		}
+		svc, err = k8s.GetService(k8s.Namespace(), i.k8sName)
+		if err != nil {
+			return "", fmt.Errorf("error retrieving deployed service '%s': %w", i.k8sName, err)
+		}
+	}
 
-    ip := svc.Spec.ClusterIP
-    if ip == "" {
-        return "", fmt.Errorf("IP address is not available for service '%s'", i.k8sName)
-    }
+	ip := svc.Spec.ClusterIP
+	if ip == "" {
+		return "", fmt.Errorf("IP address is not available for service '%s'", i.k8sName)
+	}
 
-    // Update i.kubernetesService for future reference
-    i.kubernetesService = svc
+	// Update i.kubernetesService for future reference
+	i.kubernetesService = svc
 
-    return ip, nil
+	return ip, nil
 }
 
 // GetFileBytes returns the content of the given file

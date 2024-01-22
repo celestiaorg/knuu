@@ -40,4 +40,5 @@ var (
 	ErrWatchingChannelCloseUnexpectedly = &Error{Code: "WatchingChannelCloseUnexpectedly", Message: "watch channel closed unexpectedly"}
 	ErrWatchingJob                      = &Error{Code: "WatchingJob", Message: "error watching Job"}
 	ErrContextCancelled                 = &Error{Code: "ContextCancelled", Message: "context cancelled"}
+	ErrMountingLocalDir                 = &Error{Code: "MountingLocalDir", Message: "error mounting local directory"}
 )

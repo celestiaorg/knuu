@@ -2,8 +2,6 @@ package kaniko
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -15,7 +13,7 @@ import (
 )
 
 const (
-	kanikoImage         = "gcr.io/kaniko-project/executor:debug" // debug has a shell
+	kanikoImage         = "gcr.io/kaniko-project/executor:latest"
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
 
@@ -31,7 +29,7 @@ type Kaniko struct {
 var _ builder.Builder = &Kaniko{}
 
 func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs string, err error) {
-	job, err := prepareJob(b)
+	job, err := k.prepareJob(ctx, b)
 	if err != nil {
 		return "", ErrPreparingJob.Wrap(err)
 	}
@@ -150,25 +148,7 @@ func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
 	return nil
 }
 
-func DefaultCacheOptions(buildContext string) (*builder.CacheOptions, error) {
-	if buildContext == "" {
-		return nil, ErrBuildContextEmpty
-	}
-	hash := sha256.New()
-	_, err := hash.Write([]byte(buildContext))
-	if err != nil {
-		return nil, err
-	}
-	hashStr := hex.EncodeToString(hash.Sum(nil))
-
-	return &builder.CacheOptions{
-		Enabled: true,
-		Dir:     "",
-		Repo:    fmt.Sprintf("ttl.sh/%s:24h", hashStr),
-	}, nil
-}
-
-func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
+func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*batchv1.Job, error) {
 	jobName, err := names.NewRandomK8(kanikoJobNamePrefix)
 	if err != nil {
 		return nil, ErrGeneratingUUID.Wrap(err)
@@ -196,6 +176,7 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 
 								// TODO: we might need to add some options to get the auth token for the registry
 								"--destination=" + b.Destination,
+								// "--verbosity=debug", // log level
 							},
 						},
 					},
@@ -203,6 +184,15 @@ func prepareJob(b *builder.BuilderOptions) (*batchv1.Job, error) {
 				},
 			},
 		},
+	}
+
+	if builder.IsDirContext(b.BuildContext) {
+		// Since we are using a directory as the build context, we need to mount it as a volume
+		// in the Pod so that Kaniko can access it
+		// The issues is we need to have some sort of sidecar to receive the files from client and
+		// mount it to the pod, since the implementation is too complex and there is no urgency to
+		// implement it right now, we will just return an error for now
+		return nil, fmt.Errorf("Not supported: Kaniko build context cannot be a directory")
 	}
 
 	// TODO: we need to add some configs to get the auth token for the cache repo

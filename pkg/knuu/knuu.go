@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/builder/docker"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -13,9 +15,10 @@ import (
 
 var (
 	// identifier is the identifier of the current knuu instance
-	identifier string
-	startTime  string
-	timeout    time.Duration
+	identifier   string
+	startTime    string
+	timeout      time.Duration
+	imageBuilder builder.Builder
 )
 
 // Initialize initializes knuug
@@ -75,7 +78,22 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
+	// Set default image builder
+	// TODO: we need to refactor this to allow user to set their own image builder
+	SetImageBuilder(&docker.Docker{
+		K8sClientset: k8s.Clientset(),
+		K8sNamespace: k8s.Namespace(),
+	})
+
 	return nil
+}
+
+func SetImageBuilder(b builder.Builder) {
+	imageBuilder = b
+}
+
+func ImageBuilder() builder.Builder {
+	return imageBuilder
 }
 
 // IsInitialized returns true if knuu is initialized, and false otherwise
