@@ -190,7 +190,15 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
 		BuildContext: builder.DirContext{Path: f.context}.BuildContext(),
 	})
+
+	qStatus := logrus.TextFormatter{}.DisableQuote
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: true,
+	})
 	logrus.Debug("build logs: ", logs)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: qStatus,
+	})
 
 	return err
 }
