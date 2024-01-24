@@ -17,6 +17,9 @@ const (
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
 
+	configMapVolume     = "kaniko-build-context-volume"
+	configMapMountPoint = "/build-context"
+
 	DefaultParallelism  = int32(5)
 	DefaultBackoffLimit = int32(5)
 )
@@ -187,12 +190,10 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 	}
 
 	if builder.IsDirContext(b.BuildContext) {
-		// Since we are using a directory as the build context, we need to mount it as a volume
-		// in the Pod so that Kaniko can access it
-		// The issues is we need to have some sort of sidecar to receive the files from client and
-		// mount it to the pod, since the implementation is too complex and there is no urgency to
-		// implement it right now, we will just return an error for now
-		return nil, fmt.Errorf("Not supported: Kaniko build context cannot be a directory")
+		job, err = k.mountDir(ctx, b.BuildContext, job)
+		if err != nil {
+			return nil, ErrMountingDir.Wrap(err)
+		}
 	}
 
 	// TODO: we need to add some configs to get the auth token for the cache repo
@@ -211,5 +212,50 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, b.Args...)
 
 	return job, nil
+}
 
+func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
+	configMapData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
+	if err != nil {
+		return nil, err
+	}
+
+	const archiveFile = "archive.tar.gz"
+	configMapName := job.Name + "-configmap"
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: k.K8sNamespace,
+		},
+		BinaryData: map[string][]byte{
+			archiveFile: configMapData,
+		},
+	}
+
+	_, err = k.K8sClientset.CoreV1().ConfigMaps(k.K8sNamespace).Create(ctx, configMap, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes,
+		v1.Volume{
+			Name: configMapVolume,
+			VolumeSource: v1.VolumeSource{
+				ConfigMap: &v1.ConfigMapVolumeSource{
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: configMapName,
+					},
+				},
+			},
+		})
+	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts,
+		v1.VolumeMount{
+			Name:      configMapVolume,
+			MountPath: configMapMountPoint,
+		})
+
+	// replace the context with the tar.gz file path
+	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, "--context=tar://"+configMapMountPoint+"/"+archiveFile)
+
+	return job, nil
 }
