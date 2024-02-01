@@ -157,7 +157,7 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 		return fmt.Errorf("failed to upload data to Minio: %v", err)
 	}
 
-	logrus.Infof("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
+	logrus.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
 	return nil
 }
 
@@ -194,7 +194,7 @@ func (m *Minio) createService(ctx context.Context) error {
 	// Check if Minio service already exists
 	_, err := serviceClient.Get(ctx, ServiceName, metav1.GetOptions{})
 	if err == nil {
-		logrus.Infof("Service `%s` already exists.", ServiceName)
+		logrus.Debugf("Service `%s` already exists.", ServiceName)
 		return nil
 	}
 
@@ -224,7 +224,7 @@ func (m *Minio) createService(ctx context.Context) error {
 		return fmt.Errorf("failed to create Minio service: %v", err)
 	}
 
-	logrus.Infof("Service %s created successfully.", ServiceName)
+	logrus.Debugf("Service %s created successfully.", ServiceName)
 	return nil
 }
 
@@ -240,7 +240,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *minio.Client, 
 	if err := cli.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{}); err != nil {
 		return fmt.Errorf("failed to create bucket: %v", err)
 	}
-	logrus.Infof("Bucket `%s` created successfully.", bucketName)
+	logrus.Debugf("Bucket `%s` created successfully.", bucketName)
 
 	return nil
 }
@@ -348,7 +348,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	// Check if PVC already exists
 	_, err = pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
 	if err == nil {
-		logrus.Infof("PersistentVolumeClaim `%s` already exists.", pvcName)
+		logrus.Debugf("PersistentVolumeClaim `%s` already exists.", pvcName)
 		return nil
 	}
 
@@ -389,7 +389,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 			return fmt.Errorf("failed to create PersistentVolume: %v", err)
 		}
 
-		logrus.Infof("PersistentVolume `%s` created successfully.", existingPV.Name)
+		logrus.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
 	}
 
 	// Create PVC with the existing or newly created PV
@@ -413,6 +413,6 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		return fmt.Errorf("failed to create PersistentVolumeClaim: %v", err)
 	}
 
-	logrus.Infof("PersistentVolumeClaim `%s` created successfully.", pvcName)
+	logrus.Debugf("PersistentVolumeClaim `%s` created successfully.", pvcName)
 	return nil
 }
