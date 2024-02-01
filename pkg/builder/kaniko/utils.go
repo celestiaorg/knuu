@@ -25,10 +25,12 @@ func createTarGz(srcDir string) ([]byte, error) {
 			return err
 		}
 
-		header, err := tar.FileInfoHeader(fileInfo, relPath)
+		header, err := tar.FileInfoHeader(fileInfo, "")
 		if err != nil {
 			return err
 		}
+
+		header.Name = relPath
 
 		if err := tarWriter.WriteHeader(header); err != nil {
 			return err

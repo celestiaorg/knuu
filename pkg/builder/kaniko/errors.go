@@ -41,4 +41,6 @@ var (
 	ErrWatchingJob                      = &Error{Code: "WatchingJob", Message: "error watching Job"}
 	ErrContextCancelled                 = &Error{Code: "ContextCancelled", Message: "context cancelled"}
 	ErrMountingDir                      = &Error{Code: "MountingDir", Message: "error mounting directory"}
+	ErrMinioNotConfigured               = &Error{Code: "MinioNotConfigured", Message: "Minio service is not configured"}
+	ErrMinioDeploymentFailed            = &Error{Code: "MinioDeploymentFailed", Message: "Minio deployment failed"}
 )
