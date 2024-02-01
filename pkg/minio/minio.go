@@ -35,7 +35,11 @@ const (
 	accessKey = "minioaccesskey"
 	secretKey = "miniosecretkey"
 
-	waitRetry = 5 * time.Second
+	waitRetry            = 5 * time.Second
+	pvPrefix             = "minio-pv-"
+	pvHostPath           = "/tmp/minio-pv"
+	deploymentAppLabel   = "app"
+	deploymentMinioLabel = "minio"
 )
 
 type Minio struct {
@@ -54,7 +58,7 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 		return nil
 	}
 
-	if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize); err != nil {
+	if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("failed to create PVC: %v", err)
 	}
 
@@ -66,10 +70,10 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 		},
 		Spec: appsV1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "minio"},
+				MatchLabels: map[string]string{deploymentAppLabel: deploymentMinioLabel},
 			},
 			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "minio"}},
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{deploymentAppLabel: deploymentMinioLabel}},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
 						Name:  DeploymentName,
@@ -337,7 +341,7 @@ func checkServiceConnectivity(serviceEndpoint string) error {
 	return nil // success
 }
 
-func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize string) error {
+func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize string, createOptions metav1.CreateOptions) error {
 	storageQt, err := resource.ParseQuantity(storageSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse storage size: %v", err)
@@ -371,7 +375,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		// Create a simple PV if no existing PV is suitable
 		_, err = m.Clientset.CoreV1().PersistentVolumes().Create(ctx, &v1.PersistentVolume{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "minio-pv-",
+				GenerateName: pvPrefix,
 			},
 			Spec: v1.PersistentVolumeSpec{
 				Capacity: v1.ResourceList{
@@ -380,11 +384,11 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 				PersistentVolumeSource: v1.PersistentVolumeSource{
 					HostPath: &v1.HostPathVolumeSource{
-						Path: "/tmp/minio-pv", // Replace with your desired host path
+						Path: pvHostPath,
 					},
 				},
 			},
-		}, metav1.CreateOptions{})
+		}, createOptions)
 		if err != nil {
 			return fmt.Errorf("failed to create PersistentVolume: %v", err)
 		}
@@ -408,7 +412,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		},
 	}
 
-	_, err = pvcClient.Create(ctx, pvc, metav1.CreateOptions{})
+	_, err = pvcClient.Create(ctx, pvc, createOptions)
 	if err != nil {
 		return fmt.Errorf("failed to create PersistentVolumeClaim: %v", err)
 	}

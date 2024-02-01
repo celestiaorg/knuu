@@ -10,7 +10,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/names"
-	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,25 +45,21 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 	if err != nil {
 		return "", ErrCreatingJob.Wrap(err)
 	}
-	logrus.Infof("Created Job: %s", cJob.Name)
 
 	kJob, err := k.waitForJobCompletion(ctx, cJob)
 	if err != nil {
 		return "", ErrWaitingJobCompletion.Wrap(err)
 	}
-	logrus.Infof("Job completed: %s", kJob.Name)
 
 	pod, err := k.firstPodFromJob(ctx, kJob)
 	if err != nil {
 		return "", ErrGettingPodFromJob.Wrap(err)
 	}
-	logrus.Infof("Pod found: %s", pod.Name)
 
 	logs, err = k.containerLogs(ctx, pod)
 	if err != nil {
 		return "", ErrGettingContainerLogs.Wrap(err)
 	}
-	logrus.Infof("Container logs: %s", logs)
 
 	if err := k.cleanup(ctx, kJob); err != nil {
 		return "", ErrCleaningUp.Wrap(err)
