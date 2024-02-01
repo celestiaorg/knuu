@@ -1,10 +1,14 @@
 package kaniko
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/names"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -17,16 +21,16 @@ const (
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
 
-	configMapVolume     = "kaniko-build-context-volume"
-	configMapMountPoint = "/build-context"
-
 	DefaultParallelism  = int32(5)
 	DefaultBackoffLimit = int32(5)
+
+	MinioBucketName = "kaniko"
 )
 
 type Kaniko struct {
 	K8sClientset kubernetes.Interface
 	K8sNamespace string
+	Minio        *minio.Minio // Minio service to store the build context if it's a directory
 }
 
 var _ builder.Builder = &Kaniko{}
@@ -115,10 +119,8 @@ func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error)
 		return "", ErrNoContainersFound.Wrap(fmt.Errorf("pod: %s", pod.Name))
 	}
 
-	containerName := pod.Spec.Containers[0].Name
-
 	logOptions := v1.PodLogOptions{
-		Container: containerName,
+		Container: pod.Spec.Containers[0].Name,
 	}
 
 	req := k.K8sClientset.CoreV1().Pods(k.K8sNamespace).GetLogs(pod.Name, &logOptions)
@@ -214,48 +216,78 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 	return job, nil
 }
 
+// mountDir mounts the build context directory to the Kaniko container
+// Since we cannot really mount a local directory to a k8s Pod,
+// we create a tar.gz archive of the directory and upload it to Minio
+// then we download it from the init container into a shared volume which is also mounted
+// to the Kaniko container
+// As kaniko also supports directly tar.gz archives, no need to extract it,
+// we just need to set the context to tar://<path-to-archive>
 func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
-	configMapData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
+	if k.Minio == nil {
+		return nil, ErrMinioNotConfigured
+	}
+
+	// Create the tar.gz archive
+	archiveData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
 	if err != nil {
 		return nil, err
 	}
 
-	const archiveFile = "archive.tar.gz"
-	configMapName := job.Name + "-configmap"
-	configMap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      configMapName,
-			Namespace: k.K8sNamespace,
-		},
-		BinaryData: map[string][]byte{
-			archiveFile: configMapData,
-		},
+	// Create a SHA256 hash of for the name of the archive content
+	hash := sha256.New()
+	hash.Write(archiveData)
+	contentName := hex.EncodeToString(hash.Sum(nil))
+
+	if err := k.Minio.DeployMinio(ctx); err != nil {
+		return nil, ErrMinioDeploymentFailed.Wrap(err)
 	}
 
-	_, err = k.K8sClientset.CoreV1().ConfigMaps(k.K8sNamespace).Create(ctx, configMap, metav1.CreateOptions{})
+	if err := k.Minio.PushToMinio(ctx, bytes.NewReader(archiveData), contentName, MinioBucketName); err != nil {
+		return nil, err
+	}
+
+	s3URL, err := k.Minio.GetMinioURL(ctx, contentName, MinioBucketName)
 	if err != nil {
 		return nil, err
 	}
 
-	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes,
-		v1.Volume{
-			Name: configMapVolume,
-			VolumeSource: v1.VolumeSource{
-				ConfigMap: &v1.ConfigMapVolumeSource{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: configMapName,
-					},
-				},
+	const (
+		workspaceDir     = "/workspace"
+		workspaceVolName = "workspace"
+		archiveFilePath  = workspaceDir + "/archive.tar.gz"
+	)
+
+	// Configure the init container to download the tar.gz archive first
+	initContainer := v1.Container{
+		Name:    "download-container",
+		Image:   "curlimages/curl:latest",
+		Command: []string{"/bin/sh", "-c"},
+		Args: []string{
+			fmt.Sprintf("curl -L -o %s '%s'", archiveFilePath, s3URL),
+		},
+		VolumeMounts: []v1.VolumeMount{
+			{
+				Name:      workspaceVolName,
+				MountPath: workspaceDir,
 			},
-		})
-	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts,
-		v1.VolumeMount{
-			Name:      configMapVolume,
-			MountPath: configMapMountPoint,
-		})
+		},
+	}
+	job.Spec.Template.Spec.InitContainers = append(job.Spec.Template.Spec.InitContainers, initContainer)
 
-	// replace the context with the tar.gz file path
-	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, "--context=tar://"+configMapMountPoint+"/"+archiveFile)
+	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, v1.Volume{
+		Name: workspaceVolName,
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+		},
+	})
+	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts, v1.VolumeMount{
+		Name:      workspaceVolName,
+		MountPath: workspaceDir,
+	})
+
+	// Replace the context with the tar.gz archive
+	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, "--context=tar://"+archiveFilePath)
 
 	return job, nil
 }
