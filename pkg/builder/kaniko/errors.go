@@ -23,6 +23,7 @@ func (e *Error) Wrap(err error) error {
 }
 
 var (
+	ErrBuildFailed                      = &Error{Code: "BuildFailed", Message: "build failed"}
 	ErrBuildContextEmpty                = &Error{Code: "BuildContextEmpty", Message: "build context cannot be empty"}
 	ErrCleaningUp                       = &Error{Code: "CleaningUp", Message: "error cleaning up"}
 	ErrCreatingJob                      = &Error{Code: "CreatingJob", Message: "error creating Job"}
