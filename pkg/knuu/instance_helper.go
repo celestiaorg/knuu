@@ -127,19 +127,19 @@ func (i *Instance) deployPod() error {
 		}
 	}
 
-	statefulSetConfig := i.prepareStatefulSetConfig()
+	ReplicaSetConfig := i.prepareReplicaSetConfig()
 
-	// Deploy the statefulSet
-	statefulSet, err := k8s.DeployStatefulSet(statefulSetConfig, true)
+	// Deploy the ReplicaSet
+	ReplicaSet, err := k8s.DeployReplicaSet(ReplicaSetConfig, true)
 	if err != nil {
 		return fmt.Errorf("failed to deploy pod: %v", err)
 	}
 
 	// Set the state of the instance to started
-	i.kubernetesStatefulSet = statefulSet
+	i.kubernetesReplicaSet = ReplicaSet
 
 	// Log the deployment of the pod
-	logrus.Debugf("Started statefulSet '%s'", i.k8sName)
+	logrus.Debugf("Started ReplicaSet '%s'", i.k8sName)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -149,7 +149,7 @@ func (i *Instance) deployPod() error {
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod() error {
 	grace := int64(0)
-	err := k8s.DeleteStatefulSetWithGracePeriod(k8s.Namespace(), i.k8sName, &grace)
+	err := k8s.DeleteReplicaSetWithGracePeriod(k8s.Namespace(), i.k8sName, &grace)
 	if err != nil {
 		return fmt.Errorf("failed to delete pod: %v", err)
 	}
@@ -329,33 +329,33 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
 
 	return &Instance{
-		name:                  i.name + suffix,
-		k8sName:               i.k8sName + suffix,
-		imageName:             i.imageName,
-		state:                 i.state,
-		instanceType:          i.instanceType,
-		kubernetesService:     i.kubernetesService,
-		builderFactory:        i.builderFactory,
-		kubernetesStatefulSet: i.kubernetesStatefulSet,
-		portsTCP:              i.portsTCP,
-		portsUDP:              i.portsUDP,
-		command:               i.command,
-		args:                  i.args,
-		env:                   i.env,
-		volumes:               i.volumes,
-		memoryRequest:         i.memoryRequest,
-		memoryLimit:           i.memoryLimit,
-		cpuRequest:            i.cpuRequest,
-		policyRules:           i.policyRules,
-		livenessProbe:         i.livenessProbe,
-		readinessProbe:        i.readinessProbe,
-		startupProbe:          i.startupProbe,
-		isSidecar:             false,
-		parentInstance:        nil,
-		sidecars:              clonedSidecars,
-		obsyConfig:            i.obsyConfig,
-		securityContext:       &clonedSecurityContext,
-		BitTwister:            &clonedBitTwister,
+		name:                 i.name + suffix,
+		k8sName:              i.k8sName + suffix,
+		imageName:            i.imageName,
+		state:                i.state,
+		instanceType:         i.instanceType,
+		kubernetesService:    i.kubernetesService,
+		builderFactory:       i.builderFactory,
+		kubernetesReplicaSet: i.kubernetesReplicaSet,
+		portsTCP:             i.portsTCP,
+		portsUDP:             i.portsUDP,
+		command:              i.command,
+		args:                 i.args,
+		env:                  i.env,
+		volumes:              i.volumes,
+		memoryRequest:        i.memoryRequest,
+		memoryLimit:          i.memoryLimit,
+		cpuRequest:           i.cpuRequest,
+		policyRules:          i.policyRules,
+		livenessProbe:        i.livenessProbe,
+		readinessProbe:       i.readinessProbe,
+		startupProbe:         i.startupProbe,
+		isSidecar:            false,
+		parentInstance:       nil,
+		sidecars:             clonedSidecars,
+		obsyConfig:           i.obsyConfig,
+		securityContext:      &clonedSecurityContext,
+		BitTwister:           &clonedBitTwister,
 	}
 }
 
@@ -442,7 +442,7 @@ func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
 }
 
 // prepareConfig prepares the config for the instance
-func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
+func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 
 	// Generate the container configuration
 	containerConfig := k8s.ContainerConfig{
@@ -491,8 +491,8 @@ func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 	}
-	// Generate the statefulset configuration
-	statefulSetConfig := k8s.StatefulSetConfig{
+	// Generate the Replicaset configuration
+	ReplicaSetConfig := k8s.ReplicaSetConfig{
 		Namespace: k8s.Namespace(),
 		Name:      i.k8sName,
 		Labels:    i.getLabels(),
@@ -500,17 +500,17 @@ func (i *Instance) prepareStatefulSetConfig() k8s.StatefulSetConfig {
 		PodConfig: podConfig,
 	}
 
-	return statefulSetConfig
+	return ReplicaSetConfig
 }
 
 // setImageWithGracePeriod sets the image of the instance with a grace period
 func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64) error {
 	i.imageName = imageName
 
-	statefulSetConfig := i.prepareStatefulSetConfig()
+	ReplicaSetConfig := i.prepareReplicaSetConfig()
 
 	// Replace the pod with a new one, using the given image
-	_, err := k8s.ReplaceStatefulSetWithGracePeriod(statefulSetConfig, gracePeriod)
+	_, err := k8s.ReplaceReplicaSetWithGracePeriod(ReplicaSetConfig, gracePeriod)
 	if err != nil {
 		return fmt.Errorf("error replacing pod: %s", err.Error())
 	}
