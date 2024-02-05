@@ -12,7 +12,7 @@ import (
 )
 
 // getReplicaSet retrieves replicaSet from the given namespace and logs any errors.
-func getReplicaSet(namespace, name string) (*appv1.ReplicaSetSet, error) {
+func getReplicaSet(namespace, name string) (*appv1.ReplicaSet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -159,9 +159,8 @@ func prepareReplicaSet(ReplicaSetConfig ReplicaSetConfig, init bool) (*appv1.Rep
 			Labels:    labels,
 		},
 		Spec: appv1.ReplicaSetSpec{
-			Replicas:    &replicas,
-			Selector:    &metav1.LabelSelector{MatchLabels: labels},
-			ServiceName: name,
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
