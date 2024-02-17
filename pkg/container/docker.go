@@ -13,23 +13,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	DefaultTimeout = 2 * time.Minute
+)
+
 // BuilderFactory is responsible for creating new instances of buildah.Builder
 type BuilderFactory struct {
 	imageNameFrom          string
 	imageNameTo            string
+	imageBuilder           builder.Builder
 	cli                    *client.Client
 	dockerFileInstructions []string
 	context                string
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
-func NewBuilderFactory(imageName string, buildContext string) (*BuilderFactory, error) {
+func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Builder) (*BuilderFactory, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
@@ -39,6 +45,7 @@ func NewBuilderFactory(imageName string, buildContext string) (*BuilderFactory, 
 		cli:                    cli,
 		dockerFileInstructions: []string{"FROM " + imageName},
 		context:                buildContext,
+		imageBuilder:           imageBuilder,
 	}, nil
 }
 
@@ -155,7 +162,6 @@ func (f *BuilderFactory) Changed() bool {
 // PushBuilderImage pushes the image from the given builder to a registry.
 // The image is identified by the provided name.
 func (f *BuilderFactory) PushBuilderImage(imageName string) error {
-
 	if !f.Changed() {
 		logrus.Debugf("No changes made to image %s, skipping push", f.imageNameFrom)
 		return nil
@@ -177,43 +183,62 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
-	// Check if there is an existing builder instance
-	cmd := exec.Command("docker", "buildx", "ls")
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
+		ImageName:    f.imageNameTo,
+		Destination:  f.imageNameTo, // in docker the image name and destination are the same
+		BuildContext: builder.DirContext{Path: f.context}.BuildContext(),
+	})
+
+	qStatus := logrus.TextFormatter{}.DisableQuote
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: true,
+	})
+	logrus.Debug("build logs: ", logs)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: qStatus,
+	})
+
+	return err
+}
+
+// BuildImageFromGitRepo builds an image from the given git repository and
+// pushes it to a registry. The image is identified by the provided name.
+func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx builder.GitContext, imageName string) error {
+	buildCtx, err := gitCtx.BuildContext()
 	if err != nil {
-		return fmt.Errorf("failed to list buildx builders: %w", err)
+		return fmt.Errorf("failed to get build context: %w", err)
 	}
 
-	// If no builder instance exists, create a new one
-	if !strings.Contains(string(output), "default") {
-		cmd = exec.Command("docker", "buildx", "create", "--use")
-		err = runCommand(cmd)
-		if err != nil {
-			return fmt.Errorf("failed to create buildx builder: %w", err)
-		}
-	}
+	f.imageNameTo = imageName
 
-	// Build the Docker image using buildx
-	cmd = exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/amd64", "-t", imageName, f.context)
-	err = runCommand(cmd)
+	cOpts := &builder.CacheOptions{}
+	cOpts, err = cOpts.Default(buildCtx)
 	if err != nil {
-		return fmt.Errorf("failed to build image: %w", err)
+		return fmt.Errorf("failed to get default cache options: %w", err)
 	}
 
-	// Push the Docker image to the registry
-	cmd = exec.Command("docker", "push", imageName)
-	err = runCommand(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to push image: %w", err)
-	}
+	logrus.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
 
-	// Remove the context directory
-	err = os.RemoveAll(f.context)
-	if err != nil {
-		return fmt.Errorf("failed to remove context directory: %w", err)
-	}
+	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
+		ImageName:    imageName,
+		Destination:  imageName,
+		BuildContext: buildCtx,
+		Cache:        cOpts,
+	})
 
-	return nil
+	qStatus := logrus.TextFormatter{}.DisableQuote
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: true,
+	})
+
+	logrus.Debug("build logs: ", logs)
+
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableQuote: qStatus,
+	})
+	return err
 }
 
 func runCommand(cmd *exec.Cmd) error {
