@@ -21,7 +21,7 @@ const (
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
 
-	DefaultParallelism  = int32(5)
+	DefaultParallelism  = int32(1)
 	DefaultBackoffLimit = int32(5)
 
 	MinioBucketName = "kaniko"
@@ -63,6 +63,10 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 
 	if err := k.cleanup(ctx, kJob); err != nil {
 		return "", ErrCleaningUp.Wrap(err)
+	}
+
+	if kJob.Status.Succeeded == 0 {
+		return logs, ErrBuildFailed
 	}
 
 	return logs, nil
