@@ -9,7 +9,7 @@ import (
 
 const (
 	btDefaultPort             = 9009
-	btDefaultImage            = "ghcr.io/celestiaorg/bittwister:f5f94e6"
+	btDefaultImage            = "ghcr.io/celestiaorg/bittwister:4187779"
 	btDefaultNetworkInterface = "eth0"
 )
 
