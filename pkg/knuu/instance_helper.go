@@ -613,9 +613,9 @@ func (i *Instance) addBitTwisterSidecar() error {
 		return fmt.Errorf("error adding capability for bit-twister instance '%s': %w", i.k8sName, err)
 	}
 
-	if err := networkConfigSidecar.SetUser("0"); err != nil {
-		return fmt.Errorf("error setting user root for bit-twister instance '%s': %w", i.k8sName, err)
-	}
+	//if err := networkConfigSidecar.SetUser("0"); err != nil {
+	//	return fmt.Errorf("error setting user root for bit-twister instance '%s': %w", i.k8sName, err)
+	//}
 
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {
 		return fmt.Errorf("error adding bit-twister sidecar to instance '%s': %w", i.k8sName, err)
