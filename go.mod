@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/celestiaorg/bittwister v0.0.0-20231211182706-b065de784c03
-	github.com/docker/docker v25.0.4+incompatible
+	github.com/docker/docker v25.0.5+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/sirupsen/logrus v1.9.3
