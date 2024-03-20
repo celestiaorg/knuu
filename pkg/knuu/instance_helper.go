@@ -609,7 +609,7 @@ func (i *Instance) addBitTwisterSidecar() error {
 		return fmt.Errorf("error setting privileged for bit-twister instance '%s': %w", i.k8sName, err)
 	}
 
-	if err := networkConfigSidecar.AddCapability("all"); err != nil {
+	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
 		return fmt.Errorf("error adding capability for bit-twister instance '%s': %w", i.k8sName, err)
 	}
 
