@@ -195,6 +195,18 @@ func prepareReplicaSet(ReplicaSetConfig ReplicaSetConfig, init bool) (*appv1.Rep
 
 // GetFirstPodFromReplicaSet returns the first pod of a Replicaset.
 func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
-	podName := fmt.Sprintf("%s-0", name)
-	return getPod(namespace, podName)
+	//podName := fmt.Sprintf("%s-0", name)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	rsName, err := getReplicaSet(ctx, namespace, name)
+	if err != nil {
+		// If the ReplicaSet does not exist, skip and return without error
+		return nil, err
+	}
+	logrus.Debugf("----------------------")
+	logrus.Debugf("ReplicaSet info: %s", rsName)
+	logrus.Debugf("----------------------")
+
+	return getPod(namespace, rsName.Name)
 }
