@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/celestiaorg/bittwister v0.0.0-20231211182706-b065de784c03
-	github.com/docker/docker v26.0.0+incompatible
+	github.com/docker/docker v25.0.5+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/sirupsen/logrus v1.9.3
@@ -47,7 +47,6 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
-	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
