@@ -10,14 +10,16 @@ import (
 	"strings"
 	"time"
 
+	appv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+
+	"github.com/sirupsen/logrus"
+
 	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/sirupsen/logrus"
-	appv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -62,35 +64,35 @@ type SecurityContext struct {
 
 // Instance represents a instance
 type Instance struct {
-	name                  string
-	imageName             string
-	k8sName               string
-	state                 InstanceState
-	instanceType          InstanceType
-	kubernetesService     *v1.Service
-	builderFactory        *container.BuilderFactory
-	kubernetesStatefulSet *appv1.StatefulSet
-	portsTCP              []int
-	portsUDP              []int
-	command               []string
-	args                  []string
-	env                   map[string]string
-	volumes               []*k8s.Volume
-	memoryRequest         string
-	memoryLimit           string
-	cpuRequest            string
-	policyRules           []rbacv1.PolicyRule
-	livenessProbe         *v1.Probe
-	readinessProbe        *v1.Probe
-	startupProbe          *v1.Probe
-	files                 []*k8s.File
-	isSidecar             bool
-	parentInstance        *Instance
-	sidecars              []*Instance
-	fsGroup               int64
-	obsyConfig            *ObsyConfig
-	securityContext       *SecurityContext
-	BitTwister            *btConfig
+	name                 string
+	imageName            string
+	k8sName              string
+	state                InstanceState
+	instanceType         InstanceType
+	kubernetesService    *v1.Service
+	builderFactory       *container.BuilderFactory
+	kubernetesReplicaSet *appv1.ReplicaSet
+	portsTCP             []int
+	portsUDP             []int
+	command              []string
+	args                 []string
+	env                  map[string]string
+	volumes              []*k8s.Volume
+	memoryRequest        string
+	memoryLimit          string
+	cpuRequest           string
+	policyRules          []rbacv1.PolicyRule
+	livenessProbe        *v1.Probe
+	readinessProbe       *v1.Probe
+	startupProbe         *v1.Probe
+	files                []*k8s.File
+	isSidecar            bool
+	parentInstance       *Instance
+	sidecars             []*Instance
+	fsGroup              int64
+	obsyConfig           *ObsyConfig
+	securityContext      *SecurityContext
+	BitTwister           *btConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -304,9 +306,9 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 		return -1, fmt.Errorf("error getting free port: %v", err)
 	}
 	// Forward the port
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), i.k8sName)
 	if err != nil {
-		return -1, fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return -1, fmt.Errorf("error getting pod from replicaset '%s': %v", i.k8sName, err)
 	}
 	// We need to retry here because the port forwarding might fail as getFreePortTCP() might not free the port fast enough
 	retries := 5
@@ -382,9 +384,9 @@ func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...str
 		errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
 	}
 
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), instanceName)
 	if err != nil {
-		return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return "", fmt.Errorf("error getting pod from replicaset '%s': %v", i.k8sName, err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
@@ -978,7 +980,7 @@ func (i *Instance) IsRunning() (bool, error) {
 	if !i.IsInState(Started, Stopped) {
 		return false, fmt.Errorf("checking if instance is running is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	return k8s.IsStatefulSetRunning(k8s.Namespace(), i.k8sName)
+	return k8s.IsReplicaSetRunning(k8s.Namespace(), i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
