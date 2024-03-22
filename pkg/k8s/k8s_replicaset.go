@@ -195,7 +195,6 @@ func prepareReplicaSet(ReplicaSetConfig ReplicaSetConfig, init bool) (*appv1.Rep
 
 // GetFirstPodFromReplicaSet returns the first pod of a Replicaset.
 func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
-	//podName := fmt.Sprintf("%s-0", name)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -204,11 +203,6 @@ func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
 		// If the ReplicaSet does not exist, skip and return without error
 		return nil, err
 	}
-	logrus.Debugf("----------------------")
-	logrus.Debugf("ReplicaSet info: %s", rsName.Name)
-	logrus.Debugf("ReplicaSet info: %s", rsName.Namespace)
-	logrus.Debugf("----------------------")
-
 	selector := metav1.FormatLabelSelector(rsName.Spec.Selector)
 	pods, err := Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
@@ -218,9 +212,6 @@ func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
 	if len(pods.Items) == 0 {
 		return nil, fmt.Errorf("no pods found for ReplicaSet %s", name)
 	}
-	//logrus.Debugf("num of PODs: %s", len(pods.Items))
-	logrus.Debugf("FIRST POD: %s", &pods.Items[0])
-	logrus.Debugf("FIRST POD: %s", &pods.Items[0].Name)
 
 	return getPod(namespace, pods.Items[0].Name)
 }
