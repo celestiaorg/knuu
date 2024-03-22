@@ -218,8 +218,9 @@ func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
 	if len(pods.Items) == 0 {
 		return nil, fmt.Errorf("no pods found for ReplicaSet %s", name)
 	}
-	logrus.Debugf("num of PODs: %s", len(pods.Items))
+	//logrus.Debugf("num of PODs: %s", len(pods.Items))
 	logrus.Debugf("FIRST POD: %s", &pods.Items[0])
+	logrus.Debugf("FIRST POD: %s", &pods.Items[0].Name)
 
-	return getPod(namespace, rsName.Name)
+	return getPod(namespace, pods.Items[0].Name)
 }
