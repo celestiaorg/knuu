@@ -205,8 +205,21 @@ func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
 		return nil, err
 	}
 	logrus.Debugf("----------------------")
-	logrus.Debugf("ReplicaSet info: %s", rsName)
+	logrus.Debugf("ReplicaSet info: %s", rsName.Name)
+	logrus.Debugf("ReplicaSet info: %s", rsName.Namespace)
 	logrus.Debugf("----------------------")
+
+	selector := metav1.FormatLabelSelector(rsName.Spec.Selector)
+	pods, err := Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for ReplicaSet %s: %w", name, err)
+	}
+
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no pods found for ReplicaSet %s", name)
+	}
+	logrus.Debugf("num of PODs: %s", len(pods.Items))
+	logrus.Debugf("FIRST POD: %s", &pods.Items[0])
 
 	return getPod(namespace, rsName.Name)
 }
