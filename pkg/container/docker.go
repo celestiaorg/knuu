@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
@@ -102,12 +101,12 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 		}
 
 		// Remove the container
-		if err := f.cli.ContainerRemove(context.Background(), resp.ID, types.ContainerRemoveOptions{}); err != nil {
+		if err := f.cli.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{}); err != nil {
 			logrus.Warnf("failed to remove container: %v", err)
 		}
 	}()
 
-	if err := f.cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
+	if err := f.cli.ContainerStart(context.Background(), resp.ID, container.StartOptions{}); err != nil {
 		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
