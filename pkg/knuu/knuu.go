@@ -4,13 +4,15 @@ package knuu
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
 )
 
 var (
@@ -31,6 +33,10 @@ func Initialize() error {
 // Identifier returns the identifier of the current knuu instance
 func Identifier() string {
 	return identifier
+}
+
+func () {
+
 }
 
 // InitializeWithIdentifier initializes knuu with a unique identifier
@@ -57,7 +63,16 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	err := k8s.Initialize()
+	useDedicatedNamespaceEnv := os.Getenv("KNUU_DEDICATED_NAMESPACE")
+	useDedicatedNamespace, err := strconv.ParseBool(useDedicatedNamespaceEnv)
+	if err != nil {
+		useDedicatedNamespace = false
+	}
+
+	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
+
+
+	err = k8s.Initialize()
 	if err != nil {
 		return err
 	}
