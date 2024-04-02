@@ -28,12 +28,13 @@ func InitializeNamespace() (string, error) {
 		useDedicatedNamespace = false
 	}
 
-	// namespaceName get the random name
-	namespaceName := generateRandomString()
-	logrus.Debugf("namespace random generated: %s", namespaceName)
-
+	var namespaceName string
 	if useDedicatedNamespace {
+		// namespaceName get the random name
+		namespaceName = generateRandomString()
 		namespaceName = "knuu-" + sanitizeName(namespaceName)
+
+		logrus.Debugf("namespace random generated: %s", namespaceName)
 		if err := createNamespace(Clientset(), namespaceName); err != nil {
 			return "", fmt.Errorf("failed to create dedicated namespace: %v", err)
 		}
