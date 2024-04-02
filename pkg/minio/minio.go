@@ -21,17 +21,15 @@ import (
 )
 
 const (
-	ServiceName              = "minio-service"
-	ServiceAPIPort           = 9000  // API port
-	ServiceWebUIPort         = 45191 // WebUI port
-	ServiceAPIExternalPort   = 30505 // some random port
-	ServiceWebUIExternalPort = 30506 // some random port
-	DeploymentName           = "minio"
-	Image                    = "minio/minio:RELEASE.2024-03-30T09-41-56Z"
-	StorageClassName         = "standard" // standard | gp2 | default
-	VolumeClaimName          = "minio-data"
-	VolumeMountPath          = "/data"
-	PVCStorageSize           = "1Gi"
+	ServiceName      = "minio-service"
+	ServiceAPIPort   = 9000  // API port
+	ServiceWebUIPort = 45191 // WebUI port
+	DeploymentName   = "minio"
+	Image            = "minio/minio:RELEASE.2024-03-30T09-41-56Z"
+	StorageClassName = "standard" // standard | gp2 | default
+	VolumeClaimName  = "minio-data"
+	VolumeMountPath  = "/data"
+	PVCStorageSize   = "1Gi"
 
 	// The minio service is used internally, so not sure if it is ok to use constant key/secret
 	rootUser     = "minioUser"     // Previously accessKey
@@ -252,14 +250,12 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceAPIPort,
 					TargetPort: intstr.FromInt(ServiceAPIPort),
-					NodePort:   ServiceAPIExternalPort,
 				},
 				{
 					Name:       "webui",
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceWebUIPort,
 					TargetPort: intstr.FromInt(ServiceWebUIPort),
-					NodePort:   ServiceWebUIExternalPort,
 				},
 			},
 			Type: v1.ServiceTypeLoadBalancer,
