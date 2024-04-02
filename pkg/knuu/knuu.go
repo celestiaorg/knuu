@@ -35,10 +35,6 @@ func Identifier() string {
 	return identifier
 }
 
-func () {
-
-}
-
 // InitializeWithIdentifier initializes knuu with a unique identifier
 // Default timeout is 60 minutes and can be changed by setting the KNUU_TIMEOUT environment variable
 func InitializeWithIdentifier(uniqueIdentifier string) error {
@@ -70,7 +66,6 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	}
 
 	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
-
 
 	err = k8s.Initialize()
 	if err != nil {
