@@ -4,7 +4,6 @@ package knuu
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -59,13 +58,12 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	useDedicatedNamespaceEnv := os.Getenv("KNUU_DEDICATED_NAMESPACE")
-	useDedicatedNamespace, err := strconv.ParseBool(useDedicatedNamespaceEnv)
+	namespaceName, err := k8s.InitializeNamespace()
 	if err != nil {
-		useDedicatedNamespace = false
+		namespaceName = "false"
 	}
 
-	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
+	logrus.Debugf("Use dedicated namespace: %s", namespaceName)
 
 	err = k8s.Initialize()
 	if err != nil {
