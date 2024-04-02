@@ -8,7 +8,9 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
+	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 )
@@ -78,12 +80,21 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
-	// Set default image builder
-	// TODO: we need to refactor this to allow user to set their own image builder
-	SetImageBuilder(&docker.Docker{
-		K8sClientset: k8s.Clientset(),
-		K8sNamespace: k8s.Namespace(),
-	})
+	if os.Getenv("KNUU_IN_CLUSTER_BUILDER") == "true" {
+		SetImageBuilder(&kaniko.Kaniko{
+			K8sClientset: k8s.Clientset(),
+			K8sNamespace: k8s.Namespace(),
+			Minio: &minio.Minio{
+				Clientset: k8s.Clientset(),
+				Namespace: k8s.Namespace(),
+			},
+		})
+	} else {
+		SetImageBuilder(&docker.Docker{
+			K8sClientset: k8s.Clientset(),
+			K8sNamespace: k8s.Namespace(),
+		})
+	}
 
 	return nil
 }

@@ -21,19 +21,21 @@ import (
 )
 
 const (
-	ServiceName         = "minio-service"
-	ServicePort         = 9000
-	ServiceExternalPort = 30505 // some random port
-	DeploymentName      = "minio"
-	Image               = "minio/minio:RELEASE.2024-01-28T22-35-53Z"
-	StorageClassName    = "standard" // standard | gp2 | default
-	VolumeClaimName     = "minio-data"
-	VolumeMountPath     = "/data"
-	PVCStorageSize      = "1Gi"
+	ServiceName              = "minio-service"
+	ServiceAPIPort           = 9000  // API port
+	ServiceWebUIPort         = 45191 // WebUI port
+	ServiceAPIExternalPort   = 30505 // some random port
+	ServiceWebUIExternalPort = 30506 // some random port
+	DeploymentName           = "minio"
+	Image                    = "minio/minio:RELEASE.2024-03-30T09-41-56Z"
+	StorageClassName         = "standard" // standard | gp2 | default
+	VolumeClaimName          = "minio-data"
+	VolumeMountPath          = "/data"
+	PVCStorageSize           = "1Gi"
 
 	// The minio service is used internally, so not sure if it is ok to use constant key/secret
-	accessKey = "minioaccesskey"
-	secretKey = "miniosecretkey"
+	rootUser     = "minioUser"     // Previously accessKey
+	rootPassword = "minioPassword" // Previously secretKey
 
 	waitRetry            = 5 * time.Second
 	pvPrefix             = "minio-pv-"
@@ -54,64 +56,77 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to check Minio deployment status: %v", err)
 	}
+
 	if deployed {
-		return nil
-	}
+		if err := m.updateMinioDeployment(ctx); err != nil {
+			return fmt.Errorf("failed to update Minio deployment: %v", err)
+		}
+		logrus.Debug("Minio deployment updated successfully.")
+	} else {
+		if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("failed to create PVC: %v", err)
+		}
 
-	if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create PVC: %v", err)
-	}
-
-	// Create Minio deployment
-	minioDeployment := &appsV1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      DeploymentName,
-			Namespace: m.Namespace,
-		},
-		Spec: appsV1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{deploymentAppLabel: deploymentMinioLabel},
+		// Create Minio deployment
+		minioDeployment := &appsV1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      DeploymentName,
+				Namespace: m.Namespace,
 			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{deploymentAppLabel: deploymentMinioLabel}},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
-						Name:  DeploymentName,
-						Image: Image,
-						Env: []v1.EnvVar{
-							{Name: "MINIO_ACCESS_KEY", Value: accessKey},
-							{Name: "MINIO_SECRET_KEY", Value: secretKey},
-						},
-						Ports: []v1.ContainerPort{{ContainerPort: ServicePort}},
-						VolumeMounts: []v1.VolumeMount{{
-							Name:      VolumeClaimName,
-							MountPath: VolumeMountPath,
-						}},
-						Command: []string{"minio", "server", VolumeMountPath},
-					}},
-					Volumes: []v1.Volume{{
-						Name: VolumeClaimName,
-						VolumeSource: v1.VolumeSource{
-							PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-								ClaimName: VolumeClaimName,
+			Spec: appsV1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{deploymentAppLabel: deploymentMinioLabel},
+				},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{deploymentAppLabel: deploymentMinioLabel}},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Name:  DeploymentName,
+							Image: Image,
+							Env: []v1.EnvVar{
+								{Name: "MINIO_ROOT_USER", Value: rootUser},
+								{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
 							},
-						},
-					}},
+							Ports: []v1.ContainerPort{
+								{ContainerPort: ServiceAPIPort},
+								{ContainerPort: ServiceWebUIPort},
+							},
+							VolumeMounts: []v1.VolumeMount{{
+								Name:      VolumeClaimName,
+								MountPath: VolumeMountPath,
+							}},
+							Command: []string{"minio", "server", VolumeMountPath},
+						}},
+						Volumes: []v1.Volume{{
+							Name: VolumeClaimName,
+							VolumeSource: v1.VolumeSource{
+								PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+									ClaimName: VolumeClaimName,
+								},
+							},
+						}},
+					},
 				},
 			},
-		},
-	}
+		}
 
-	_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to create Minio deployment: %v", err)
+		_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
+		if err != nil {
+			if errors.IsAlreadyExists(err) {
+				if err := m.updateMinioDeployment(ctx); err != nil {
+					return fmt.Errorf("failed to update existing Minio deployment: %v", err)
+				}
+			} else {
+				return fmt.Errorf("failed to create Minio deployment: %v", err)
+			}
+		}
 	}
 
 	if err = m.waitForMinio(ctx); err != nil {
 		return fmt.Errorf("failed waiting for Minio to be ready: %v", err)
 	}
 
-	if err := m.createService(ctx); err != nil {
+	if err := m.createOrUpdateService(ctx); err != nil {
 		return fmt.Errorf("failed to create Minio service: %v", err)
 	}
 
@@ -119,7 +134,35 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for Minio service to be ready: %v", err)
 	}
 
-	logrus.Info("Minio deployed successfully.")
+	logrus.Debug("Minio deployed successfully.")
+	return nil
+}
+
+func (m *Minio) updateMinioDeployment(ctx context.Context) error {
+	deploymentClient := m.Clientset.AppsV1().Deployments(m.Namespace)
+
+	minioDeployment, err := deploymentClient.Get(ctx, DeploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get existing Minio deployment: %v", err)
+	}
+
+	// Update the deployment spec as needed
+	minioDeployment.Spec.Template.Spec.Containers[0].Image = Image
+	minioDeployment.Spec.Template.Spec.Containers[0].Env = []v1.EnvVar{
+		{Name: "MINIO_ROOT_USER", Value: rootUser},
+		{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
+	}
+	// Update the ports
+	minioDeployment.Spec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{
+		{ContainerPort: ServiceAPIPort},
+		{ContainerPort: ServiceWebUIPort},
+	}
+
+	_, err = deploymentClient.Update(ctx, minioDeployment, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update Minio deployment: %v", err)
+	}
+
 	return nil
 }
 
@@ -145,7 +188,7 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 	}
 
 	cli, err := miniogo.New(endpoint, &miniogo.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(rootUser, rootPassword, ""),
 		Secure: false,
 	})
 	if err != nil {
@@ -173,7 +216,7 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	}
 	// Initialize Minio client
 	minioClient, err := miniogo.New(minioEndpoint, &miniogo.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(rootUser, rootPassword, ""),
 		Secure: false,
 	})
 	if err != nil {
@@ -192,17 +235,10 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	return presignedURL.String(), nil
 }
 
-func (m *Minio) createService(ctx context.Context) error {
+func (m *Minio) createOrUpdateService(ctx context.Context) error {
 	serviceClient := m.Clientset.CoreV1().Services(m.Namespace)
 
-	// Check if Minio service already exists
-	_, err := serviceClient.Get(ctx, ServiceName, metav1.GetOptions{})
-	if err == nil {
-		logrus.Debugf("Service `%s` already exists.", ServiceName)
-		return nil
-	}
-
-	// Create Minio service
+	// Define Minio service
 	minioService := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ServiceName,
@@ -212,19 +248,38 @@ func (m *Minio) createService(ctx context.Context) error {
 			Selector: map[string]string{"app": "minio"},
 			Ports: []v1.ServicePort{
 				{
+					Name:       "api",
 					Protocol:   v1.ProtocolTCP,
-					Port:       ServicePort,
-					TargetPort: intstr.FromInt(ServicePort),
-					NodePort:   ServiceExternalPort,
+					Port:       ServiceAPIPort,
+					TargetPort: intstr.FromInt(ServiceAPIPort),
+					NodePort:   ServiceAPIExternalPort,
+				},
+				{
+					Name:       "webui",
+					Protocol:   v1.ProtocolTCP,
+					Port:       ServiceWebUIPort,
+					TargetPort: intstr.FromInt(ServiceWebUIPort),
+					NodePort:   ServiceWebUIExternalPort,
 				},
 			},
-			// Expose the service port outside the cluster, so client can push their data to Minio
-			Type: v1.ServiceTypeNodePort,
+			Type: v1.ServiceTypeLoadBalancer,
 		},
 	}
 
-	_, err = serviceClient.Create(ctx, minioService, metav1.CreateOptions{})
-	if err != nil {
+	// Check if Minio service already exists
+	existingService, err := serviceClient.Get(ctx, ServiceName, metav1.GetOptions{})
+	if err == nil {
+		logrus.Debugf("Service `%s` already exists, updating.", ServiceName)
+		minioService.ResourceVersion = existingService.ResourceVersion // Retain the existing resource version
+		if _, err := serviceClient.Update(ctx, minioService, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update Minio service: %v", err)
+		}
+		logrus.Debugf("Service %s updated successfully.", ServiceName)
+		return nil
+	}
+
+	// Create Minio service if it does not exist
+	if _, err := serviceClient.Create(ctx, minioService, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("failed to create Minio service: %v", err)
 	}
 
@@ -274,7 +329,13 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 		}
 
 		// Use the first node for simplicity, you might need to handle multiple nodes
-		nodeIP := nodes.Items[0].Status.Addresses[0].Address
+		var nodeIP string
+		for _, address := range nodes.Items[0].Status.Addresses {
+			if address.Type == "ExternalIP" {
+				nodeIP = address.Address
+				break
+			}
+		}
 		return fmt.Sprintf("%s:%d", nodeIP, minioService.Spec.Ports[0].NodePort), nil
 	}
 
@@ -302,34 +363,43 @@ func (m *Minio) waitForMinio(ctx context.Context) error {
 func (m *Minio) waitForMinioService(ctx context.Context) error {
 	for {
 		service, err := m.Clientset.CoreV1().Services(m.Namespace).Get(ctx, ServiceName, metav1.GetOptions{})
-		if err == nil &&
-			(service.Spec.Type == v1.ServiceTypeLoadBalancer ||
-				service.Spec.Type == v1.ServiceTypeNodePort) &&
-			// Check if LoadBalancer IP, NodePort, or externalIPs are available
-			(len(service.Status.LoadBalancer.Ingress) > 0 ||
-				service.Spec.Ports[0].NodePort > 0 ||
-				len(service.Spec.ExternalIPs) > 0) {
-
-			// Check if Minio is reachable
-			endpoint, err := m.getEndpoint(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get Minio endpoint: %v", err)
-			}
-
-			if err := checkServiceConnectivity(endpoint); err == nil {
-				break
-			}
+		if err != nil {
+			return fmt.Errorf("failed to get Minio service: %v", err)
 		}
 
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for Minio service to be ready")
-		case <-time.After(waitRetry):
-			// Retry after some seconds
+		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
+			if len(service.Status.LoadBalancer.Ingress) == 0 {
+				time.Sleep(waitRetry)
+				continue // Wait until the LoadBalancer IP is available
+			}
+		} else if service.Spec.Type == v1.ServiceTypeNodePort {
+			if service.Spec.Ports[0].NodePort == 0 {
+				return fmt.Errorf("NodePort for Minio service is not set")
+			}
+		} else if len(service.Spec.ExternalIPs) == 0 {
+			return fmt.Errorf("External IPs for Minio service are not set")
 		}
+
+		// Check if Minio is reachable
+		endpoint, err := m.getEndpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get Minio endpoint: %v", err)
+		}
+
+		if err := checkServiceConnectivity(endpoint); err != nil {
+			time.Sleep(waitRetry) // Retry after some seconds if Minio is not reachable
+			continue
+		}
+
+		break // Minio is reachable, exit the loop
 	}
 
-	return nil
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("timeout waiting for Minio service to be ready")
+	default:
+		return nil
+	}
 }
 
 func checkServiceConnectivity(serviceEndpoint string) error {
