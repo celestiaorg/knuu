@@ -80,7 +80,9 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
-	if os.Getenv("KNUU_IN_CLUSTER_BUILDER") == "true" {
+	builderType := os.Getenv("KNUU_BUILDER")
+	switch builderType {
+	case "kubernetes":
 		SetImageBuilder(&kaniko.Kaniko{
 			K8sClientset: k8s.Clientset(),
 			K8sNamespace: k8s.Namespace(),
@@ -89,11 +91,13 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 				Namespace: k8s.Namespace(),
 			},
 		})
-	} else {
+	case "docker", "":
 		SetImageBuilder(&docker.Docker{
 			K8sClientset: k8s.Clientset(),
 			K8sNamespace: k8s.Namespace(),
 		})
+	default:
+		return fmt.Errorf("invalid KNUU_BUILDER value: %s", builderType)
 	}
 
 	return nil
