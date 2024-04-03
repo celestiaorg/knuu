@@ -70,6 +70,8 @@ func Initialize() error {
 	// Set the namespace
 	setNamespace(namespaceName)
 
+	logrus.Infof("Namespace where the test runs: %s", namespaceName)
+
 	return nil
 }
 
