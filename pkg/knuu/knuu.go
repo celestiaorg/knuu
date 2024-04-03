@@ -61,7 +61,15 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	err := k8s.Initialize()
+	useDedicatedNamespaceEnv := os.Getenv("KNUU_DEDICATED_NAMESPACE")
+	useDedicatedNamespace, err := strconv.ParseBool(useDedicatedNamespaceEnv)
+	if err != nil {
+		useDedicatedNamespace = false
+	}
+
+	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
+
+	err = k8s.Initialize()
 	if err != nil {
 		return err
 	}
