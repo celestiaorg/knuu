@@ -153,9 +153,7 @@ func handleTimeout() error {
 	// Command runs in-cluster to delete resources post-test. Chosen for simplicity over a separate Go app.
 	wait := fmt.Sprintf("sleep %d", timeoutSeconds)
 	deleteAllButTimeOutType := fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace())
-	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace())
-	cmd := fmt.Sprintf("%s && %s && %s", wait, deleteAllButTimeOutType, deleteAll)
-	command = append(command, cmd)
+	cmd := fmt.Sprintf("%s && %s", wait, deleteAllButTimeOutType)
 
 	// Delete namespace only if KNUU_DEDICATED_NAMESPACE is true
 	if useDedicatedNamespace {
@@ -163,8 +161,11 @@ func handleTimeout() error {
 		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
 
 		cmd = fmt.Sprintf("%s && %s", cmd, deleteNamespace)
+		command = append(command, cmd)
 	}
 
+	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace())
+	cmd = fmt.Sprintf("%s && %s", wait, deleteAll)
 	command = append(command, cmd)
 
 	if err := instance.SetCommand(command...); err != nil {
