@@ -12,7 +12,9 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
+	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 var (
@@ -80,12 +82,25 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
-	// Set default image builder
-	// TODO: we need to refactor this to allow user to set their own image builder
-	SetImageBuilder(&docker.Docker{
-		K8sClientset: k8s.Clientset(),
-		K8sNamespace: k8s.Namespace(),
-	})
+	builderType := os.Getenv("KNUU_BUILDER")
+	switch builderType {
+	case "kubernetes":
+		SetImageBuilder(&kaniko.Kaniko{
+			K8sClientset: k8s.Clientset(),
+			K8sNamespace: k8s.Namespace(),
+			Minio: &minio.Minio{
+				Clientset: k8s.Clientset(),
+				Namespace: k8s.Namespace(),
+			},
+		})
+	case "docker", "":
+		SetImageBuilder(&docker.Docker{
+			K8sClientset: k8s.Clientset(),
+			K8sNamespace: k8s.Namespace(),
+		})
+	default:
+		return fmt.Errorf("invalid KNUU_BUILDER, available [kubernetes, docker], value used: %s", builderType)
+	}
 
 	return nil
 }

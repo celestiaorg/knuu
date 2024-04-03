@@ -169,6 +169,17 @@ To run all tests in the current directory, you can run:
 go test -v ./...
 ```
 
+#### Environment Variables
+
+You can set the following environment variables to change the behavior of knuu:
+
+| Environment Variable       | Description                               | Possible Values         | Default |
+|----------------------------|-------------------------------------------|-------------------------|---------|
+| `KNUU_TIMEOUT`             | The timeout for the tests.                | Any valid duration       | `60m`    |
+| `KNUU_NAMESPACE`           | The namespace where the instances will be created. | Any valid namespace name | `test`  |
+| `KNUU_BUILDER`             | The builder to use for building images.   | `docker`, `kubernetes`  | `docker` |
+| `DEBUG_LEVEL`              | The debug level.                          | `debug`, `info`, `warn`, `error` | `info`  |
+
 ## Contributing
 
 We warmly welcome and appreciate contributions.
