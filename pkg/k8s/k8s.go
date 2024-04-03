@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
@@ -36,6 +37,9 @@ func Initialize() error {
 		return fmt.Errorf("creating clientset for Kubernetes: %w", err)
 	}
 
+	var namespaceName string
+	useDedicatedNamespace, _ := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
+
 	// Check if the program is running in a Kubernetes cluster environment
 	if isClusterEnvironment() {
 		// Read the namespace from the pod's spec
@@ -43,15 +47,24 @@ func Initialize() error {
 		if err != nil {
 			return fmt.Errorf("reading namespace from pod's spec: %w", err)
 		}
-		setNamespace(string(namespaceBytes))
+		namespaceName = string(namespaceBytes)
+	} else if useDedicatedNamespace {
+		// If KNUU_DEDICATED_NAMESPACE is true, generate and use a dedicated namespace
+		namespaceName, err = InitializeNamespace() // Assumes this function creates the namespace and returns its name
+		if err != nil {
+			return fmt.Errorf("initializing dedicated namespace: %w", err)
+		}
 	} else {
-		// Read the namespace from KNUU_NAMESPACE environment variable
-		if os.Getenv("KNUU_NAMESPACE") != "" {
-			setNamespace(os.Getenv("KNUU_NAMESPACE"))
-		} else {
-			setNamespace("test")
+		// Use KNUU_NAMESPACE or fallback to a default if it's not set
+		namespaceName = os.Getenv("KNUU_NAMESPACE")
+		if namespaceName == "" {
+			namespaceName = "test"
 		}
 	}
+
+	// Set the namespace
+	setNamespace(namespaceName)
+
 	return nil
 }
 
