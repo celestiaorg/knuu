@@ -31,6 +31,7 @@ type Kaniko struct {
 	K8sClientset kubernetes.Interface
 	K8sNamespace string
 	Minio        *minio.Minio // Minio service to store the build context if it's a directory
+	ContentName  string       // Name of the content pushed to Minio
 }
 
 var _ builder.Builder = &Kaniko{}
@@ -154,6 +155,13 @@ func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
 		return ErrDeletingPods.Wrap(err)
 	}
 
+	// Delete the content pushed to Minio
+	if k.ContentName != "" {
+		if err := k.Minio.DeleteFromMinio(ctx, k.ContentName, MinioBucketName); err != nil {
+			return ErrDeletingMinioContent.Wrap(err)
+		}
+	}
+
 	return nil
 }
 
@@ -241,17 +249,17 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	// Create a SHA256 hash of for the name of the archive content
 	hash := sha256.New()
 	hash.Write(archiveData)
-	contentName := hex.EncodeToString(hash.Sum(nil))
+	k.ContentName = hex.EncodeToString(hash.Sum(nil))
 
 	if err := k.Minio.DeployMinio(ctx); err != nil {
 		return nil, ErrMinioDeploymentFailed.Wrap(err)
 	}
 
-	if err := k.Minio.PushToMinio(ctx, bytes.NewReader(archiveData), contentName, MinioBucketName); err != nil {
+	if err := k.Minio.PushToMinio(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
 		return nil, err
 	}
 
-	s3URL, err := k.Minio.GetMinioURL(ctx, contentName, MinioBucketName)
+	s3URL, err := k.Minio.GetMinioURL(ctx, k.ContentName, MinioBucketName)
 	if err != nil {
 		return nil, err
 	}
