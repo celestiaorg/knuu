@@ -27,7 +27,7 @@ var (
 )
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
-func Initialize(identifier strin) error {
+func Initialize(identifier string) error {
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
 		return fmt.Errorf("retrieving the Kubernetes config: %w", err)
