@@ -28,7 +28,7 @@ var (
 // Initialize initializes knuug
 func Initialize() error {
 	t := time.Now()
-	identifier = fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
+	identifier = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 	return InitializeWithIdentifier(identifier)
 }
 
@@ -46,7 +46,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	identifier = uniqueIdentifier
 
 	t := time.Now()
-	startTime = fmt.Sprintf("%s_%03d", t.Format("20060102_150405"), t.Nanosecond()/1e6)
+	startTime = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 
 	switch os.Getenv("LOG_LEVEL") {
 	case "debug":
