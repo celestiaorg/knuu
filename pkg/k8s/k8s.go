@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -47,19 +48,23 @@ func Initialize() error {
 		if err != nil {
 			return fmt.Errorf("reading namespace from pod's spec: %w", err)
 		}
+
 		namespaceName = string(namespaceBytes)
+		logrus.Debugf("Using namespace from pod spec: %s", namespaceName)
 	} else if useDedicatedNamespace {
 		// If KNUU_DEDICATED_NAMESPACE is true, generate and use a dedicated namespace
 		namespaceName, err = InitializeNamespace() // Assumes this function creates the namespace and returns its name
 		if err != nil {
 			return fmt.Errorf("initializing dedicated namespace: %w", err)
 		}
+		logrus.Debugf("KNUU_DEDICATED_NAMESPACE enabled, namespace generated: %s", namespaceName)
 	} else {
 		// Use KNUU_NAMESPACE or fallback to a default if it's not set
 		namespaceName = os.Getenv("KNUU_NAMESPACE")
 		if namespaceName == "" {
 			namespaceName = "test"
 		}
+		logrus.Debugf("KNUU_DEDICATED_NAMESPACE not specified, namespace to use: %s", namespaceName)
 	}
 
 	// Set the namespace
