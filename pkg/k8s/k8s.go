@@ -48,7 +48,6 @@ func Initialize(identifier string) error {
 		if err != nil {
 			return fmt.Errorf("reading namespace from pod's spec: %w", err)
 		}
-
 		namespaceName = string(namespaceBytes)
 		logrus.Debugf("Using namespace from pod spec: %s", namespaceName)
 	} else if useDedicatedNamespace {
