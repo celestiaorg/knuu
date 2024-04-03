@@ -22,8 +22,8 @@ import (
 
 const (
 	ServiceName      = "minio-service"
-	ServiceAPIPort   = 9000  // API port
-	ServiceWebUIPort = 45191 // WebUI port
+	ServiceAPIPort   = 9000 // API port
+	ServiceWebUIPort = 9001 // WebUI port
 	DeploymentName   = "minio"
 	Image            = "minio/minio:RELEASE.2024-03-30T09-41-56Z"
 	StorageClassName = "standard" // standard | gp2 | default
@@ -48,117 +48,100 @@ type Minio struct {
 }
 
 func (m *Minio) DeployMinio(ctx context.Context) error {
-	deploymentClient := m.Clientset.AppsV1().Deployments(m.Namespace)
-
-	deployed, err := m.IsMinioDeployed(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to check Minio deployment status: %v", err)
+	if err := m.createOrUpdateDeployment(ctx); err != nil {
+		return fmt.Errorf("failed to create or update Minio deployment: %v", err)
 	}
 
-	if deployed {
-		if err := m.updateMinioDeployment(ctx); err != nil {
-			return fmt.Errorf("failed to update Minio deployment: %v", err)
-		}
-		logrus.Debug("Minio deployment updated successfully.")
-	} else {
-		if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("failed to create PVC: %v", err)
-		}
-
-		// Create Minio deployment
-		minioDeployment := &appsV1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      DeploymentName,
-				Namespace: m.Namespace,
-			},
-			Spec: appsV1.DeploymentSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{deploymentAppLabel: deploymentMinioLabel},
-				},
-				Template: v1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{deploymentAppLabel: deploymentMinioLabel}},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{{
-							Name:  DeploymentName,
-							Image: Image,
-							Env: []v1.EnvVar{
-								{Name: "MINIO_ROOT_USER", Value: rootUser},
-								{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
-							},
-							Ports: []v1.ContainerPort{
-								{ContainerPort: ServiceAPIPort},
-								{ContainerPort: ServiceWebUIPort},
-							},
-							VolumeMounts: []v1.VolumeMount{{
-								Name:      VolumeClaimName,
-								MountPath: VolumeMountPath,
-							}},
-							Command: []string{"minio", "server", VolumeMountPath},
-						}},
-						Volumes: []v1.Volume{{
-							Name: VolumeClaimName,
-							VolumeSource: v1.VolumeSource{
-								PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-									ClaimName: VolumeClaimName,
-								},
-							},
-						}},
-					},
-				},
-			},
-		}
-
-		_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				if err := m.updateMinioDeployment(ctx); err != nil {
-					return fmt.Errorf("failed to update existing Minio deployment: %v", err)
-				}
-			} else {
-				return fmt.Errorf("failed to create Minio deployment: %v", err)
-			}
-		}
-	}
-
-	if err = m.waitForMinio(ctx); err != nil {
+	if err := m.waitForMinio(ctx); err != nil {
 		return fmt.Errorf("failed waiting for Minio to be ready: %v", err)
 	}
 
 	if err := m.createOrUpdateService(ctx); err != nil {
-		return fmt.Errorf("failed to create Minio service: %v", err)
+		return fmt.Errorf("failed to create or update Minio service: %v", err)
 	}
 
 	if err := m.waitForMinioService(ctx); err != nil {
 		return fmt.Errorf("failed waiting for Minio service to be ready: %v", err)
 	}
 
-	logrus.Debug("Minio deployed successfully.")
+	logrus.Debug("Minio deployed or updated successfully.")
 	return nil
 }
 
-func (m *Minio) updateMinioDeployment(ctx context.Context) error {
+func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 	deploymentClient := m.Clientset.AppsV1().Deployments(m.Namespace)
 
-	minioDeployment, err := deploymentClient.Get(ctx, DeploymentName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get existing Minio deployment: %v", err)
+	// Define the Minio deployment
+	minioDeployment := &appsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      DeploymentName,
+			Namespace: m.Namespace,
+		},
+		Spec: appsV1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{deploymentAppLabel: deploymentMinioLabel},
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{deploymentAppLabel: deploymentMinioLabel}},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  DeploymentName,
+						Image: Image,
+						Env: []v1.EnvVar{
+							{Name: "MINIO_ROOT_USER", Value: rootUser},
+							{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
+						},
+						Ports: []v1.ContainerPort{
+							{ContainerPort: ServiceAPIPort},
+							{ContainerPort: ServiceWebUIPort},
+						},
+						VolumeMounts: []v1.VolumeMount{{
+							Name:      VolumeClaimName,
+							MountPath: VolumeMountPath,
+						}},
+						Command: []string{
+							"minio",
+							"server",
+							VolumeMountPath,
+							"--console-address=:9001",
+						},
+					}},
+					Volumes: []v1.Volume{{
+						Name: VolumeClaimName,
+						VolumeSource: v1.VolumeSource{
+							PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+								ClaimName: VolumeClaimName,
+							},
+						},
+					}},
+				},
+			},
+		},
 	}
 
-	// Update the deployment spec as needed
-	minioDeployment.Spec.Template.Spec.Containers[0].Image = Image
-	minioDeployment.Spec.Template.Spec.Containers[0].Env = []v1.EnvVar{
-		{Name: "MINIO_ROOT_USER", Value: rootUser},
-		{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
-	}
-	// Update the ports
-	minioDeployment.Spec.Template.Spec.Containers[0].Ports = []v1.ContainerPort{
-		{ContainerPort: ServiceAPIPort},
-		{ContainerPort: ServiceWebUIPort},
-	}
-
-	_, err = deploymentClient.Update(ctx, minioDeployment, metav1.UpdateOptions{})
+	// Check if the deployment already exists
+	_, err := deploymentClient.Get(ctx, DeploymentName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to update Minio deployment: %v", err)
+		if errors.IsNotFound(err) {
+			// Deployment does not exist, create it
+			if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
+				return fmt.Errorf("failed to create PVC: %v", err)
+			}
+			_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to create Minio deployment: %v", err)
+			}
+			logrus.Debug("Minio deployment created successfully.")
+		} else {
+			return fmt.Errorf("failed to get Minio deployment: %v", err)
+		}
+	} else {
+		// Deployment exists, update it
+		_, err = deploymentClient.Update(ctx, minioDeployment, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update Minio deployment: %v", err)
+		}
+		logrus.Debug("Minio deployment updated successfully.")
 	}
 
 	return nil
@@ -203,6 +186,36 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 	}
 
 	logrus.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
+	return nil
+}
+
+// DeleteFromMinio deletes a file from Minio and fails if the content does not exist
+func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName string) error {
+	endpoint, err := m.getEndpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get Minio endpoint: %v", err)
+	}
+
+	cli, err := miniogo.New(endpoint, &miniogo.Options{
+		Creds:  credentials.NewStaticV4(rootUser, rootPassword, ""),
+		Secure: false,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize Minio client: %v", err)
+	}
+
+	// Check if the object exists before attempting to delete
+	_, err = cli.StatObject(ctx, bucketName, minioFilePath, miniogo.StatObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to find file in Minio before deletion: %v", err)
+	}
+
+	err = cli.RemoveObject(ctx, bucketName, minioFilePath, miniogo.RemoveObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete file from Minio: %v", err)
+	}
+
+	logrus.Debugf("File %s deleted successfully from bucket %s", minioFilePath, bucketName)
 	return nil
 }
 
