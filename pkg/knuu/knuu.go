@@ -58,17 +58,18 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
+	err := k8s.Initialize()
+	if err != nil {
+		return err
+	}
+
+	// namespace where the tests will run
 	namespaceName, err := k8s.InitializeNamespace()
 	if err != nil {
 		namespaceName = "false"
 	}
 
 	logrus.Debugf("Use dedicated namespace: %s", namespaceName)
-
-	err = k8s.Initialize()
-	if err != nil {
-		return err
-	}
 
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
