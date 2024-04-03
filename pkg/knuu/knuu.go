@@ -63,14 +63,6 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 		return err
 	}
 
-	// namespace where the tests will run
-	namespaceName, err := k8s.InitializeNamespace()
-	if err != nil {
-		namespaceName = "false"
-	}
-
-	logrus.Debugf("Use dedicated namespace: %s", namespaceName)
-
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
 	if timeoutString == "" {
