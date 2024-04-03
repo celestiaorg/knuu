@@ -97,7 +97,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 			K8sNamespace: k8s.Namespace(),
 		})
 	default:
-		return fmt.Errorf("invalid KNUU_BUILDER value: %s", builderType)
+		return fmt.Errorf("invalid KNUU_BUILDER, available [kubernetes, docker], value used: %s", builderType)
 	}
 
 	return nil
