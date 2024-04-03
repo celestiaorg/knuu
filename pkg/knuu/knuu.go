@@ -160,12 +160,12 @@ func handleTimeout() error {
 		deleteNamespace := fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace())
 		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
 
-		cmd = fmt.Sprintf("&& %s && %s", cmd, deleteNamespace)
+		cmd = fmt.Sprintf("%s && %s", cmd, deleteNamespace)
 		command = append(command, cmd)
 	}
 
 	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace())
-	cmd = fmt.Sprintf("%s", deleteAll)
+	cmd = fmt.Sprintf("&& %s", deleteAll)
 	command = append(command, cmd)
 
 	if err := instance.SetCommand(command...); err != nil {
