@@ -22,7 +22,7 @@ const (
 )
 
 // InitializeNamespace sets up the namespace based on the KNUU_DEDICATED_NAMESPACE environment variable
-func InitializeNamespace() (string, error) {
+func InitializeNamespace(identifier string) (string, error) {
 	useDedicatedNamespace, err := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
 	if err != nil {
 		useDedicatedNamespace = false
@@ -31,8 +31,8 @@ func InitializeNamespace() (string, error) {
 	var namespaceName string
 	if useDedicatedNamespace {
 		// namespaceName get the random name
-		namespaceName = generateRandomString()
-		namespaceName = "knuu-" + sanitizeName(namespaceName)
+		//namespaceName = generateRandomString()
+		namespaceName = "knuu-" + sanitizeName(identifier)
 
 		logrus.Debugf("namespace random generated: %s", namespaceName)
 		if err := createNamespace(Clientset(), namespaceName); err != nil {

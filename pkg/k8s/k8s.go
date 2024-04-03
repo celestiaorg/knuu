@@ -27,7 +27,7 @@ var (
 )
 
 // Initialize sets up the Kubernetes client with the appropriate configuration.
-func Initialize() error {
+func Initialize(identifier strin) error {
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
 		return fmt.Errorf("retrieving the Kubernetes config: %w", err)
@@ -53,7 +53,7 @@ func Initialize() error {
 		logrus.Debugf("Using namespace from pod spec: %s", namespaceName)
 	} else if useDedicatedNamespace {
 		// If KNUU_DEDICATED_NAMESPACE is true, generate and use a dedicated namespace
-		namespaceName, err = InitializeNamespace()
+		namespaceName, err = InitializeNamespace(identifier)
 		if err != nil {
 			return fmt.Errorf("initializing dedicated namespace: %w", err)
 		}

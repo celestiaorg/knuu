@@ -69,7 +69,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 
 	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
 
-	err = k8s.Initialize()
+	err = k8s.Initialize(identifier)
 	if err != nil {
 		return err
 	}
