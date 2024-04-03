@@ -167,7 +167,7 @@ func handleTimeout() error {
 	}
 
 	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace())
-	cmd = fmt.Sprintf("&& %s", deleteAll)
+	cmd = fmt.Sprintf("%s", deleteAll)
 	command = append(command, cmd)
 
 	if err := instance.SetCommand(command...); err != nil {
