@@ -3,8 +3,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -16,23 +14,13 @@ import (
 
 // InitializeNamespace sets up the namespace based on the KNUU_DEDICATED_NAMESPACE environment variable
 func InitializeNamespace(identifier string) (string, error) {
-	useDedicatedNamespace, err := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
-	if err != nil {
-		useDedicatedNamespace = false
+	namespaceName := "knuu-" + sanitizeName(identifier)
+	logrus.Debugf("namespace random generated: %s", namespaceName)
+	if err := createNamespace(Clientset(), namespaceName); err != nil {
+		return "", fmt.Errorf("failed to create dedicated namespace: %v", err)
 	}
 
-	var namespaceName string
-	if useDedicatedNamespace {
-		namespaceName = "knuu-" + sanitizeName(identifier)
-		logrus.Debugf("namespace random generated: %s", namespaceName)
-		if err := createNamespace(Clientset(), namespaceName); err != nil {
-			return "", fmt.Errorf("failed to create dedicated namespace: %v", err)
-		}
-
-		logrus.Debugf("full namespace name generated: %s", namespaceName)
-	} else {
-		namespaceName = "test"
-	}
+	logrus.Debugf("full namespace name generated: %s", namespaceName)
 
 	return namespaceName, nil
 }
