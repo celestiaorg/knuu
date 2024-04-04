@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -140,37 +141,23 @@ func handleTimeout() error {
 	if err := instance.Commit(); err != nil {
 		return fmt.Errorf("cannot commit instance: %s", err)
 	}
-	timeoutSeconds := int64(timeout.Seconds())
 
 	// Check if KNUU_DEDICATED_NAMESPACE is true
-	useDedicatedNamespace, err := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
-	if err != nil {
-		useDedicatedNamespace = false
-	}
+	useDedicatedNamespace, _ := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
 
-	// command to wait for timeout and delete all resources with the identifier
-	var command = []string{"sh", "-c"}
-	// Command runs in-cluster to delete resources post-test. Chosen for simplicity over a separate Go app.
-	wait := fmt.Sprintf("sleep %d", timeoutSeconds)
-	deleteAllButTimeOutType := fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace())
-	cmd := fmt.Sprintf("%s && %s", wait, deleteAllButTimeOutType)
+	var commands []string
+	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
+	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
 
-	command = append(command, cmd)
-
-	// Delete namespace only if KNUU_DEDICATED_NAMESPACE is true
 	if useDedicatedNamespace {
-		deleteNamespace := fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace())
-		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
-
-		cmd = fmt.Sprintf("%s && %s &&", cmd, deleteNamespace)
-		command = append(command, cmd)
+		commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace()))
 	}
 
-	deleteAll := fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace())
-	cmd = fmt.Sprintf("%s", deleteAll)
-	command = append(command, cmd)
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace()))
 
-	if err := instance.SetCommand(command...); err != nil {
+	finalCmd := strings.Join(commands, " && ")
+
+	if err := instance.SetCommand("sh", "-c", finalCmd); err != nil {
 		return fmt.Errorf("cannot set command: %s", err)
 	}
 
