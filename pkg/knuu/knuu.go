@@ -149,7 +149,9 @@ func handleTimeout() error {
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
 
+	// Delete namespace only if KNUU_DEDICATED_NAMESPACE is true
 	if useDedicatedNamespace {
+		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
 		commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace()))
 	}
 
@@ -157,7 +159,9 @@ func handleTimeout() error {
 
 	finalCmd := strings.Join(commands, " && ")
 
+	// run the command
 	if err := instance.SetCommand("sh", "-c", finalCmd); err != nil {
+		logrus.Debugf("The full command generated is [%s]", finalCmd)
 		return fmt.Errorf("cannot set command: %s", err)
 	}
 
