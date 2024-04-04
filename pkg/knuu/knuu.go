@@ -142,24 +142,33 @@ func handleTimeout() error {
 		return fmt.Errorf("cannot commit instance: %s", err)
 	}
 
-	// Check if KNUU_DEDICATED_NAMESPACE is true
-	useDedicatedNamespace, _ := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
-
 	var commands []string
+
+	// Wait for a specific period before executing the next operation.
+	// This is useful to ensure that any previous operation has time to complete.
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
+	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
+	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
 
-	// Delete namespace only if KNUU_DEDICATED_NAMESPACE is true
+	// Get KNUU_DEDICATED_NAMESPACE from the environment
+	useDedicatedNamespace, _ := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
+
+	// If KNUU_DEDICATED_NAMESPACE is true, it indicates that a dedicated namespace is being used for this run.
+	// Therefore, if it is set to be deleted, this command will delete the dedicated namespace.
+	// This helps ensure that all resources within the namespace are deleted, and the namespace itself as well.
 	if useDedicatedNamespace {
 		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
 		commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace()))
 	}
 
+	// Delete all labeled resources within the namespace.
+	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
 	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
-	// run the command
+	// Run the command
 	if err := instance.SetCommand("sh", "-c", finalCmd); err != nil {
 		logrus.Debugf("The full command generated is [%s]", finalCmd)
 		return fmt.Errorf("cannot set command: %s", err)
