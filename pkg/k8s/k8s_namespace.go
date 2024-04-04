@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +37,13 @@ func createNamespace(clientset *kubernetes.Clientset, name string) error {
 
 	_, err := clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			fmt.Printf("Namespace %s already exists, continuing.\n", name)
+			return nil
+		}
 		return fmt.Errorf("error creating namespace %s: %v", name, err)
 	}
+
 	return nil
 }
 
