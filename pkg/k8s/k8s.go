@@ -51,7 +51,6 @@ func Initialize(identifier string) error {
 		namespaceName = string(namespaceBytes)
 		logrus.Debugf("Using namespace from pod spec: %s", namespaceName)
 	} else if useDedicatedNamespace {
-		// If KNUU_DEDICATED_NAMESPACE is true, generate and use a dedicated namespace
 		namespaceName, err = InitializeNamespace(identifier)
 		if err != nil {
 			return fmt.Errorf("initializing dedicated namespace: %w", err)
