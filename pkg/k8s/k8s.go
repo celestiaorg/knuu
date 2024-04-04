@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -110,4 +112,29 @@ func getClusterConfig() (*rest.Config, error) {
 // isNotFound checks if the error is a NotFound error
 func isNotFound(err error) bool {
 	return apierrs.IsNotFound(err)
+}
+
+// precompile the regular expression to avoid recompiling it on every function call
+var invalidCharsRegexp = regexp.MustCompile(`[^a-z0-9-]+`)
+
+// sanitizeName ensures compliance with Kubernetes DNS-1123 subdomain names. It:
+//  1. Converts the input string to lowercase.
+//  2. Replaces underscores and any non-DNS-1123 compliant characters with hyphens.
+//  3. Trims leading and trailing hyphens.
+//  4. Ensures the name does not exceed 63 characters, trimming excess characters if necessary
+//     and ensuring it does not end with a hyphen after trimming.
+//
+// Use this function to sanitize strings to be used as Kubernetes names for resources.
+func sanitizeName(name string) string {
+	sanitized := strings.ToLower(name)
+	// Replace underscores and any other disallowed characters with hyphens
+	sanitized = invalidCharsRegexp.ReplaceAllString(sanitized, "-")
+	// Trim leading and trailing hyphens
+	sanitized = strings.Trim(sanitized, "-")
+	if len(sanitized) > 63 {
+		sanitized = sanitized[:63]
+		// Ensure it does not end with a hyphen after cutting it to the max length
+		sanitized = strings.TrimRight(sanitized, "-")
+	}
+	return sanitized
 }

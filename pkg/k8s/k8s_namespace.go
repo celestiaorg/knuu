@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,16 +44,4 @@ func createNamespace(clientset *kubernetes.Clientset, name string) error {
 	}
 
 	return nil
-}
-
-// sanitizeName ensures that the namespace name complies with Kubernetes restrictions
-func sanitizeName(name string) string {
-	sanitized := strings.ToLower(name)
-	sanitized = strings.ReplaceAll(sanitized, "_", "-")
-
-	if len(sanitized) > 63 {
-		sanitized = sanitized[:63]
-	}
-
-	return sanitized
 }
