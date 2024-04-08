@@ -105,6 +105,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	return nil
 }
 
+// setupLogging Configures the log
 func setupLogging() {
 	// Set the default log level
 	logrus.SetLevel(logrus.InfoLevel)
