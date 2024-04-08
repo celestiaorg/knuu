@@ -4,6 +4,8 @@ package knuu
 import (
 	"fmt"
 	"os"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -49,18 +51,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	t := time.Now()
 	startTime = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 
-	switch os.Getenv("LOG_LEVEL") {
-	case "debug":
-		logrus.SetLevel(logrus.DebugLevel)
-	case "info":
-		logrus.SetLevel(logrus.InfoLevel)
-	case "warn":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "error":
-		logrus.SetLevel(logrus.ErrorLevel)
-	default:
-		logrus.SetLevel(logrus.InfoLevel)
-	}
+	setupLogging()
 
 	useDedicatedNamespaceEnv := os.Getenv("KNUU_DEDICATED_NAMESPACE")
 	useDedicatedNamespace, err := strconv.ParseBool(useDedicatedNamespaceEnv)
@@ -112,6 +103,39 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	}
 
 	return nil
+}
+
+func setupLogging() {
+	// Set the default log level
+	logrus.SetLevel(logrus.InfoLevel)
+
+	// Set the custom formatter
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			filename := path.Base(f.File)
+			directory := path.Base(path.Dir(f.File))
+			return "", directory + "/" + filename + ":" + strconv.Itoa(f.Line)
+		},
+	})
+
+	// Enable reporting the file and line
+	logrus.SetReportCaller(true)
+
+	switch os.Getenv("LOG_LEVEL") {
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+	case "info":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "warn":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
+	default:
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
+	logrus.Info("LOG_LEVEL: ", logrus.GetLevel())
 }
 
 func SetImageBuilder(b builder.Builder) {
