@@ -491,10 +491,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 }
 
 // AddFolder adds a folder to the instance
-// This function can only be called in the state 'Preparing'
+// This function can only be called in the state 'Committed'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding folder is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Committed) {
+		return fmt.Errorf("adding folder is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
 	}
 
 	i.validateFileArgs(src, dest, chown)
