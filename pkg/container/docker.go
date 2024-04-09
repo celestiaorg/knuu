@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -13,10 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
 )
 
 const (
@@ -249,4 +251,16 @@ func runCommand(cmd *exec.Cmd) error {
 		return fmt.Errorf("command failed: %s\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 	}
 	return nil
+}
+
+// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions.
+func (f *BuilderFactory) GenerateImageHash() (string, error) {
+	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
+	hasher := sha256.New()
+	_, err := hasher.Write([]byte(dockerFileContent))
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
