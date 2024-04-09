@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/celestiaorg/bittwister/sdk"
+
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -576,6 +577,20 @@ func (i *Instance) SetUser(user string) error {
 	return nil
 }
 
+// imageCache maps image hash values to image names
+var imageCache = make(map[string]string)
+
+// checkImageHashInCache checks if the given image hash exists in the cache.
+func checkImageHashInCache(imageHash string) (imageName string, exists bool) {
+	imageName, exists = imageCache[imageHash]
+	return imageName, exists
+}
+
+// updateImageCacheWithHash adds or updates the image cache with the given hash and image name.
+func updateImageCacheWithHash(imageHash, imageName string) {
+	imageCache[imageHash] = imageName // Update the cache with the new hash and image name
+}
+
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
@@ -588,12 +603,28 @@ func (i *Instance) Commit() error {
 		if err != nil {
 			return fmt.Errorf("error getting image registry: %w", err)
 		}
-		err = i.builderFactory.PushBuilderImage(imageName)
+
+		// Generate a hash for the current image
+		imageHash, err := i.builderFactory.GenerateImageHash()
 		if err != nil {
-			return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+			return fmt.Errorf("error generating image hash: %w", err)
 		}
-		i.imageName = imageName
-		logrus.Debugf("Pushed image for instance '%s'", i.name)
+
+		// Check if the generated image hash already exists in the cache, otherwise, we build it.
+		cachedImageName, exists := checkImageHashInCache(imageHash)
+		if exists {
+			i.imageName = cachedImageName
+			logrus.Debugf("Using cached image for instance '%s'", i.name)
+		} else {
+			logrus.Debugf("Cannot use any cached image for instance '%s'", i.name)
+			err = i.builderFactory.PushBuilderImage(imageName)
+			if err != nil {
+				return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+			}
+			updateImageCacheWithHash(imageHash, imageName)
+			i.imageName = imageName
+			logrus.Debugf("Pushed new image for instance '%s'", i.name)
+		}
 	} else {
 		i.imageName = i.builderFactory.ImageNameFrom()
 		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
