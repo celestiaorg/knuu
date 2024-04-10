@@ -28,12 +28,12 @@ type ObsyConfig struct {
 	// otelCollectorVersion is the version of the otel collector to use
 	otelCollectorVersion string
 
-	// prometheusPort is the port on which the prometheus server will be exposed
-	prometheusPort int
-	// prometheusJobName is the name of the prometheus job
-	prometheusJobName string
-	// prometheusScrapeInterval is the scrape interval for the prometheus job
-	prometheusScrapeInterval string
+	// prometheusEndpointPort is the port on which the prometheus server will be exposed
+	prometheusEndpointPort int
+	// prometheusEndpointJobName is the name of the prometheus job
+	prometheusEndpointJobName string
+	// prometheusEndpointScrapeInterval is the scrape interval for the prometheus job
+	prometheusEndpointScrapeInterval string
 
 	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
 	jaegerGrpcPort int
@@ -52,6 +52,12 @@ type ObsyConfig struct {
 	otlpUsername string
 	// otlpPassword is the password to use for the otlp collector
 	otlpPassword string
+
+	// prometheusExporterEndpoint is the endpoint of the prometheus exporter
+	prometheusExporterEndpoint string
+
+	// prometheusRemoteWriteExporterEndpoint is the endpoint of the prometheus remote write
+	prometheusRemoteWriteExporterEndpoint string
 }
 
 // SecurityContext represents the security settings for a container
@@ -105,18 +111,20 @@ func NewInstance(name string) (*Instance, error) {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
 	}
 	obsyConfig := &ObsyConfig{
-		otelCollectorVersion:     "0.83.0",
-		otlpPort:                 0,
-		prometheusPort:           0,
-		prometheusJobName:        "",
-		prometheusScrapeInterval: "",
-		jaegerGrpcPort:           0,
-		jaegerThriftCompactPort:  0,
-		jaegerThriftHttpPort:     0,
-		otlpEndpoint:             "",
-		otlpUsername:             "",
-		otlpPassword:             "",
-		jaegerEndpoint:           "",
+		otelCollectorVersion:                  "0.83.0",
+		otlpPort:                              0,
+		prometheusEndpointPort:                0,
+		prometheusEndpointJobName:             "",
+		prometheusEndpointScrapeInterval:      "",
+		jaegerGrpcPort:                        0,
+		jaegerThriftCompactPort:               0,
+		jaegerThriftHttpPort:                  0,
+		otlpEndpoint:                          "",
+		otlpUsername:                          "",
+		otlpPassword:                          "",
+		jaegerEndpoint:                        "",
+		prometheusExporterEndpoint:            "",
+		prometheusRemoteWriteExporterEndpoint: "",
 	}
 	securityContext := &SecurityContext{
 		privileged:      false,
@@ -858,9 +866,9 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
 		return err
 	}
-	i.obsyConfig.prometheusPort = port
-	i.obsyConfig.prometheusJobName = jobName
-	i.obsyConfig.prometheusScrapeInterval = scapeInterval
+	i.obsyConfig.prometheusEndpointPort = port
+	i.obsyConfig.prometheusEndpointJobName = jobName
+	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
 	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
@@ -899,6 +907,28 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
 	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetPrometheusExporter sets the Prometheus exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetPrometheusRemoteWriteExporter sets the Prometheus remote write exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus remote write exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 

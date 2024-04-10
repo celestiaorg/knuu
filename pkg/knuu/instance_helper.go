@@ -552,7 +552,7 @@ func setStateForSidecars(sidecars []*Instance, state InstanceState) {
 
 // isObservabilityEnabled returns true if observability is enabled
 func (i *Instance) isObservabilityEnabled() bool {
-	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
+	return i.obsyConfig.otlpPort != 0 || i.obsyConfig.prometheusEndpointPort != 0 || i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0
 }
 
 func (i *Instance) validateStateForObsy(endpoint string) error {
