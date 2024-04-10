@@ -32,7 +32,7 @@ type BuilderFactory struct {
 	imageBuilder           builder.Builder
 	cli                    *client.Client
 	dockerFileInstructions []string
-	context                string
+	buildContext           string
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
@@ -45,7 +45,7 @@ func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Buil
 		imageNameFrom:          imageName,
 		cli:                    cli,
 		dockerFileInstructions: []string{"FROM " + imageName},
-		context:                buildContext,
+		buildContext:           buildContext,
 		imageBuilder:           imageBuilder,
 	}, nil
 }
@@ -170,10 +170,10 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 
 	f.imageNameTo = imageName
 
-	dockerFilePath := filepath.Join(f.context, "Dockerfile")
+	dockerFilePath := filepath.Join(f.buildContext, "Dockerfile")
 	// create path if it does not exist
-	if _, err := os.Stat(f.context); os.IsNotExist(err) {
-		err = os.MkdirAll(f.context, 0755)
+	if _, err := os.Stat(f.buildContext); os.IsNotExist(err) {
+		err = os.MkdirAll(f.buildContext, 0755)
 		if err != nil {
 			return fmt.Errorf("failed to create context directory: %w", err)
 		}
@@ -189,7 +189,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
-		BuildContext: builder.DirContext{Path: f.context}.BuildContext(),
+		BuildContext: builder.DirContext{Path: f.buildContext}.BuildContext(),
 	})
 
 	qStatus := logrus.TextFormatter{}.DisableQuote
@@ -253,14 +253,39 @@ func runCommand(cmd *exec.Cmd) error {
 	return nil
 }
 
-// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions.
+// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions and all files in the build context.
 func (f *BuilderFactory) GenerateImageHash() (string, error) {
-	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
 	hasher := sha256.New()
+
+	// Hash Dockerfile content
+	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
 	_, err := hasher.Write([]byte(dockerFileContent))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error hashing Dockerfile content: %w", err)
 	}
+
+	// Hash contents of all files in the build context
+	err = filepath.Walk(f.buildContext, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("error reading file %s: %w", path, err)
+			}
+			_, err = hasher.Write(fileContent)
+			if err != nil {
+				return fmt.Errorf("error hashing file %s: %w", path, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error hashing build context: %w", err)
+	}
+
+	logrus.Debug("Generated image hash: ", fmt.Sprintf("%x", hasher.Sum(nil)))
 
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
