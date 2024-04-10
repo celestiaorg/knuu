@@ -253,14 +253,39 @@ func runCommand(cmd *exec.Cmd) error {
 	return nil
 }
 
-// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions.
+// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions and all files in the build context.
 func (f *BuilderFactory) GenerateImageHash() (string, error) {
-	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
 	hasher := sha256.New()
+
+	// Hash Dockerfile content
+	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
 	_, err := hasher.Write([]byte(dockerFileContent))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error hashing Dockerfile content: %w", err)
 	}
+
+	// Hash contents of all files in the build context
+	err = filepath.Walk(f.context, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("error reading file %s: %w", path, err)
+			}
+			_, err = hasher.Write(fileContent)
+			if err != nil {
+				return fmt.Errorf("error hashing file %s: %w", path, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error hashing build context: %w", err)
+	}
+
+	logrus.Debug("Generated image hash: ", fmt.Sprintf("%x", hasher.Sum(nil)))
 
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
