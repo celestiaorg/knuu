@@ -41,6 +41,10 @@ func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Buil
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
+	err = os.MkdirAll(buildContext, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create context directory: %w", err)
+	}
 	return &BuilderFactory{
 		imageNameFrom:          imageName,
 		cli:                    cli,
