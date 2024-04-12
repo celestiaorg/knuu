@@ -21,50 +21,66 @@ import (
 )
 
 var (
-	// identifier is the identifier of the current knuu instance
-	identifier   string
-	startTime    string
-	timeout      time.Duration
-	imageBuilder builder.Builder
+	// testScope is the testScope of the current knuu instance
+	testScope string
+	// namespaceCreated is true if the namespace was created by knuu and false if it already existed
+	namespaceCreated bool
+	startTime        string
+	timeout          time.Duration
+	imageBuilder     builder.Builder
 )
 
-// Initialize initializes knuug
+// Initialize initializes knuu with a unique scope
 func Initialize() error {
 	t := time.Now()
-	identifier = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
-	return InitializeWithIdentifier(identifier)
+	scope := fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+	return InitializeWithScope(scope)
 }
 
-// Identifier returns the identifier of the current knuu instance
-func Identifier() string {
-	return identifier
+// Scope returns the scope of the current knuu instance
+func Scope() string {
+	return testScope
 }
 
-// InitializeWithIdentifier initializes knuu with a unique identifier
-// Default timeout is 60 minutes and can be changed by setting the KNUU_TIMEOUT environment variable
-func InitializeWithIdentifier(uniqueIdentifier string) error {
-	if uniqueIdentifier == "" {
-		return fmt.Errorf("cannot initialize knuu with empty identifier")
+// InitializeWithScope initializes knuu with a given scope
+func InitializeWithScope(scope string) error {
+	if scope == "" {
+		return fmt.Errorf("cannot initialize knuu with empty scope")
 	}
-	identifier = uniqueIdentifier
+
+	testScope = scope
 
 	t := time.Now()
 	startTime = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 
 	setupLogging()
 
-	useDedicatedNamespaceEnv := os.Getenv("KNUU_DEDICATED_NAMESPACE")
-	useDedicatedNamespace, err := strconv.ParseBool(useDedicatedNamespaceEnv)
-	if err != nil {
-		useDedicatedNamespace = false
+	// Override scope if KNUU_NAMESPACE is set
+	namespaceEnv := os.Getenv("KNUU_NAMESPACE")
+	if namespaceEnv != "" {
+		scope = namespaceEnv
+		logrus.Warnf("KNUU_NAMESPACE is deprecated. Scope overridden to: %s", scope)
 	}
 
-	logrus.Debugf("Use dedicated namespace: %t", useDedicatedNamespace)
+	logrus.Infof("Initializing knuu with scope: %s", scope)
 
-	err = k8s.Initialize(identifier)
+	err := k8s.Initialize()
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot initialize k8s: %s", err)
 	}
+
+	namespace := scope
+	namespaceExists := k8s.NamespaceExists(namespace)
+
+	if !namespaceExists {
+		namespaceCreated = true
+		err := k8s.CreateNamespace(namespace)
+		if err != nil {
+			return fmt.Errorf("creating namespace %s: %w", namespace, err)
+		}
+	}
+
+	k8s.SetNamespace(namespace)
 
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
@@ -103,6 +119,18 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	}
 
 	return nil
+}
+
+// Deprecated: Identifier is deprecated, use Scope() instead.
+func Identifier() string {
+	logrus.Warn("Identifier() is deprecated, use Scope() instead.")
+	return Scope()
+}
+
+// Deprecated: InitializeWithIdentifier is deprecated, use InitializeWithScope(scope string) instead.
+func InitializeWithIdentifier(uniqueIdentifier string) error {
+	logrus.Warn("InitializeWithIdentifier is deprecated, use InitializeWithScope(scope string) instead.")
+	return InitializeWithScope(uniqueIdentifier)
 }
 
 // setupLogging Configures the log
@@ -152,7 +180,7 @@ func IsInitialized() bool {
 	return k8s.IsInitialized()
 }
 
-// handleTimeout creates a timeout handler that will delete all resources with the identifier after the timeout
+// handleTimeout creates a timeout handler that will delete all resources with the scope after the timeout
 func handleTimeout() error {
 	instance, err := NewInstance("timeout-handler")
 	if err != nil {
@@ -174,22 +202,17 @@ func handleTimeout() error {
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
-	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", identifier, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", testScope, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
 
-	// Get KNUU_DEDICATED_NAMESPACE from the environment
-	useDedicatedNamespace, _ := strconv.ParseBool(os.Getenv("KNUU_DEDICATED_NAMESPACE"))
-
-	// If KNUU_DEDICATED_NAMESPACE is true, it indicates that a dedicated namespace is being used for this run.
-	// Therefore, if it is set to be deleted, this command will delete the dedicated namespace.
-	// This helps ensure that all resources within the namespace are deleted, and the namespace itself as well.
-	if useDedicatedNamespace {
+	// Delete the namespace if it was created by knuu.
+	if namespaceCreated {
 		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
 		commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace()))
 	}
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/test-run-id=%s -n %s", identifier, k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", testScope, k8s.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 

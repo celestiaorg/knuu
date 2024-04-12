@@ -3,6 +3,7 @@ package knuu
 import (
 	"fmt"
 
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"gopkg.in/yaml.v3"
 )
 
@@ -122,6 +123,16 @@ type TLS struct {
 type Service struct {
 	Extensions []string  `yaml:"extensions,omitempty"`
 	Pipelines  Pipelines `yaml:"pipelines,omitempty"`
+	Telemetry  Telemetry `yaml:"telemetry,omitempty"` // Added Telemetry field
+}
+
+type Telemetry struct {
+	Metrics MetricsTelemetry `yaml:"metrics,omitempty"`
+}
+
+type MetricsTelemetry struct {
+	Address string `yaml:"address,omitempty"`
+	Level   string `yaml:"level,omitempty"` // Options are basic, normal, detailed
 }
 
 type Pipelines struct {
@@ -130,8 +141,9 @@ type Pipelines struct {
 }
 
 type Metrics struct {
-	Receivers []string `yaml:"receivers,omitempty"`
-	Exporters []string `yaml:"exporters,omitempty"`
+	Receivers  []string `yaml:"receivers,omitempty"`
+	Exporters  []string `yaml:"exporters,omitempty"`
+	Processors []string `yaml:"processors,omitempty"`
 }
 
 type Traces struct {
@@ -143,6 +155,7 @@ type Traces struct {
 type Processors struct {
 	Batch         Batch         `yaml:"batch,omitempty"`
 	MemoryLimiter MemoryLimiter `yaml:"memory_limiter,omitempty"`
+	Attributes    Attributes    `yaml:"attributes,omitempty"`
 }
 
 type Batch struct{}
@@ -151,6 +164,16 @@ type MemoryLimiter struct {
 	LimitMiB      int    `yaml:"limit_mib,omitempty"`
 	SpikeLimitMiB int    `yaml:"spike_limit_mib,omitempty"`
 	CheckInterval string `yaml:"check_interval,omitempty"`
+}
+
+type Attributes struct {
+	Actions []Action `yaml:"actions,omitempty"`
+}
+
+type Action struct {
+	Key    string `yaml:"key,omitempty"`
+	Value  string `yaml:"value,omitempty"`
+	Action string `yaml:"action,omitempty"`
 }
 
 func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
@@ -237,6 +260,15 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 					StaticConfigs: []StaticConfig{
 						{
 							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
+						},
+					},
+				},
+				{
+					JobName:        "internal-telemetry",
+					ScrapeInterval: "10s",
+					StaticConfigs: []StaticConfig{
+						{
+							Targets: []string{"localhost:8888"},
 						},
 					},
 				},
@@ -349,6 +381,7 @@ func (i *Instance) prepareMetricsForServicePipeline() Metrics {
 	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
 		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
 	}
+	metrics.Processors = []string{"attributes"}
 	return metrics
 }
 
@@ -366,6 +399,7 @@ func (i *Instance) prepareTracesForServicePipeline() Traces {
 	if i.obsyConfig.jaegerEndpoint != "" {
 		traces.Exporters = append(traces.Exporters, "jaeger")
 	}
+	traces.Processors = []string{"attributes"}
 	return traces
 }
 
@@ -379,22 +413,31 @@ func (i *Instance) createService() Service {
 	pipelines.Metrics = i.prepareMetricsForServicePipeline()
 	pipelines.Traces = i.prepareTracesForServicePipeline()
 
+	telemetry := Telemetry{
+		Metrics: MetricsTelemetry{
+			Address: "localhost:8888",
+			Level:   "basic",
+		},
+	}
+
 	return Service{
 		Extensions: extensions,
 		Pipelines:  pipelines,
+		Telemetry:  telemetry,
 	}
 }
 
 func (i *Instance) createProcessors() Processors {
 	processors := Processors{}
 
-	if i.obsyConfig.jaegerGrpcPort != 0 {
-		processors.Batch = Batch{}
-		processors.MemoryLimiter = MemoryLimiter{
-			LimitMiB:      400,
-			SpikeLimitMiB: 100,
-			CheckInterval: "5s",
-		}
+	processors.Attributes = Attributes{
+		Actions: []Action{
+			{
+				Key:    "namespace",
+				Value:  k8s.Namespace(),
+				Action: "insert",
+			},
+		},
 	}
 
 	return processors
