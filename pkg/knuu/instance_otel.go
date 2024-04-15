@@ -2,6 +2,7 @@ package knuu
 
 import (
 	"fmt"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,8 +86,10 @@ type JaegerThriftHTTP struct {
 }
 
 type Exporters struct {
-	OTLPHTTP OTLPHTTPExporter `yaml:"otlphttp,omitempty"`
-	Jaeger   JaegerExporter   `yaml:"jaeger,omitempty"`
+	OTLPHTTP              OTLPHTTPExporter              `yaml:"otlphttp,omitempty"`
+	Jaeger                JaegerExporter                `yaml:"jaeger,omitempty"`
+	Prometheus            PrometheusExporter            `yaml:"prometheus,omitempty"`
+	PrometheusRemoteWrite PrometheusRemoteWriteExporter `yaml:"prometheusremotewrite,omitempty"`
 }
 
 type OTLPHTTPExporter struct {
@@ -99,6 +102,15 @@ type OTLPAuth struct {
 }
 
 type JaegerExporter struct {
+	Endpoint string `yaml:"endpoint,omitempty"`
+	TLS      TLS    `yaml:"tls,omitempty"`
+}
+
+type PrometheusExporter struct {
+	Endpoint string `yaml:"endpoint,omitempty"`
+}
+
+type PrometheusRemoteWriteExporter struct {
 	Endpoint string `yaml:"endpoint,omitempty"`
 	TLS      TLS    `yaml:"tls,omitempty"`
 }
@@ -220,11 +232,11 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 		Config: PrometheusConfig{
 			ScrapeConfigs: []ScrapeConfig{
 				{
-					JobName:        i.obsyConfig.prometheusJobName,
-					ScrapeInterval: i.obsyConfig.prometheusScrapeInterval,
+					JobName:        i.obsyConfig.prometheusEndpointJobName,
+					ScrapeInterval: i.obsyConfig.prometheusEndpointScrapeInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusPort)},
+							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
 						},
 					},
 				},
@@ -254,7 +266,7 @@ func (i *Instance) createReceivers() Receivers {
 		receivers.OTLP = i.createOtlpReceiver()
 	}
 
-	if i.obsyConfig.prometheusPort != 0 {
+	if i.obsyConfig.prometheusEndpointPort != 0 {
 		receivers.Prometheus = i.createPrometheusReceiver()
 	}
 
@@ -283,6 +295,21 @@ func (i *Instance) createJaegerExporter() JaegerExporter {
 	}
 }
 
+func (i *Instance) createPrometheusExporter() PrometheusExporter {
+	return PrometheusExporter{
+		Endpoint: i.obsyConfig.prometheusExporterEndpoint,
+	}
+}
+
+func (i *Instance) createPrometheusRemoteWriteExporter() PrometheusRemoteWriteExporter {
+	return PrometheusRemoteWriteExporter{
+		Endpoint: i.obsyConfig.prometheusRemoteWriteExporterEndpoint,
+		TLS: TLS{
+			Insecure: true,
+		},
+	}
+}
+
 func (i *Instance) createExporters() Exporters {
 	exporters := Exporters{}
 
@@ -294,6 +321,14 @@ func (i *Instance) createExporters() Exporters {
 		exporters.Jaeger = i.createJaegerExporter()
 	}
 
+	if i.obsyConfig.prometheusEndpointPort != 0 {
+		exporters.Prometheus = i.createPrometheusExporter()
+	}
+
+	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		exporters.PrometheusRemoteWrite = i.createPrometheusRemoteWriteExporter()
+	}
+
 	return exporters
 }
 
@@ -302,11 +337,17 @@ func (i *Instance) prepareMetricsForServicePipeline() Metrics {
 	if i.obsyConfig.otlpPort != 0 {
 		metrics.Receivers = append(metrics.Receivers, "otlp")
 	}
-	if i.obsyConfig.prometheusPort != 0 {
+	if i.obsyConfig.prometheusEndpointPort != 0 {
 		metrics.Receivers = append(metrics.Receivers, "prometheus")
 	}
 	if i.obsyConfig.otlpEndpoint != "" {
 		metrics.Exporters = append(metrics.Exporters, "otlphttp")
+	}
+	if i.obsyConfig.prometheusExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, "prometheus")
+	}
+	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
 	}
 	return metrics
 }

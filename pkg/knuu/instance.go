@@ -10,14 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/celestiaorg/bittwister/sdk"
-	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/container"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/bittwister/sdk"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/container"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -25,12 +28,12 @@ type ObsyConfig struct {
 	// otelCollectorVersion is the version of the otel collector to use
 	otelCollectorVersion string
 
-	// prometheusPort is the port on which the prometheus server will be exposed
-	prometheusPort int
-	// prometheusJobName is the name of the prometheus job
-	prometheusJobName string
-	// prometheusScrapeInterval is the scrape interval for the prometheus job
-	prometheusScrapeInterval string
+	// prometheusEndpointPort is the port on which the prometheus server will be exposed
+	prometheusEndpointPort int
+	// prometheusEndpointJobName is the name of the prometheus job
+	prometheusEndpointJobName string
+	// prometheusEndpointScrapeInterval is the scrape interval for the prometheus job
+	prometheusEndpointScrapeInterval string
 
 	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
 	jaegerGrpcPort int
@@ -49,6 +52,12 @@ type ObsyConfig struct {
 	otlpUsername string
 	// otlpPassword is the password to use for the otlp collector
 	otlpPassword string
+
+	// prometheusExporterEndpoint is the endpoint of the prometheus exporter
+	prometheusExporterEndpoint string
+
+	// prometheusRemoteWriteExporterEndpoint is the endpoint of the prometheus remote write
+	prometheusRemoteWriteExporterEndpoint string
 }
 
 // SecurityContext represents the security settings for a container
@@ -62,35 +71,35 @@ type SecurityContext struct {
 
 // Instance represents a instance
 type Instance struct {
-	name                  string
-	imageName             string
-	k8sName               string
-	state                 InstanceState
-	instanceType          InstanceType
-	kubernetesService     *v1.Service
-	builderFactory        *container.BuilderFactory
-	kubernetesStatefulSet *appv1.StatefulSet
-	portsTCP              []int
-	portsUDP              []int
-	command               []string
-	args                  []string
-	env                   map[string]string
-	volumes               []*k8s.Volume
-	memoryRequest         string
-	memoryLimit           string
-	cpuRequest            string
-	policyRules           []rbacv1.PolicyRule
-	livenessProbe         *v1.Probe
-	readinessProbe        *v1.Probe
-	startupProbe          *v1.Probe
-	files                 []*k8s.File
-	isSidecar             bool
-	parentInstance        *Instance
-	sidecars              []*Instance
-	fsGroup               int64
-	obsyConfig            *ObsyConfig
-	securityContext       *SecurityContext
-	BitTwister            *btConfig
+	name                 string
+	imageName            string
+	k8sName              string
+	state                InstanceState
+	instanceType         InstanceType
+	kubernetesService    *v1.Service
+	builderFactory       *container.BuilderFactory
+	kubernetesReplicaSet *appv1.ReplicaSet
+	portsTCP             []int
+	portsUDP             []int
+	command              []string
+	args                 []string
+	env                  map[string]string
+	volumes              []*k8s.Volume
+	memoryRequest        string
+	memoryLimit          string
+	cpuRequest           string
+	policyRules          []rbacv1.PolicyRule
+	livenessProbe        *v1.Probe
+	readinessProbe       *v1.Probe
+	startupProbe         *v1.Probe
+	files                []*k8s.File
+	isSidecar            bool
+	parentInstance       *Instance
+	sidecars             []*Instance
+	fsGroup              int64
+	obsyConfig           *ObsyConfig
+	securityContext      *SecurityContext
+	BitTwister           *btConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -102,18 +111,20 @@ func NewInstance(name string) (*Instance, error) {
 		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
 	}
 	obsyConfig := &ObsyConfig{
-		otelCollectorVersion:     "0.83.0",
-		otlpPort:                 0,
-		prometheusPort:           0,
-		prometheusJobName:        "",
-		prometheusScrapeInterval: "",
-		jaegerGrpcPort:           0,
-		jaegerThriftCompactPort:  0,
-		jaegerThriftHttpPort:     0,
-		otlpEndpoint:             "",
-		otlpUsername:             "",
-		otlpPassword:             "",
-		jaegerEndpoint:           "",
+		otelCollectorVersion:                  "0.83.0",
+		otlpPort:                              0,
+		prometheusEndpointPort:                0,
+		prometheusEndpointJobName:             "",
+		prometheusEndpointScrapeInterval:      "",
+		jaegerGrpcPort:                        0,
+		jaegerThriftCompactPort:               0,
+		jaegerThriftHttpPort:                  0,
+		otlpEndpoint:                          "",
+		otlpUsername:                          "",
+		otlpPassword:                          "",
+		jaegerEndpoint:                        "",
+		prometheusExporterEndpoint:            "",
+		prometheusRemoteWriteExporterEndpoint: "",
 	}
 	securityContext := &SecurityContext{
 		privileged:      false,
@@ -304,9 +315,9 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 		return -1, fmt.Errorf("error getting free port: %v", err)
 	}
 	// Forward the port
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), i.k8sName)
 	if err != nil {
-		return -1, fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return -1, fmt.Errorf("error getting pod from replicaset '%s': %v", i.k8sName, err)
 	}
 	// We need to retry here because the port forwarding might fail as getFreePortTCP() might not free the port fast enough
 	retries := 5
@@ -382,9 +393,9 @@ func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...str
 		errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
 	}
 
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), instanceName)
 	if err != nil {
-		return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return "", fmt.Errorf("error getting pod from replicaset '%s': %v", i.k8sName, err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
@@ -488,10 +499,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 }
 
 // AddFolder adds a folder to the instance
-// This function can only be called in the state 'Preparing'
+// This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding folder is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed) {
+		return fmt.Errorf("adding folder is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
 	i.validateFileArgs(src, dest, chown)
@@ -574,6 +585,20 @@ func (i *Instance) SetUser(user string) error {
 	return nil
 }
 
+// imageCache maps image hash values to image names
+var imageCache = make(map[string]string)
+
+// checkImageHashInCache checks if the given image hash exists in the cache.
+func checkImageHashInCache(imageHash string) (imageName string, exists bool) {
+	imageName, exists = imageCache[imageHash]
+	return imageName, exists
+}
+
+// updateImageCacheWithHash adds or updates the image cache with the given hash and image name.
+func updateImageCacheWithHash(imageHash, imageName string) {
+	imageCache[imageHash] = imageName // Update the cache with the new hash and image name
+}
+
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
@@ -586,12 +611,28 @@ func (i *Instance) Commit() error {
 		if err != nil {
 			return fmt.Errorf("error getting image registry: %w", err)
 		}
-		err = i.builderFactory.PushBuilderImage(imageName)
+
+		// Generate a hash for the current image
+		imageHash, err := i.builderFactory.GenerateImageHash()
 		if err != nil {
-			return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+			return fmt.Errorf("error generating image hash: %w", err)
 		}
-		i.imageName = imageName
-		logrus.Debugf("Pushed image for instance '%s'", i.name)
+
+		// Check if the generated image hash already exists in the cache, otherwise, we build it.
+		cachedImageName, exists := checkImageHashInCache(imageHash)
+		if exists {
+			i.imageName = cachedImageName
+			logrus.Debugf("Using cached image for instance '%s'", i.name)
+		} else {
+			logrus.Debugf("Cannot use any cached image for instance '%s'", i.name)
+			err = i.builderFactory.PushBuilderImage(imageName)
+			if err != nil {
+				return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+			}
+			updateImageCacheWithHash(imageHash, imageName)
+			i.imageName = imageName
+			logrus.Debugf("Pushed new image for instance '%s'", i.name)
+		}
 	} else {
 		i.imageName = i.builderFactory.ImageNameFrom()
 		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
@@ -825,9 +866,9 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
 		return err
 	}
-	i.obsyConfig.prometheusPort = port
-	i.obsyConfig.prometheusJobName = jobName
-	i.obsyConfig.prometheusScrapeInterval = scapeInterval
+	i.obsyConfig.prometheusEndpointPort = port
+	i.obsyConfig.prometheusEndpointJobName = jobName
+	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
 	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
@@ -866,6 +907,28 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
 	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetPrometheusExporter sets the Prometheus exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetPrometheusRemoteWriteExporter sets the Prometheus remote write exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus remote write exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -978,7 +1041,7 @@ func (i *Instance) IsRunning() (bool, error) {
 	if !i.IsInState(Started, Stopped) {
 		return false, fmt.Errorf("checking if instance is running is only allowed in state 'Started'. Current state is '%s'", i.state.String())
 	}
-	return k8s.IsStatefulSetRunning(k8s.Namespace(), i.k8sName)
+	return k8s.IsReplicaSetRunning(k8s.Namespace(), i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running

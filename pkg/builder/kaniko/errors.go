@@ -44,4 +44,5 @@ var (
 	ErrMountingDir                      = &Error{Code: "MountingDir", Message: "error mounting directory"}
 	ErrMinioNotConfigured               = &Error{Code: "MinioNotConfigured", Message: "Minio service is not configured"}
 	ErrMinioDeploymentFailed            = &Error{Code: "MinioDeploymentFailed", Message: "Minio deployment failed"}
+	ErrDeletingMinioContent             = &Error{Code: "DeletingMinioContent", Message: "error deleting Minio content"}
 )
