@@ -5,43 +5,67 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/api/errors"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
-// InitializeNamespace sets up the namespace based on the KNUU_DEDICATED_NAMESPACE environment variable
-func InitializeNamespace(identifier string) (string, error) {
-	namespaceName := "knuu-" + sanitizeName(identifier)
-	logrus.Debugf("namespace random generated: %s", namespaceName)
-	if err := createNamespace(Clientset(), namespaceName); err != nil {
-		return "", fmt.Errorf("failed to create dedicated namespace: %v", err)
-	}
+// CreateNamespace creates a new namespace if it does not exist
+func CreateNamespace(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	logrus.Debugf("full namespace name generated: %s", namespaceName)
-
-	return namespaceName, nil
-}
-
-// createNamespace creates a new namespace if it does not exist
-func createNamespace(clientset *kubernetes.Clientset, name string) error {
-	ctx := context.TODO()
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 	}
 
-	_, err := clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
+	_, err := Clientset().CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			fmt.Printf("Namespace %s already exists, continuing.\n", name)
-			return nil
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("error creating namespace %s: %v", name, err)
 		}
-		return fmt.Errorf("error creating namespace %s: %v", name, err)
+		logrus.Debugf("Namespace %s already exists, continuing.\n", name)
+	}
+	logrus.Debugf("Namespace %s created.\n", name)
+
+	return nil
+}
+
+// DeleteNamespace deletes an existing namespace
+func DeleteNamespace(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := Clientset().CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error deleting namespace %s: %v", name, err)
 	}
 
 	return nil
+}
+
+// GetNamespace retrieves an existing namespace
+func GetNamespace(name string) (*corev1.Namespace, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	namespace, err := Clientset().CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting namespace %s: %v", name, err)
+	}
+
+	return namespace, nil
+}
+
+// NamespaceExists checks if a namespace exists
+func NamespaceExists(name string) bool {
+	_, err := GetNamespace(name)
+	if err != nil {
+		logrus.Debugf("Namespace %s does not exist, err: %v", name, err)
+		return false
+	}
+
+	return true
 }

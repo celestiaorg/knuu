@@ -19,7 +19,7 @@ func Namespace() string {
 	return namespace
 }
 
-// setNamespace updates the namespace to the provided string.
-func setNamespace(newNamespace string) {
+// SetNamespace sets the used namespace to the provided string.
+func SetNamespace(newNamespace string) {
 	namespace = newNamespace
 }
