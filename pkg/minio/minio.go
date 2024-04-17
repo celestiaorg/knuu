@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/sirupsen/logrus"
@@ -296,7 +295,7 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 	return nil
 }
 
-func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *minio.Client, bucketName string) error {
+func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *miniogo.Client, bucketName string) error {
 	exists, err := cli.BucketExists(ctx, bucketName)
 	if err != nil {
 		return fmt.Errorf("failed to check if bucket exists: %v", err)
@@ -305,7 +304,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *minio.Client, 
 		return nil
 	}
 
-	if err := cli.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{}); err != nil {
+	if err := cli.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
 		return fmt.Errorf("failed to create bucket: %v", err)
 	}
 	logrus.Debugf("Bucket `%s` created successfully.", bucketName)
@@ -383,10 +382,10 @@ func (m *Minio) waitForMinioService(ctx context.Context) error {
 			}
 		} else if service.Spec.Type == v1.ServiceTypeNodePort {
 			if service.Spec.Ports[0].NodePort == 0 {
-				return fmt.Errorf("NodePort for Minio service is not set")
+				return fmt.Errorf("NodePort for minio service is not set")
 			}
 		} else if len(service.Spec.ExternalIPs) == 0 {
-			return fmt.Errorf("External IPs for Minio service are not set")
+			return fmt.Errorf("external IPs for minio service are not set")
 		}
 
 		// Check if Minio is reachable
@@ -471,9 +470,8 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		if err != nil {
 			return fmt.Errorf("failed to create PersistentVolume: %v", err)
 		}
-
-		logrus.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
 	}
+	logrus.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
 
 	// Create PVC with the existing or newly created PV
 	pvc := &v1.PersistentVolumeClaim{
