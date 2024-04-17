@@ -69,7 +69,7 @@ func InitializeWithScope(scope string) error {
 		return fmt.Errorf("cannot initialize k8s: %s", err)
 	}
 
-	namespace := scope
+	namespace := k8s.SanitizeName(scope)
 	namespaceExists := k8s.NamespaceExists(namespace)
 
 	if !namespaceExists {
