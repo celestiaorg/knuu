@@ -529,12 +529,9 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 		if info.IsDir() {
 			// create directory at destination path
 			return os.MkdirAll(dstPath, os.ModePerm)
-		} else {
-			// copy file to destination path
-			return i.AddFile(path, filepath.Join(dest, relPath), chown)
 		}
-
-		return nil
+		// copy file to destination path
+		return i.AddFile(path, filepath.Join(dest, relPath), chown)
 	})
 
 	if err != nil {
