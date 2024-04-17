@@ -1,7 +1,9 @@
 package knuu
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/sirupsen/logrus"
@@ -11,6 +13,7 @@ const (
 	btDefaultPort             = 9009
 	btDefaultImage            = "ghcr.io/celestiaorg/bittwister:4187779"
 	btDefaultNetworkInterface = "eth0"
+	btWaitToStartInterval     = 50 * time.Millisecond
 )
 
 type btConfig struct {
@@ -77,4 +80,25 @@ func (c *btConfig) enable() {
 
 func (c *btConfig) disable() {
 	c.enabled = false
+}
+
+func (c *btConfig) Started() bool {
+	_, err := c.client.AllServicesStatus()
+	return err == nil
+}
+
+func (c *btConfig) WaitForStart(ctx context.Context) error {
+	ticker := time.NewTicker(btWaitToStartInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if c.Started() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("BitTwister failed to start")
+		default:
+		}
+	}
+	return nil
 }
