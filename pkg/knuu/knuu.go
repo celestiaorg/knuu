@@ -34,6 +34,7 @@ var (
 func Initialize() error {
 	t := time.Now()
 	scope := fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+	scope = k8s.SanitizeName(scope)
 	return InitializeWithScope(scope)
 }
 
@@ -202,7 +203,7 @@ func handleTimeout() error {
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
-	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", testScope, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", k8s.SanitizeName(testScope), k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
 
 	// Delete the namespace if it was created by knuu.
 	if namespaceCreated {
@@ -212,7 +213,7 @@ func handleTimeout() error {
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", testScope, k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k8s.SanitizeName(testScope), k8s.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
