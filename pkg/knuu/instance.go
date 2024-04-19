@@ -737,15 +737,42 @@ func (i *Instance) GetIP() (string, error) {
 // GetFileBytes returns the content of the given file
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) GetFileBytes(file string) ([]byte, error) {
-	if !i.IsInState(Preparing, Committed) {
-		return nil, fmt.Errorf("getting file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed, Started) {
+		return nil, fmt.Errorf("getting file is only allowed in state 'Started', 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
 	}
 
-	bytes, err := i.builderFactory.ReadFileFromBuilder(file)
-	if err != nil {
-		return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
+	if i.state != Started {
+		bytes, err := i.builderFactory.ReadFileFromBuilder(file)
+		if err != nil {
+			return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
+		}
+		return bytes, nil
 	}
-	return bytes, nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), k8s.Timeout())
+	defer cancel()
+
+	rc, err := i.ReadFileFromRunningInstance(ctx, file)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file '%s' from running instance '%s': %w", file, i.name, err)
+	}
+
+	defer rc.Close()
+	return io.ReadAll(rc)
+}
+
+func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath string) (io.ReadCloser, error) {
+	if !i.IsInState(Started) {
+		return nil, fmt.Errorf("reading file is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+	}
+
+	// Not the best solution, we need to find a better one.
+	// Tested with a 110MB+ file and it worked.
+	fileContent, err := i.ExecuteCommandWithContext(ctx, "cat", filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file '%s' from running instance '%s': %v", filePath, i.name, err)
+	}
+	return io.NopCloser(strings.NewReader(fileContent)), nil
 }
 
 // AddPolicyRule adds a policy rule to the instance
