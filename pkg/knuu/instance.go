@@ -991,6 +991,16 @@ func (i *Instance) AddCapabilities(capabilities []string) error {
 	return nil
 }
 
+// StartAsync starts the instance without waiting for it to be ready
+// This function can only be called in the state 'Committed' or 'Stopped'
+// This function will replace StartWithoutWait
+func (i *Instance) StartAsync() error {
+	if err := i.StartWithoutWait(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait() error {
