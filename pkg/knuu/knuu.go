@@ -99,16 +99,18 @@ func InitializeWithScope(scope string) error {
 		return fmt.Errorf("cannot handle timeout: %s", err)
 	}
 
+	minioClient = &minio.Minio{
+		Clientset: k8s.Clientset(),
+		Namespace: k8s.Namespace(),
+	}
+
 	builderType := os.Getenv("KNUU_BUILDER")
 	switch builderType {
 	case "kubernetes":
 		SetImageBuilder(&kaniko.Kaniko{
 			K8sClientset: k8s.Clientset(),
 			K8sNamespace: k8s.Namespace(),
-			Minio: &minio.Minio{
-				Clientset: k8s.Clientset(),
-				Namespace: k8s.Namespace(),
-			},
+			Minio:        minioClient, // same client is used to make the best use of the resources
 		})
 	case "docker", "":
 		SetImageBuilder(&docker.Docker{
