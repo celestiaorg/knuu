@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -24,7 +23,7 @@ func CreateNamespace(name string) error {
 	_, err := Clientset().CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("error creating namespace %s: %v", name, err)
+			return ErrCreatingNamespace.WithParams(name).Wrap(err)
 		}
 		logrus.Debugf("Namespace %s already exists, continuing.\n", name)
 	}
@@ -40,7 +39,7 @@ func DeleteNamespace(name string) error {
 
 	err := Clientset().CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("error deleting namespace %s: %v", name, err)
+		return ErrDeletingNamespace.WithParams(name).Wrap(err)
 	}
 
 	return nil
@@ -53,7 +52,7 @@ func GetNamespace(name string) (*corev1.Namespace, error) {
 
 	namespace, err := Clientset().CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting namespace %s: %v", name, err)
+		return nil, ErrGettingNamespace.WithParams(name).Wrap(err)
 	}
 
 	return namespace, nil

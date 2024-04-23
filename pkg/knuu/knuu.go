@@ -46,7 +46,7 @@ func Scope() string {
 // InitializeWithScope initializes knuu with a given scope
 func InitializeWithScope(scope string) error {
 	if scope == "" {
-		return fmt.Errorf("cannot initialize knuu with empty scope")
+		return ErrCannotInitializeKnuuWithEmptyScope
 	}
 
 	testScope = scope
@@ -67,7 +67,7 @@ func InitializeWithScope(scope string) error {
 
 	err := k8s.Initialize()
 	if err != nil {
-		return fmt.Errorf("cannot initialize k8s: %s", err)
+		return ErrCannotInitializeK8s.Wrap(err)
 	}
 
 	namespace := k8s.SanitizeName(scope)
@@ -77,7 +77,7 @@ func InitializeWithScope(scope string) error {
 		namespaceCreated = true
 		err := k8s.CreateNamespace(namespace)
 		if err != nil {
-			return fmt.Errorf("creating namespace %s: %w", namespace, err)
+			return ErrCreatingNamespace.WithParams(namespace).Wrap(err)
 		}
 	}
 
@@ -90,13 +90,13 @@ func InitializeWithScope(scope string) error {
 	} else {
 		parsedTimeout, err := time.ParseDuration(timeoutString)
 		if err != nil {
-			return fmt.Errorf("cannot parse timeout: %s", err)
+			return ErrCannotParseTimeout.Wrap(err)
 		}
 		timeout = parsedTimeout
 	}
 
 	if err := handleTimeout(); err != nil {
-		return fmt.Errorf("cannot handle timeout: %s", err)
+		return ErrCannotHandleTimeout.Wrap(err)
 	}
 
 	minioClient = &minio.Minio{
@@ -118,7 +118,7 @@ func InitializeWithScope(scope string) error {
 			K8sNamespace: k8s.Namespace(),
 		})
 	default:
-		return fmt.Errorf("invalid KNUU_BUILDER, available [kubernetes, docker], value used: %s", builderType)
+		return ErrInvalidKnuuBuilder.WithParams(builderType)
 	}
 
 	return nil
@@ -187,15 +187,15 @@ func IsInitialized() bool {
 func handleTimeout() error {
 	instance, err := NewInstance("timeout-handler")
 	if err != nil {
-		return fmt.Errorf("cannot create instance: %s", err)
+		return ErrCannotCreateInstance.Wrap(err)
 	}
 	instance.instanceType = TimeoutHandlerInstance
 	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
 	if err := instance.SetImage("docker.io/bitnami/kubectl:latest"); err != nil {
-		return fmt.Errorf("cannot set image: %s", err)
+		return ErrCannotSetImage.Wrap(err)
 	}
 	if err := instance.Commit(); err != nil {
-		return fmt.Errorf("cannot commit instance: %s", err)
+		return ErrCannotCommitInstance.Wrap(err)
 	}
 
 	var commands []string
@@ -222,7 +222,7 @@ func handleTimeout() error {
 	// Run the command
 	if err := instance.SetCommand("sh", "-c", finalCmd); err != nil {
 		logrus.Debugf("The full command generated is [%s]", finalCmd)
-		return fmt.Errorf("cannot set command: %s", err)
+		return ErrCannotSetCommand.Wrap(err)
 	}
 
 	rule := rbacv1.PolicyRule{
@@ -232,10 +232,10 @@ func handleTimeout() error {
 	}
 
 	if err := instance.AddPolicyRule(rule); err != nil {
-		return fmt.Errorf("cannot add policy rule: %s", err)
+		return ErrCannotAddPolicyRule.Wrap(err)
 	}
 	if err := instance.Start(); err != nil {
-		return fmt.Errorf("cannot start instance: %s", err)
+		return ErrCannotStartInstance.Wrap(err)
 	}
 
 	return nil

@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -16,12 +15,12 @@ import (
 // getReplicaSet retrieves replicaSet from the given namespace and logs any errors.
 func getReplicaSet(ctx context.Context, namespace, name string) (*appv1.ReplicaSet, error) {
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 
 	replicaset, err := Clientset().AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ReplicaSet %s: %w", name, err)
+		return nil, ErrGettingReplicaSet.WithParams(name).Wrap(err)
 	}
 
 	return replicaset, nil
@@ -32,7 +31,7 @@ func DeployReplicaSet(ctx context.Context, replicaSetConfig ReplicaSetConfig, in
 	// Prepare the pod
 	replicaSet, err := prepareReplicaSet(replicaSetConfig, init)
 	if err != nil {
-		return nil, fmt.Errorf("error preparing pod: %s", err)
+		return nil, ErrPreparingPod.Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -40,11 +39,11 @@ func DeployReplicaSet(ctx context.Context, replicaSetConfig ReplicaSetConfig, in
 
 	// Try to create the ReplicaSet
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	createdReplicaSet, err := Clientset().AppsV1().ReplicaSets(replicaSetConfig.Namespace).Create(ctx, replicaSet, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ReplicaSet: %v", err)
+		return nil, ErrCreatingReplicaSet.Wrap(err)
 	}
 
 	return createdReplicaSet, nil
@@ -69,7 +68,7 @@ func ReplaceReplicaSetWithGracePeriod(ReplicaSetConfig ReplicaSetConfig, gracePe
 
 	// Delete the existing ReplicaSet (if any)
 	if err := DeleteReplicaSetWithGracePeriod(ctx, ReplicaSetConfig.Namespace, ReplicaSetConfig.Name, gracePeriod); err != nil {
-		return nil, fmt.Errorf("failed to delete ReplicaSet: %v", err)
+		return nil, ErrDeletingReplicaSet.Wrap(err)
 	}
 
 	// Wait for the ReplicaSet to be fully deleted
@@ -87,7 +86,7 @@ func ReplaceReplicaSetWithGracePeriod(ReplicaSetConfig ReplicaSetConfig, gracePe
 				// ReplicaSet has been deleted
 				deleted = true
 			} else if err != nil {
-				return nil, fmt.Errorf("error waiting for ReplicaSet to delete: %v", err)
+				return nil, ErrWaitingForReplicaSet.Wrap(err)
 			}
 			// If ReplicaSet still exists, wait for the next tick
 		}
@@ -96,7 +95,7 @@ func ReplaceReplicaSetWithGracePeriod(ReplicaSetConfig ReplicaSetConfig, gracePe
 	// Deploy the new ReplicaSet
 	ReplicaSet, err := DeployReplicaSet(ctx, ReplicaSetConfig, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy ReplicaSet: %v", err)
+		return nil, ErrDeployingReplicaSet.Wrap(err)
 	}
 
 	// Return the newly created ReplicaSet
@@ -116,7 +115,7 @@ func IsReplicaSetRunning(namespace, name string) (bool, error) {
 	// Get the ReplicaSet from Kubernetes API server
 	ReplicaSet, err := getReplicaSet(ctx, namespace, name)
 	if err != nil {
-		return false, fmt.Errorf("failed to get pod: %v", err)
+		return false, ErrGettingPod.WithParams(name).Wrap(err)
 	}
 
 	// Check if the ReplicaSet is running
@@ -134,13 +133,13 @@ func DeleteReplicaSetWithGracePeriod(ctx context.Context, namespace, name string
 
 	// Delete the ReplicaSet using the Kubernetes client API
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: gracePeriodSeconds,
 	}
 	if err := Clientset().AppsV1().ReplicaSets(namespace).Delete(ctx, name, deleteOptions); err != nil {
-		return fmt.Errorf("failed to delete ReplicaSet %s: %v", name, err)
+		return ErrDeletingReplicaSet.WithParams(name).Wrap(err)
 	}
 
 	return nil
@@ -164,7 +163,7 @@ func prepareReplicaSet(ReplicaSetConfig ReplicaSetConfig, init bool) (*appv1.Rep
 
 	podSpec, err := preparePodSpec(podConfig, init)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare pod spec: %w", err)
+		return nil, ErrPreparingPodSpec.Wrap(err)
 	}
 
 	// Construct the ReplicaSet object using the above data
@@ -206,11 +205,11 @@ func GetFirstPodFromReplicaSet(namespace, name string) (*v1.Pod, error) {
 	selector := metav1.FormatLabelSelector(rsName.Spec.Selector)
 	pods, err := Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods for ReplicaSet %s: %w", name, err)
+		return nil, ErrListingPodsForReplicaSet.WithParams(name).Wrap(err)
 	}
 
 	if len(pods.Items) == 0 {
-		return nil, fmt.Errorf("no pods found for ReplicaSet %s", name)
+		return nil, ErrNoPodsForReplicaSet.WithParams(name)
 	}
 
 	return getPod(namespace, pods.Items[0].Name)

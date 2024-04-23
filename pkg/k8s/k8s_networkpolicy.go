@@ -2,8 +2,7 @@ package k8s
 
 import (
 	"context"
-	"fmt"
-  
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,11 +68,11 @@ func CreateNetworkPolicy(
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
-	np, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Create(ctx, np, metav1.CreateOptions{})
+	_, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Create(ctx, np, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating network policy %s: %w", name, err)
+		return ErrCreatingNetworkPolicy.WithParams(name).Wrap(err)
 	}
 
 	return nil
@@ -85,11 +84,11 @@ func DeleteNetworkPolicy(namespace string, name string) error {
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	err := Clientset().NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("error deleting network policy %s: %w", name, err)
+		return ErrDeletingNetworkPolicy.WithParams(name).Wrap(err)
 	}
 
 	return nil
@@ -101,11 +100,11 @@ func GetNetworkPolicy(namespace string, name string) (*v1.NetworkPolicy, error) 
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	np, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting network policy %s: %w", name, err)
+		return nil, ErrGettingNetworkPolicy.WithParams(name).Wrap(err)
 	}
 
 	return np, nil

@@ -19,7 +19,7 @@ type Preloader struct {
 func NewPreloader() (*Preloader, error) {
 	k8sName, err := generateK8sName("knuu-preloader")
 	if err != nil {
-		return nil, fmt.Errorf("error generating k8s name for preloader: %w", err)
+		return nil, ErrGeneratingK8sNameForPreloader.Wrap(err)
 	}
 	return &Preloader{
 		k8sName: k8sName,

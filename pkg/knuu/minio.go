@@ -2,7 +2,6 @@ package knuu
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/celestiaorg/knuu/pkg/minio"
@@ -14,7 +13,7 @@ var minioClient *minio.Minio
 
 func initMinio(ctx context.Context) error {
 	if minioClient == nil {
-		return fmt.Errorf("minio not initialized")
+		return ErrMinioNotInitialized
 	}
 
 	ok, err := minioClient.IsMinioDeployed(ctx)
