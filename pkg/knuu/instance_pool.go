@@ -21,7 +21,7 @@ func (i *InstancePool) Instances() []*Instance {
 // This function can only be called in the state 'Committed'
 func (i *Instance) CreatePool(amount int) (*InstancePool, error) {
 	if !i.IsInState(Committed) {
-		return nil, fmt.Errorf("creating a pool is only allowed in state 'Committed' or 'Destroyed'. Current state is '%s'", i.state.String())
+		return nil, ErrCreatingPoolNotAllowed.WithParams(i.state.String())
 	}
 	instances := make([]*Instance, amount)
 	for j := 0; j < amount; j++ {

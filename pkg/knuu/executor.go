@@ -2,7 +2,6 @@ package knuu
 
 import (
 	"context"
-	"fmt"
 )
 
 type Executor struct {
@@ -12,36 +11,36 @@ type Executor struct {
 func NewExecutor() (*Executor, error) {
 	instance, err := NewInstance("executor")
 	if err != nil {
-		return nil, fmt.Errorf("error creating instance '%v':", err)
+		return nil, ErrCreatingInstance.Wrap(err)
 	}
 	err = instance.SetImage("docker.io/nicolaka/netshoot:latest")
 	if err != nil {
-		return nil, fmt.Errorf("error setting image '%v':", err)
+		return nil, ErrSettingImage.Wrap(err)
 	}
 	err = instance.Commit()
 	if err != nil {
-		return nil, fmt.Errorf("error committing instance: %v", err)
+		return nil, ErrCommittingInstance.Wrap(err)
 	}
 	err = instance.SetArgs("sleep", "infinity")
 	if err != nil {
-		return nil, fmt.Errorf("error setting args '%v':", err)
+		return nil, ErrSettingArgs.Wrap(err)
 	}
 	err = instance.SetMemory("100M", "100M")
 	if err != nil {
-		return nil, fmt.Errorf("error setting memory '%v':", err)
+		return nil, ErrSettingMemory.Wrap(err)
 	}
 	err = instance.SetCPU("100m")
 	if err != nil {
-		return nil, fmt.Errorf("error setting cpu '%v':", err)
+		return nil, ErrSettingCPU.Wrap(err)
 	}
 	instance.instanceType = ExecutorInstance
 	err = instance.Start()
 	if err != nil {
-		return nil, fmt.Errorf("error starting instance: %v", err)
+		return nil, ErrStartingInstance.Wrap(err)
 	}
 	err = instance.WaitInstanceIsRunning()
 	if err != nil {
-		return nil, fmt.Errorf("error waiting for instance to be running: %v", err)
+		return nil, ErrWaitingInstanceIsRunning.Wrap(err)
 	}
 	return &Executor{
 		instances: instance,

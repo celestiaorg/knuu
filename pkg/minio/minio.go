@@ -48,19 +48,19 @@ type Minio struct {
 
 func (m *Minio) DeployMinio(ctx context.Context) error {
 	if err := m.createOrUpdateDeployment(ctx); err != nil {
-		return fmt.Errorf("failed to create or update Minio deployment: %v", err)
+		return ErrMinioFailedToStart.Wrap(err)
 	}
 
 	if err := m.waitForMinio(ctx); err != nil {
-		return fmt.Errorf("failed waiting for Minio to be ready: %v", err)
+		return ErrMinioFailedToBeReady.Wrap(err)
 	}
 
 	if err := m.createOrUpdateService(ctx); err != nil {
-		return fmt.Errorf("failed to create or update Minio service: %v", err)
+		return ErrMinioFailedToCreateOrUpdateService.Wrap(err)
 	}
 
 	if err := m.waitForMinioService(ctx); err != nil {
-		return fmt.Errorf("failed waiting for Minio service to be ready: %v", err)
+		return ErrMinioFailedToBeReadyService.Wrap(err)
 	}
 
 	logrus.Debug("Minio deployed or updated successfully.")
@@ -124,21 +124,21 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 		if errors.IsNotFound(err) {
 			// Deployment does not exist, create it
 			if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
-				return fmt.Errorf("failed to create PVC: %v", err)
+				return ErrMinioFailedToCreatePVC.Wrap(err)
 			}
 			_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to create Minio deployment: %v", err)
+				return ErrMinioFailedToCreateDeployment.Wrap(err)
 			}
 			logrus.Debug("Minio deployment created successfully.")
 		} else {
-			return fmt.Errorf("failed to get Minio deployment: %v", err)
+			return ErrMinioFailedToGetDeployment.Wrap(err)
 		}
 	} else {
 		// Deployment exists, update it
 		_, err = deploymentClient.Update(ctx, minioDeployment, metav1.UpdateOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to update Minio deployment: %v", err)
+			return ErrMinioFailedToUpdateDeployment.Wrap(err)
 		}
 		logrus.Debug("Minio deployment updated successfully.")
 	}
@@ -154,7 +154,7 @@ func (m *Minio) IsMinioDeployed(ctx context.Context) (bool, error) {
 		if errors.IsNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to get Minio deployment: %v", err)
+		return false, ErrMinioFailedToGetService.Wrap(err)
 	}
 
 	return true, nil
@@ -164,7 +164,7 @@ func (m *Minio) IsMinioDeployed(ctx context.Context) (bool, error) {
 func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFilePath, bucketName string) error {
 	endpoint, err := m.getEndpoint(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get Minio endpoint: %v", err)
+		return ErrMinioFailedToGetEndpoint.Wrap(err)
 	}
 
 	cli, err := miniogo.New(endpoint, &miniogo.Options{
@@ -172,16 +172,16 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 		Secure: false,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize Minio client: %v", err)
+		return ErrMinioFailedToInitializeClient.Wrap(err)
 	}
 
 	if err := m.createBucketIfNotExists(ctx, cli, bucketName); err != nil {
-		return fmt.Errorf("failed to create bucket: %v", err)
+		return ErrMinioFailedToCreateBucket.Wrap(err)
 	}
 
 	uploadInfo, err := cli.PutObject(ctx, bucketName, minioFilePath, localReader, -1, miniogo.PutObjectOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to upload data to Minio: %v", err)
+		return ErrMinioFailedToUploadData.Wrap(err)
 	}
 
 	logrus.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
@@ -192,7 +192,7 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName string) error {
 	endpoint, err := m.getEndpoint(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get Minio endpoint: %v", err)
+		return ErrMinioFailedToGetPresignedURL.Wrap(err)
 	}
 
 	cli, err := miniogo.New(endpoint, &miniogo.Options{
@@ -200,18 +200,18 @@ func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName s
 		Secure: false,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize Minio client: %v", err)
+		return ErrMinioFailedToUpdateService.Wrap(err)
 	}
 
 	// Check if the object exists before attempting to delete
 	_, err = cli.StatObject(ctx, bucketName, minioFilePath, miniogo.StatObjectOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to find file in Minio before deletion: %v", err)
+		return ErrMinioFailedToFindFileBeforeDeletion.Wrap(err)
 	}
 
 	err = cli.RemoveObject(ctx, bucketName, minioFilePath, miniogo.RemoveObjectOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to delete file from Minio: %v", err)
+		return ErrMinioFailedToDeleteFile.Wrap(err)
 	}
 
 	logrus.Debugf("File %s deleted successfully from bucket %s", minioFilePath, bucketName)
@@ -222,7 +222,7 @@ func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName s
 func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName string) (string, error) {
 	minioEndpoint, err := m.getEndpoint(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get Minio endpoint: %v", err)
+		return "", ErrMinioFailedToGetMinioEndpoint.Wrap(err)
 	}
 	// Initialize Minio client
 	minioClient, err := miniogo.New(minioEndpoint, &miniogo.Options{
@@ -230,7 +230,7 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 		Secure: false,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to initialize Minio client: %v", err)
+		return "", ErrMinioFailedToInitializeClient.Wrap(err)
 	}
 
 	// Set the expiration time for the URL (e.g., 24h from now)
@@ -239,7 +239,7 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	// Generate a presigned URL for the object
 	presignedURL, err := minioClient.PresignedGetObject(ctx, bucketName, minioFilePath, expiration, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL for Minio object: %v", err)
+		return "", ErrMinioFailedToGeneratePresignedURL.Wrap(err)
 	}
 
 	return presignedURL.String(), nil
@@ -280,7 +280,7 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 		logrus.Debugf("Service `%s` already exists, updating.", ServiceName)
 		minioService.ResourceVersion = existingService.ResourceVersion // Retain the existing resource version
 		if _, err := serviceClient.Update(ctx, minioService, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("failed to update Minio service: %v", err)
+			return ErrMinioFailedToUpdateService.Wrap(err)
 		}
 		logrus.Debugf("Service %s updated successfully.", ServiceName)
 		return nil
@@ -288,7 +288,7 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 
 	// Create Minio service if it does not exist
 	if _, err := serviceClient.Create(ctx, minioService, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create Minio service: %v", err)
+		return ErrMinioFailedToCreateService.Wrap(err)
 	}
 
 	logrus.Debugf("Service %s created successfully.", ServiceName)
@@ -298,14 +298,14 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *miniogo.Client, bucketName string) error {
 	exists, err := cli.BucketExists(ctx, bucketName)
 	if err != nil {
-		return fmt.Errorf("failed to check if bucket exists: %v", err)
+		return ErrMinioFailedToCheckBucket.Wrap(err)
 	}
 	if exists {
 		return nil
 	}
 
 	if err := cli.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
-		return fmt.Errorf("failed to create bucket: %v", err)
+		return ErrMinioFailedToCreateBucket.Wrap(err)
 	}
 	logrus.Debugf("Bucket `%s` created successfully.", bucketName)
 
@@ -315,7 +315,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, cli *miniogo.Client
 func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 	minioService, err := m.Clientset.CoreV1().Services(m.Namespace).Get(ctx, ServiceName, metav1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to get Minio service: %v", err)
+		return "", ErrMinioFailedToGetService.Wrap(err)
 	}
 
 	if minioService.Spec.Type == v1.ServiceTypeLoadBalancer {
@@ -323,17 +323,17 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 		if len(minioService.Status.LoadBalancer.Ingress) > 0 {
 			return fmt.Sprintf("%s:%d", minioService.Status.LoadBalancer.Ingress[0].IP, minioService.Spec.Ports[0].Port), nil
 		}
-		return "", fmt.Errorf("LoadBalancer IP not available yet")
+		return "", ErrMinioLoadBalancerIPNotAvailable
 	}
 
 	if minioService.Spec.Type == v1.ServiceTypeNodePort {
 		// Use the Node IP and NodePort
 		nodes, err := m.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
-			return "", fmt.Errorf("failed to get nodes: %v", err)
+			return "", ErrMinioFailedToGetNodes.Wrap(err)
 		}
 		if len(nodes.Items) == 0 {
-			return "", fmt.Errorf("no nodes found")
+			return "", ErrMinioNoNodesFound
 		}
 
 		// Use the first node for simplicity, you might need to handle multiple nodes
@@ -359,7 +359,7 @@ func (m *Minio) waitForMinio(ctx context.Context) error {
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for Minio to be ready")
+			return ErrMinioTimeoutWaitingForReady
 		case <-time.After(waitRetry):
 			// Retry after some seconds
 		}
@@ -372,7 +372,7 @@ func (m *Minio) waitForMinioService(ctx context.Context) error {
 	for {
 		service, err := m.Clientset.CoreV1().Services(m.Namespace).Get(ctx, ServiceName, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to get Minio service: %v", err)
+			return ErrMinioFailedToGetService.Wrap(err)
 		}
 
 		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
@@ -382,16 +382,16 @@ func (m *Minio) waitForMinioService(ctx context.Context) error {
 			}
 		} else if service.Spec.Type == v1.ServiceTypeNodePort {
 			if service.Spec.Ports[0].NodePort == 0 {
-				return fmt.Errorf("NodePort for minio service is not set")
+				return ErrMinioNodePortNotSet
 			}
 		} else if len(service.Spec.ExternalIPs) == 0 {
-			return fmt.Errorf("external IPs for minio service are not set")
+			return ErrMinioExternalIPsNotSet
 		}
 
 		// Check if Minio is reachable
 		endpoint, err := m.getEndpoint(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get Minio endpoint: %v", err)
+			return ErrMinioFailedToGetEndpoint.Wrap(err)
 		}
 
 		if err := checkServiceConnectivity(endpoint); err != nil {
@@ -404,7 +404,7 @@ func (m *Minio) waitForMinioService(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("timeout waiting for Minio service to be ready")
+		return ErrMinioTimeoutWaitingForServiceReady
 	default:
 		return nil
 	}
@@ -413,7 +413,7 @@ func (m *Minio) waitForMinioService(ctx context.Context) error {
 func checkServiceConnectivity(serviceEndpoint string) error {
 	conn, err := net.DialTimeout("tcp", serviceEndpoint, 2*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to connect to %s: %v", serviceEndpoint, err)
+		return ErrMinioFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
 	}
 	defer conn.Close()
 	return nil // success
@@ -422,7 +422,7 @@ func checkServiceConnectivity(serviceEndpoint string) error {
 func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize string, createOptions metav1.CreateOptions) error {
 	storageQt, err := resource.ParseQuantity(storageSize)
 	if err != nil {
-		return fmt.Errorf("failed to parse storage size: %v", err)
+		return ErrMinioFailedToParseStorageSize.Wrap(err)
 	}
 
 	pvcClient := m.Clientset.CoreV1().PersistentVolumeClaims(m.Namespace)
@@ -437,7 +437,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	// Create a simple PersistentVolume if no suitable one is found
 	pvList, err := m.Clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to list PersistentVolumes: %v", err)
+		return ErrMinioFailedToListPersistentVolumes.Wrap(err)
 	}
 
 	var existingPV *v1.PersistentVolume
@@ -468,7 +468,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 			},
 		}, createOptions)
 		if err != nil {
-			return fmt.Errorf("failed to create PersistentVolume: %v", err)
+			return ErrMinioFailedToCreatePersistentVolume.Wrap(err)
 		}
 	}
 	logrus.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
@@ -491,7 +491,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 
 	_, err = pvcClient.Create(ctx, pvc, createOptions)
 	if err != nil {
-		return fmt.Errorf("failed to create PersistentVolumeClaim: %v", err)
+		return ErrMinioFailedToCreatePersistentVolumeClaim.Wrap(err)
 	}
 
 	logrus.Debugf("PersistentVolumeClaim `%s` created successfully.", pvcName)

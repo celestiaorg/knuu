@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -16,14 +15,14 @@ func DaemonSetExists(namespace, name string) (bool, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return false, fmt.Errorf("knuu is not initialized")
+		return false, ErrKnuuNotInitialized
 	}
 	_, err := Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if isNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("error getting daemonset %s: %w", name, err)
+		return false, ErrGettingDaemonset.WithParams(name).Wrap(err)
 	}
 	return true, nil
 }
@@ -34,11 +33,11 @@ func GetDaemonSet(namespace, name string) (*appv1.DaemonSet, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	ds, err := Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting daemonset %s: %w", name, err)
+		return nil, ErrGettingDaemonset.WithParams(name).Wrap(err)
 	}
 	return ds, nil
 }
@@ -60,11 +59,11 @@ func CreateDaemonSet(
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	created, err := Clientset().AppsV1().DaemonSets(namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error creating daemonset %s: %w", name, err)
+		return nil, ErrCreatingDaemonset.WithParams(name).Wrap(err)
 	}
 	logrus.Debugf("DaemonSet %s created in namespace %s", name, namespace)
 	return created, nil
@@ -87,11 +86,11 @@ func UpdateDaemonSet(
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	updated, err := Clientset().AppsV1().DaemonSets(namespace).Update(ctx, ds, metav1.UpdateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error updating daemonset %s: %w", name, err)
+		return nil, ErrUpdatingDaemonset.WithParams(name).Wrap(err)
 	}
 	logrus.Debugf("DaemonSet %s updated in namespace %s", name, namespace)
 	return updated, nil
@@ -103,10 +102,10 @@ func DeleteDaemonSet(namespace, name string) error {
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if err := Clientset().AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("error deleting daemonset %s: %w", name, err)
+		return ErrDeletingDaemonset.WithParams(name).Wrap(err)
 	}
 	logrus.Debugf("DaemonSet %s deleted in namespace %s", name, namespace)
 	return nil

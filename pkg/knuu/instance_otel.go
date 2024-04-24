@@ -179,26 +179,26 @@ type Action struct {
 func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 	otelAgent, err := NewInstance("otel-agent")
 	if err != nil {
-		return nil, fmt.Errorf("error creating otel-agent instance: %w", err)
+		return nil, ErrCreatingOtelAgentInstance.Wrap(err)
 	}
 
 	if err := otelAgent.SetImage(fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
-		return nil, fmt.Errorf("error setting image for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentImage.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(8888); err != nil {
-		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(9090); err != nil {
-		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
 	if err := otelAgent.SetCPU("100m"); err != nil {
-		return nil, fmt.Errorf("error setting CPU for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentCPU.Wrap(err)
 	}
 	if err := otelAgent.SetMemory("100Mi", "200Mi"); err != nil {
-		return nil, fmt.Errorf("error setting memory for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
 	if err := otelAgent.Commit(); err != nil {
-		return nil, fmt.Errorf("error committing otel-agent instance: %w", err)
+		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
 	}
 
 	config := OTelConfig{
@@ -211,15 +211,15 @@ func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 
 	bytes, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling YAML: %w", err)
+		return nil, ErrMarshalingYAML.Wrap(err)
 	}
 
 	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
-		return nil, fmt.Errorf("error adding otel-agent config file: %w", err)
+		return nil, ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
 	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
-		return nil, fmt.Errorf("error setting command for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentCommand.Wrap(err)
 	}
 
 	return otelAgent, nil
