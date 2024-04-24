@@ -1,0 +1,39 @@
+name: Knuu Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go 1.22.1
+        uses: actions/setup-go@v4.0.1
+        with:
+          go-version: 1.22.1
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4.1.2
+
+      - name: Setup kubeconfig
+        env:
+          KUBECONFIG_FILE: ${{ secrets.KNUU_KUBECONFIG_FILE }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${KUBECONFIG_FILE}" > $HOME/.kube/config
+
+      - name: Run Tests
+        run: make test-all
+        env:
+          KNUU_NAMESPACE: "knuu-test"
+          KNUU_SKIP_CLEANUP: "false"
+          KNUU_TIMEOUT: "240m" # needed as we run all the tests
+          GRAFANA_ENDPOINT: ${{ secrets.GRAFANA_ENDPOINT }}
+          GRAFANA_USERNAME: ${{ secrets.GRAFANA_USERNAME }}
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
