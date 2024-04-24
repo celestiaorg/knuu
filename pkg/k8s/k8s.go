@@ -2,7 +2,6 @@
 package k8s
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,12 +27,12 @@ var (
 func Initialize() error {
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
-		return fmt.Errorf("retrieving the Kubernetes config: %w", err)
+		return ErrRetrievingKubernetesConfig.Wrap(err)
 	}
 
 	clientset, err = kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
-		return fmt.Errorf("creating clientset for Kubernetes: %w", err)
+		return ErrCreatingClientset.Wrap(err)
 	}
 
 	return nil

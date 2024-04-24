@@ -96,7 +96,7 @@ func (c *btConfig) WaitForStart(ctx context.Context) error {
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("BitTwister failed to start")
+			return ErrBitTwisterFailedToStart
 		default:
 		}
 	}

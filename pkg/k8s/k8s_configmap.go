@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,11 +13,11 @@ func GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	cm, err := Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting configmap %s: %w", name, err)
+		return nil, ErrGettingConfigmap.WithParams(name).Wrap(err)
 	}
 
 	return cm, nil
@@ -30,14 +29,14 @@ func ConfigMapExists(namespace, name string) (bool, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return false, fmt.Errorf("knuu is not initialized")
+		return false, ErrKnuuNotInitialized
 	}
 	_, err := Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if isNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("error getting configmap %s: %w", name, err)
+		return false, ErrGettingConfigmap.WithParams(name).Wrap(err)
 	}
 	return true, nil
 }
@@ -55,7 +54,7 @@ func CreateConfigMap(
 		return nil, err
 	}
 	if exists {
-		return nil, fmt.Errorf("configmap %s already exists", name)
+		return nil, ErrConfigmapAlreadyExists.WithParams(name)
 	}
 
 	cm, err := prepareConfigMap(namespace, name, labels, data)
@@ -67,11 +66,11 @@ func CreateConfigMap(
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	created, err := Clientset().CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error creating configmap %s: %w", name, err)
+		return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
 	}
 
 	return created, nil
@@ -85,18 +84,18 @@ func DeleteConfigMap(namespace, name string) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("configmap %s does not exist", name)
+		return ErrConfigmapDoesNotExist.WithParams(name)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	err = Clientset().CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("error deleting configmap %s: %w", name, err)
+		return ErrDeletingConfigmap.WithParams(name).Wrap(err)
 	}
 
 	return nil

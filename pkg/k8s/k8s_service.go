@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -17,11 +16,11 @@ func GetService(namespace, name string) (*v1.Service, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	svc, err := Clientset().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting service %s: %w", name, err)
+		return nil, ErrGettingService.WithParams(name).Wrap(err)
 	}
 	return svc, nil
 }
@@ -37,18 +36,18 @@ func DeployService(
 ) (*v1.Service, error) {
 	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
-		return nil, fmt.Errorf("error preparing service %s: %w", name, err)
+		return nil, ErrPreparingService.WithParams(name).Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	serv, err := Clientset().CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error creating service %s: %w", name, err)
+		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
 	logrus.Debugf("Service %s deployed in namespace %s", name, namespace)
 	return serv, nil
@@ -65,18 +64,18 @@ func PatchService(
 ) error {
 	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
-		return fmt.Errorf("error preparing service %s: %w", name, err)
+		return ErrPreparingService.WithParams(name).Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	_, err = Clientset().CoreV1().Services(namespace).Update(ctx, svc, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("error patching service %s: %w", name, err)
+		return ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
 	logrus.Debugf("Service %s patched in namespace %s", name, namespace)
@@ -90,15 +89,15 @@ func DeleteService(namespace, name string) error {
 
 	_, err := GetService(namespace, name)
 	if err != nil {
-		return fmt.Errorf("error getting service %s: %w", name, err)
+		return ErrGettingService.WithParams(name).Wrap(err)
 	}
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	err = Clientset().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("error deleting service %s: %w", name, err)
+		return ErrDeletingService.WithParams(name).Wrap(err)
 	}
 
 	logrus.Debugf("Service %s deleted in namespace %s", name, namespace)
@@ -109,7 +108,7 @@ func DeleteService(namespace, name string) error {
 func GetServiceIP(namespace, name string) (string, error) {
 	svc, err := GetService(namespace, name)
 	if err != nil {
-		return "", fmt.Errorf("error getting service %s: %w", name, err)
+		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
 	return svc.Spec.ClusterIP, nil
 }
@@ -147,10 +146,10 @@ func prepareService(
 ) (*v1.Service, error) {
 
 	if namespace == "" {
-		return nil, errors.New("namespace is required")
+		return nil, ErrNamespaceRequired
 	}
 	if name == "" {
-		return nil, errors.New("service name is required")
+		return nil, ErrServiceNameRequired
 	}
 	if labels == nil {
 		labels = make(map[string]string)
@@ -161,7 +160,7 @@ func prepareService(
 
 	servicePorts := buildPorts(tcpPorts, udpPorts)
 	if len(servicePorts) == 0 {
-		return nil, fmt.Errorf("no ports specified for service %s", name)
+		return nil, ErrNoPortsSpecified.WithParams(name)
 	}
 
 	svc := &v1.Service{
