@@ -123,6 +123,7 @@ func InitializeWithScope(scope string) error {
 		return ErrInvalidKnuuBuilder.WithParams(builderType)
 	}
 
+	HandleStopSignal()
 	return nil
 }
 
@@ -185,7 +186,7 @@ func IsInitialized() bool {
 	return k8s.IsInitialized()
 }
 
-func DeleteNamespace() error {
+func CleanUp() error {
 	if namespaceCreated {
 		return k8s.DeleteNamespace(testScope)
 	}
@@ -194,11 +195,11 @@ func DeleteNamespace() error {
 
 func HandleStopSignal() {
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
 		logrus.Info("Received signal to stop, cleaning up resources...")
-		if err := DeleteNamespace(); err != nil {
+		if err := CleanUp(); err != nil {
 			logrus.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
