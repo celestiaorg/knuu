@@ -15,6 +15,9 @@ func TestMain(m *testing.M) {
 		logrus.Fatalf("error initializing knuu: %v", err)
 	}
 	logrus.Infof("Scope: %s", knuu.Scope())
+
+	knuu.HandleStopSignal()
+
 	prepareInstances(m)
 	exitVal := m.Run()
 	os.Exit(exitVal)

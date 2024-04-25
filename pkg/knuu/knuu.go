@@ -4,10 +4,12 @@ package knuu
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -181,6 +183,25 @@ func ImageBuilder() builder.Builder {
 // IsInitialized returns true if knuu is initialized, and false otherwise
 func IsInitialized() bool {
 	return k8s.IsInitialized()
+}
+
+func DeleteNamespace() error {
+	if namespaceCreated {
+		return k8s.DeleteNamespace(testScope)
+	}
+	return nil
+}
+
+func HandleStopSignal() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	go func() {
+		<-stop
+		logrus.Info("Received signal to stop, cleaning up resources...")
+		if err := DeleteNamespace(); err != nil {
+			logrus.Errorf("Error deleting namespace: %v", err)
+		}
+	}()
 }
 
 // handleTimeout creates a timeout handler that will delete all resources with the scope after the timeout
