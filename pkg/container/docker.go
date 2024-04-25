@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -13,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
 )
 
 const (
@@ -31,20 +32,24 @@ type BuilderFactory struct {
 	imageBuilder           builder.Builder
 	cli                    *client.Client
 	dockerFileInstructions []string
-	context                string
+	buildContext           string
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
 func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Builder) (*BuilderFactory, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create docker client: %w", err)
+		return nil, ErrCreatingDockerClient.Wrap(err)
+	}
+	err = os.MkdirAll(buildContext, 0755)
+	if err != nil {
+		return nil, ErrFailedToCreateContextDir.Wrap(err)
 	}
 	return &BuilderFactory{
 		imageNameFrom:          imageName,
 		cli:                    cli,
 		dockerFileInstructions: []string{"FROM " + imageName},
-		context:                buildContext,
+		buildContext:           buildContext,
 		imageBuilder:           imageBuilder,
 	}, nil
 }
@@ -72,7 +77,7 @@ func (f *BuilderFactory) AddToBuilder(srcPath, destPath, chown string) error {
 // It returns the file's content or any error encountered.
 func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 	if f.imageNameTo == "" {
-		return nil, fmt.Errorf("no image name provided, push before reading")
+		return nil, ErrNoImageNameProvided
 	}
 	containerConfig := &container.Config{
 		Image: f.imageNameTo,
@@ -87,7 +92,7 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 		"",
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create container: %w", err)
+		return nil, ErrFailedToCreateContainer.Wrap(err)
 	}
 
 	defer func() {
@@ -98,23 +103,23 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 		}
 
 		if err := f.cli.ContainerStop(context.Background(), resp.ID, stopOptions); err != nil {
-			logrus.Warnf("failed to stop container: %v", err)
+			logrus.Warn(ErrFailedToStopContainer.Wrap(err))
 		}
 
 		// Remove the container
-		if err := f.cli.ContainerRemove(context.Background(), resp.ID, types.ContainerRemoveOptions{}); err != nil {
-			logrus.Warnf("failed to remove container: %v", err)
+		if err := f.cli.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{}); err != nil {
+			logrus.Warn(ErrFailedToRemoveContainer.Wrap(err))
 		}
 	}()
 
-	if err := f.cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to start container: %w", err)
+	if err := f.cli.ContainerStart(context.Background(), resp.ID, container.StartOptions{}); err != nil {
+		return nil, ErrFailedToStartContainer.Wrap(err)
 	}
 
 	// Now you can copy the file
 	reader, _, err := f.cli.CopyFromContainer(context.Background(), resp.ID, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy file from container: %w", err)
+		return nil, ErrFailedToCopyFileFromContainer.Wrap(err)
 	}
 	defer reader.Close()
 
@@ -127,19 +132,19 @@ func (f *BuilderFactory) ReadFileFromBuilder(filePath string) ([]byte, error) {
 			break // End of archive
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read from tar: %w", err)
+			return nil, ErrFailedToReadFromTar.Wrap(err)
 		}
 
 		if header.Typeflag == tar.TypeReg { // if it's a file then extract it
 			data, err := io.ReadAll(tarReader)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read file from tar: %w", err)
+				return nil, ErrFailedToReadFileFromTar.Wrap(err)
 			}
 			return data, nil
 		}
 	}
 
-	return nil, fmt.Errorf("file not found in tar")
+	return nil, ErrFileNotFoundInTar
 }
 
 // SetEnvVar sets the value of an environment variable in the builder.
@@ -169,18 +174,18 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 
 	f.imageNameTo = imageName
 
-	dockerFilePath := filepath.Join(f.context, "Dockerfile")
+	dockerFilePath := filepath.Join(f.buildContext, "Dockerfile")
 	// create path if it does not exist
-	if _, err := os.Stat(f.context); os.IsNotExist(err) {
-		err = os.MkdirAll(f.context, 0755)
+	if _, err := os.Stat(f.buildContext); os.IsNotExist(err) {
+		err = os.MkdirAll(f.buildContext, 0755)
 		if err != nil {
-			return fmt.Errorf("failed to create context directory: %w", err)
+			return ErrFailedToCreateContextDir.Wrap(err)
 		}
 	}
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
 	err := os.WriteFile(dockerFilePath, []byte(dockerFile), 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write Dockerfile: %w", err)
+		return ErrFailedToWriteDockerfile.Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
@@ -188,7 +193,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
-		BuildContext: builder.DirContext{Path: f.context}.BuildContext(),
+		BuildContext: builder.DirContext{Path: f.buildContext}.BuildContext(),
 	})
 
 	qStatus := logrus.TextFormatter{}.DisableQuote
@@ -208,7 +213,7 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx builder.GitContext, imageName string) error {
 	buildCtx, err := gitCtx.BuildContext()
 	if err != nil {
-		return fmt.Errorf("failed to get build context: %w", err)
+		return ErrFailedToGetBuildContext.Wrap(err)
 	}
 
 	f.imageNameTo = imageName
@@ -216,7 +221,7 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 	cOpts := &builder.CacheOptions{}
 	cOpts, err = cOpts.Default(buildCtx)
 	if err != nil {
-		return fmt.Errorf("failed to get default cache options: %w", err)
+		return ErrFailedToGetDefaultCacheOptions.Wrap(err)
 	}
 
 	logrus.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
@@ -250,4 +255,41 @@ func runCommand(cmd *exec.Cmd) error {
 		return fmt.Errorf("command failed: %s\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 	}
 	return nil
+}
+
+// GenerateImageHash creates a hash value based on the contents of the Dockerfile instructions and all files in the build context.
+func (f *BuilderFactory) GenerateImageHash() (string, error) {
+	hasher := sha256.New()
+
+	// Hash Dockerfile content
+	dockerFileContent := strings.Join(f.dockerFileInstructions, "\n")
+	_, err := hasher.Write([]byte(dockerFileContent))
+	if err != nil {
+		return "", ErrHashingDockerfile.Wrap(err)
+	}
+
+	// Hash contents of all files in the build context
+	err = filepath.Walk(f.buildContext, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return ErrReadingFile.WithParams(path).Wrap(err)
+			}
+			_, err = hasher.Write(fileContent)
+			if err != nil {
+				return ErrHashingFile.WithParams(path).Wrap(err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", ErrHashingBuildContext.Wrap(err)
+	}
+
+	logrus.Debug("Generated image hash: ", fmt.Sprintf("%x", hasher.Sum(nil)))
+
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }

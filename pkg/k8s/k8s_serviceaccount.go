@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +21,7 @@ func CreateServiceAccount(namespace, name string, labels map[string]string) erro
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if _, err := Clientset().CoreV1().ServiceAccounts(namespace).Create(ctx, serviceAccount, metav1.CreateOptions{}); err != nil {
 		return err
@@ -37,7 +36,7 @@ func DeleteServiceAccount(namespace, name string) error {
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if err := Clientset().CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return err

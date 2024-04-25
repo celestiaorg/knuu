@@ -1,20 +1,26 @@
-# knuu
+![knuu-logo](./docs/knuu-logo.png)
 
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/celestiaorg/knuu)
+![GitHub Release](https://img.shields.io/github/v/release/celestiaorg/knuu)
 [![CodeQL](https://github.com/celestiaorg/knuu/workflows/CodeQL/badge.svg)](https://github.com/celestiaorg/knuu/actions) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/7475/badge)](https://bestpractices.coreinfrastructure.org/projects/7475)
+
+---
 
 ## Description
 
-The goal of knuu is to provide a framework for writing integration tests.
+The goal of Knuu is to provide a framework for writing integration tests.
 The framework is written in Go and is designed to be used in Go projects.
 The idea is to provide a framework that uses the power of containers and Kubernetes without the test writer having to know the details of how to use them.
 
 We invite you to explore our codebase, contribute, and join us in developing a framework to help projects write integration tests.
 
+---
+
 ## Features
 
 Knuu is designed around `Instances`, which you can create, start, control, communicate with other Instances, stop, and destroy.
 
-Some of the features of knuu are:
+Some of the features of Knuu are:
 
 - Initialize an Instance from a Container/Docker image
 - Configure startup commands
@@ -32,24 +38,25 @@ Some of the features of knuu are:
 
 > If you have feedback on the framework, want to report a bug, or suggest an improvement, please create an issue [here](https://github.com/celestiaorg/knuu/issues/new/choose).
 
+---
+
 ## Getting Started
 
-This section will guide you on how to set up and run **knuu**.
+This section will guide you on how to set up and run **Knuu**.
+
+---
 
 ### Prerequisites
 
-1. **Docker**: Knuu requires Docker to run
+1. **Kubernetes cluster**: Set up access to a Kubernetes cluster using a `kubeconfig`.
+   > In case you have no Kubernetes cluster running yet, you can get more information [here](https://kubernetes.io/docs/setup/).
+
+2. **Docker**: Knuu uses Docker by default. If `KNUU_BUILDER` is not explicitly set to `kubernetes`, Docker is required to run Knuu.
    > You can install Docker by following the instructions [here](https://docs.docker.com/get-docker/).
-
-2. **Kubernetes cluster**: Set up access to a Kubernetes cluster using a kubeconfig.
-   > In case you have no Kubernets cluster running yet, you can get more information [here](https://kubernetes.io/docs/setup/).
-
-3. **'test' Namespace**: Create a namespace called 'test' in your Kubernetes cluster.
-   > **Note:** The used namespace can be changed by setting the `KNUU_NAMESPACE` environment variable.
 
 ### Writing Tests
 
-The documentation you can find  [here](https://pkg.go.dev/github.com/celestiaorg/knuu).
+The documentation you can find [here](https://pkg.go.dev/github.com/celestiaorg/knuu).
 
 Simple example:
 
@@ -64,7 +71,7 @@ Simple example:
 
 2. Run `go mod tidy` to download the dependencies.
 
-3. Create a file called `main_test.go` with the following content to initialize knuu:
+3. Create a file called `main_test.go` with the following content to initialize Knuu:
 
     ```go
     package main
@@ -156,8 +163,10 @@ Simple example:
 
 You can find more examples in the following repositories:
 
-- [celestiaorg/knuu-example](https://github.com/celestiaorg/knuu-example)
+- [celestiaorg/knuu](https://github.com/celestiaorg/knuu/e2e)
 - [celestiaorg/celestia-app](https://github.com/celestiaorg/celestia-app/tree/main/test/e2e)
+
+---
 
 ### Running Tests
 
@@ -168,6 +177,69 @@ To run all tests in the current directory, you can run:
 ```shell
 go test -v ./...
 ```
+
+#### Environment Variables
+
+You can set the following environment variables to change the behavior of knuu:
+
+| Environment Variable | Description | Possible Values | Default |
+| --- | --- | --- | --- |
+| `KNUU_TIMEOUT` | The timeout for the tests. | Any valid duration | `60m` |
+| `KNUU_BUILDER` | The builder to use for building images. | `docker`, `kubernetes` | `docker` |
+| `DEBUG_LEVEL` | The debug level. | `debug`, `info`, `warn`, `error` | `info` |
+
+---
+
+# E2E
+
+In the folder `e2e`, you will find some examples of how to use the [knuu](https://github.com/celestiaorg/knuu) Integration Test Framework.
+
+## Setup
+
+1. Install [Docker](https://docs.docker.com/get-docker/).
+
+2. Set up access to a Kubernetes cluster using your `kubeconfig` and create the `test` namespace.
+
+> **Note:** The used namespace can be changed by setting the `KNUU_NAMESPACE` environment variable.
+
+## Write Tests
+
+You can find the relevant documentation in the `pkg/knuu` package at: https://pkg.go.dev/github.com/celestiaorg/knuu
+
+## Run
+
+```shell
+make test-all
+```
+
+Or run only the basic examples:
+
+```shell
+make test-basic
+```
+
+Or run BitTwister tests:
+
+```sh
+make test-bittwister-packetloss
+make test-bittwister-bandwidth
+make test-bittwister-latency
+make test-bittwister-jitter
+```
+
+Or the celestia-app examples:
+
+```shell
+make test-celestia-app
+```
+
+Or the celestia-node examples:
+
+```shell
+make test-celestia-node
+```
+
+---
 
 ## Contributing
 

@@ -2,9 +2,10 @@
 package k8s
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
@@ -16,42 +17,24 @@ var (
 	// clientset is a global variable that holds a kubernetes clientset.
 	clientset *kubernetes.Clientset
 
-	// namespacePath path in the filesystem to the namespace name
-	namespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	// tokenPath path in the filesystem to the service account token
 	tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	// certPath path in the filesystem to the ca.crt
 	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
-// Initialize sets up the Kubernetes client with the appropriate configuration.
+// Initialize sets up the Kubernetes client.
 func Initialize() error {
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
-		return fmt.Errorf("retrieving the Kubernetes config: %w", err)
+		return ErrRetrievingKubernetesConfig.Wrap(err)
 	}
 
 	clientset, err = kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
-		return fmt.Errorf("creating clientset for Kubernetes: %w", err)
+		return ErrCreatingClientset.Wrap(err)
 	}
 
-	// Check if the program is running in a Kubernetes cluster environment
-	if isClusterEnvironment() {
-		// Read the namespace from the pod's spec
-		namespaceBytes, err := os.ReadFile(namespacePath)
-		if err != nil {
-			return fmt.Errorf("reading namespace from pod's spec: %w", err)
-		}
-		setNamespace(string(namespaceBytes))
-	} else {
-		// Read the namespace from KNUU_NAMESPACE environment variable
-		if os.Getenv("KNUU_NAMESPACE") != "" {
-			setNamespace(os.Getenv("KNUU_NAMESPACE"))
-		} else {
-			setNamespace("test")
-		}
-	}
 	return nil
 }
 
@@ -92,4 +75,29 @@ func getClusterConfig() (*rest.Config, error) {
 // isNotFound checks if the error is a NotFound error
 func isNotFound(err error) bool {
 	return apierrs.IsNotFound(err)
+}
+
+// precompile the regular expression to avoid recompiling it on every function call
+var invalidCharsRegexp = regexp.MustCompile(`[^a-z0-9-]+`)
+
+// SanitizeName ensures compliance with Kubernetes DNS-1123 subdomain names. It:
+//  1. Converts the input string to lowercase.
+//  2. Replaces underscores and any non-DNS-1123 compliant characters with hyphens.
+//  3. Trims leading and trailing hyphens.
+//  4. Ensures the name does not exceed 63 characters, trimming excess characters if necessary
+//     and ensuring it does not end with a hyphen after trimming.
+//
+// Use this function to sanitize strings to be used as Kubernetes names for resources.
+func SanitizeName(name string) string {
+	sanitized := strings.ToLower(name)
+	// Replace underscores and any other disallowed characters with hyphens
+	sanitized = invalidCharsRegexp.ReplaceAllString(sanitized, "-")
+	// Trim leading and trailing hyphens
+	sanitized = strings.Trim(sanitized, "-")
+	if len(sanitized) > 63 {
+		sanitized = sanitized[:63]
+		// Ensure it does not end with a hyphen after cutting it to the max length
+		sanitized = strings.TrimRight(sanitized, "-")
+	}
+	return sanitized
 }

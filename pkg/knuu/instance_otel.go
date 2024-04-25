@@ -2,6 +2,8 @@ package knuu
 
 import (
 	"fmt"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,8 +87,10 @@ type JaegerThriftHTTP struct {
 }
 
 type Exporters struct {
-	OTLPHTTP OTLPHTTPExporter `yaml:"otlphttp,omitempty"`
-	Jaeger   JaegerExporter   `yaml:"jaeger,omitempty"`
+	OTLPHTTP              OTLPHTTPExporter              `yaml:"otlphttp,omitempty"`
+	Jaeger                JaegerExporter                `yaml:"jaeger,omitempty"`
+	Prometheus            PrometheusExporter            `yaml:"prometheus,omitempty"`
+	PrometheusRemoteWrite PrometheusRemoteWriteExporter `yaml:"prometheusremotewrite,omitempty"`
 }
 
 type OTLPHTTPExporter struct {
@@ -103,6 +107,15 @@ type JaegerExporter struct {
 	TLS      TLS    `yaml:"tls,omitempty"`
 }
 
+type PrometheusExporter struct {
+	Endpoint string `yaml:"endpoint,omitempty"`
+}
+
+type PrometheusRemoteWriteExporter struct {
+	Endpoint string `yaml:"endpoint,omitempty"`
+	TLS      TLS    `yaml:"tls,omitempty"`
+}
+
 type TLS struct {
 	Insecure bool `yaml:"insecure,omitempty"`
 }
@@ -110,6 +123,16 @@ type TLS struct {
 type Service struct {
 	Extensions []string  `yaml:"extensions,omitempty"`
 	Pipelines  Pipelines `yaml:"pipelines,omitempty"`
+	Telemetry  Telemetry `yaml:"telemetry,omitempty"` // Added Telemetry field
+}
+
+type Telemetry struct {
+	Metrics MetricsTelemetry `yaml:"metrics,omitempty"`
+}
+
+type MetricsTelemetry struct {
+	Address string `yaml:"address,omitempty"`
+	Level   string `yaml:"level,omitempty"` // Options are basic, normal, detailed
 }
 
 type Pipelines struct {
@@ -118,8 +141,9 @@ type Pipelines struct {
 }
 
 type Metrics struct {
-	Receivers []string `yaml:"receivers,omitempty"`
-	Exporters []string `yaml:"exporters,omitempty"`
+	Receivers  []string `yaml:"receivers,omitempty"`
+	Exporters  []string `yaml:"exporters,omitempty"`
+	Processors []string `yaml:"processors,omitempty"`
 }
 
 type Traces struct {
@@ -131,6 +155,7 @@ type Traces struct {
 type Processors struct {
 	Batch         Batch         `yaml:"batch,omitempty"`
 	MemoryLimiter MemoryLimiter `yaml:"memory_limiter,omitempty"`
+	Attributes    Attributes    `yaml:"attributes,omitempty"`
 }
 
 type Batch struct{}
@@ -141,29 +166,39 @@ type MemoryLimiter struct {
 	CheckInterval string `yaml:"check_interval,omitempty"`
 }
 
+type Attributes struct {
+	Actions []Action `yaml:"actions,omitempty"`
+}
+
+type Action struct {
+	Key    string `yaml:"key,omitempty"`
+	Value  string `yaml:"value,omitempty"`
+	Action string `yaml:"action,omitempty"`
+}
+
 func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 	otelAgent, err := NewInstance("otel-agent")
 	if err != nil {
-		return nil, fmt.Errorf("error creating otel-agent instance: %w", err)
+		return nil, ErrCreatingOtelAgentInstance.Wrap(err)
 	}
 
 	if err := otelAgent.SetImage(fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
-		return nil, fmt.Errorf("error setting image for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentImage.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(8888); err != nil {
-		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(9090); err != nil {
-		return nil, fmt.Errorf("error adding port for otel-agent instance: %w", err)
+		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
 	if err := otelAgent.SetCPU("100m"); err != nil {
-		return nil, fmt.Errorf("error setting CPU for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentCPU.Wrap(err)
 	}
 	if err := otelAgent.SetMemory("100Mi", "200Mi"); err != nil {
-		return nil, fmt.Errorf("error setting memory for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
 	if err := otelAgent.Commit(); err != nil {
-		return nil, fmt.Errorf("error committing otel-agent instance: %w", err)
+		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
 	}
 
 	config := OTelConfig{
@@ -176,15 +211,15 @@ func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
 
 	bytes, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling YAML: %w", err)
+		return nil, ErrMarshalingYAML.Wrap(err)
 	}
 
 	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
-		return nil, fmt.Errorf("error adding otel-agent config file: %w", err)
+		return nil, ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
 	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
-		return nil, fmt.Errorf("error setting command for otel-agent instance: %w", err)
+		return nil, ErrSettingOtelAgentCommand.Wrap(err)
 	}
 
 	return otelAgent, nil
@@ -220,11 +255,20 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 		Config: PrometheusConfig{
 			ScrapeConfigs: []ScrapeConfig{
 				{
-					JobName:        i.obsyConfig.prometheusJobName,
-					ScrapeInterval: i.obsyConfig.prometheusScrapeInterval,
+					JobName:        i.obsyConfig.prometheusEndpointJobName,
+					ScrapeInterval: i.obsyConfig.prometheusEndpointScrapeInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusPort)},
+							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
+						},
+					},
+				},
+				{
+					JobName:        "internal-telemetry",
+					ScrapeInterval: "10s",
+					StaticConfigs: []StaticConfig{
+						{
+							Targets: []string{"localhost:8888"},
 						},
 					},
 				},
@@ -254,7 +298,7 @@ func (i *Instance) createReceivers() Receivers {
 		receivers.OTLP = i.createOtlpReceiver()
 	}
 
-	if i.obsyConfig.prometheusPort != 0 {
+	if i.obsyConfig.prometheusEndpointPort != 0 {
 		receivers.Prometheus = i.createPrometheusReceiver()
 	}
 
@@ -283,6 +327,21 @@ func (i *Instance) createJaegerExporter() JaegerExporter {
 	}
 }
 
+func (i *Instance) createPrometheusExporter() PrometheusExporter {
+	return PrometheusExporter{
+		Endpoint: i.obsyConfig.prometheusExporterEndpoint,
+	}
+}
+
+func (i *Instance) createPrometheusRemoteWriteExporter() PrometheusRemoteWriteExporter {
+	return PrometheusRemoteWriteExporter{
+		Endpoint: i.obsyConfig.prometheusRemoteWriteExporterEndpoint,
+		TLS: TLS{
+			Insecure: true,
+		},
+	}
+}
+
 func (i *Instance) createExporters() Exporters {
 	exporters := Exporters{}
 
@@ -294,6 +353,14 @@ func (i *Instance) createExporters() Exporters {
 		exporters.Jaeger = i.createJaegerExporter()
 	}
 
+	if i.obsyConfig.prometheusEndpointPort != 0 {
+		exporters.Prometheus = i.createPrometheusExporter()
+	}
+
+	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		exporters.PrometheusRemoteWrite = i.createPrometheusRemoteWriteExporter()
+	}
+
 	return exporters
 }
 
@@ -302,12 +369,19 @@ func (i *Instance) prepareMetricsForServicePipeline() Metrics {
 	if i.obsyConfig.otlpPort != 0 {
 		metrics.Receivers = append(metrics.Receivers, "otlp")
 	}
-	if i.obsyConfig.prometheusPort != 0 {
+	if i.obsyConfig.prometheusEndpointPort != 0 {
 		metrics.Receivers = append(metrics.Receivers, "prometheus")
 	}
 	if i.obsyConfig.otlpEndpoint != "" {
 		metrics.Exporters = append(metrics.Exporters, "otlphttp")
 	}
+	if i.obsyConfig.prometheusExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, "prometheus")
+	}
+	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
+	}
+	metrics.Processors = []string{"attributes"}
 	return metrics
 }
 
@@ -325,6 +399,7 @@ func (i *Instance) prepareTracesForServicePipeline() Traces {
 	if i.obsyConfig.jaegerEndpoint != "" {
 		traces.Exporters = append(traces.Exporters, "jaeger")
 	}
+	traces.Processors = []string{"attributes"}
 	return traces
 }
 
@@ -338,22 +413,31 @@ func (i *Instance) createService() Service {
 	pipelines.Metrics = i.prepareMetricsForServicePipeline()
 	pipelines.Traces = i.prepareTracesForServicePipeline()
 
+	telemetry := Telemetry{
+		Metrics: MetricsTelemetry{
+			Address: "localhost:8888",
+			Level:   "basic",
+		},
+	}
+
 	return Service{
 		Extensions: extensions,
 		Pipelines:  pipelines,
+		Telemetry:  telemetry,
 	}
 }
 
 func (i *Instance) createProcessors() Processors {
 	processors := Processors{}
 
-	if i.obsyConfig.jaegerGrpcPort != 0 {
-		processors.Batch = Batch{}
-		processors.MemoryLimiter = MemoryLimiter{
-			LimitMiB:      400,
-			SpikeLimitMiB: 100,
-			CheckInterval: "5s",
-		}
+	processors.Attributes = Attributes{
+		Actions: []Action{
+			{
+				Key:    "namespace",
+				Value:  k8s.Namespace(),
+				Action: "insert",
+			},
+		},
 	}
 
 	return processors

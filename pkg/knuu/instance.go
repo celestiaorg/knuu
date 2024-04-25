@@ -2,7 +2,6 @@ package knuu
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,14 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/celestiaorg/bittwister/sdk"
-	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/container"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/bittwister/sdk"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/container"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -25,12 +27,12 @@ type ObsyConfig struct {
 	// otelCollectorVersion is the version of the otel collector to use
 	otelCollectorVersion string
 
-	// prometheusPort is the port on which the prometheus server will be exposed
-	prometheusPort int
-	// prometheusJobName is the name of the prometheus job
-	prometheusJobName string
-	// prometheusScrapeInterval is the scrape interval for the prometheus job
-	prometheusScrapeInterval string
+	// prometheusEndpointPort is the port on which the prometheus server will be exposed
+	prometheusEndpointPort int
+	// prometheusEndpointJobName is the name of the prometheus job
+	prometheusEndpointJobName string
+	// prometheusEndpointScrapeInterval is the scrape interval for the prometheus job
+	prometheusEndpointScrapeInterval string
 
 	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
 	jaegerGrpcPort int
@@ -49,6 +51,12 @@ type ObsyConfig struct {
 	otlpUsername string
 	// otlpPassword is the password to use for the otlp collector
 	otlpPassword string
+
+	// prometheusExporterEndpoint is the endpoint of the prometheus exporter
+	prometheusExporterEndpoint string
+
+	// prometheusRemoteWriteExporterEndpoint is the endpoint of the prometheus remote write
+	prometheusRemoteWriteExporterEndpoint string
 }
 
 // SecurityContext represents the security settings for a container
@@ -62,35 +70,35 @@ type SecurityContext struct {
 
 // Instance represents a instance
 type Instance struct {
-	name                  string
-	imageName             string
-	k8sName               string
-	state                 InstanceState
-	instanceType          InstanceType
-	kubernetesService     *v1.Service
-	builderFactory        *container.BuilderFactory
-	kubernetesStatefulSet *appv1.StatefulSet
-	portsTCP              []int
-	portsUDP              []int
-	command               []string
-	args                  []string
-	env                   map[string]string
-	volumes               []*k8s.Volume
-	memoryRequest         string
-	memoryLimit           string
-	cpuRequest            string
-	policyRules           []rbacv1.PolicyRule
-	livenessProbe         *v1.Probe
-	readinessProbe        *v1.Probe
-	startupProbe          *v1.Probe
-	files                 []*k8s.File
-	isSidecar             bool
-	parentInstance        *Instance
-	sidecars              []*Instance
-	fsGroup               int64
-	obsyConfig            *ObsyConfig
-	securityContext       *SecurityContext
-	BitTwister            *btConfig
+	name                 string
+	imageName            string
+	k8sName              string
+	state                InstanceState
+	instanceType         InstanceType
+	kubernetesService    *v1.Service
+	builderFactory       *container.BuilderFactory
+	kubernetesReplicaSet *appv1.ReplicaSet
+	portsTCP             []int
+	portsUDP             []int
+	command              []string
+	args                 []string
+	env                  map[string]string
+	volumes              []*k8s.Volume
+	memoryRequest        string
+	memoryLimit          string
+	cpuRequest           string
+	policyRules          []rbacv1.PolicyRule
+	livenessProbe        *v1.Probe
+	readinessProbe       *v1.Probe
+	startupProbe         *v1.Probe
+	files                []*k8s.File
+	isSidecar            bool
+	parentInstance       *Instance
+	sidecars             []*Instance
+	fsGroup              int64
+	obsyConfig           *ObsyConfig
+	securityContext      *SecurityContext
+	BitTwister           *btConfig
 }
 
 // NewInstance creates a new instance of the Instance struct
@@ -99,21 +107,23 @@ func NewInstance(name string) (*Instance, error) {
 
 	k8sName, err := generateK8sName(name)
 	if err != nil {
-		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
+		return nil, ErrGeneratingK8sName.WithParams(name).Wrap(err)
 	}
 	obsyConfig := &ObsyConfig{
-		otelCollectorVersion:     "0.83.0",
-		otlpPort:                 0,
-		prometheusPort:           0,
-		prometheusJobName:        "",
-		prometheusScrapeInterval: "",
-		jaegerGrpcPort:           0,
-		jaegerThriftCompactPort:  0,
-		jaegerThriftHttpPort:     0,
-		otlpEndpoint:             "",
-		otlpUsername:             "",
-		otlpPassword:             "",
-		jaegerEndpoint:           "",
+		otelCollectorVersion:                  "0.83.0",
+		otlpPort:                              0,
+		prometheusEndpointPort:                0,
+		prometheusEndpointJobName:             "",
+		prometheusEndpointScrapeInterval:      "",
+		jaegerGrpcPort:                        0,
+		jaegerThriftCompactPort:               0,
+		jaegerThriftHttpPort:                  0,
+		otlpEndpoint:                          "",
+		otlpUsername:                          "",
+		otlpPassword:                          "",
+		jaegerEndpoint:                        "",
+		prometheusExporterEndpoint:            "",
+		prometheusRemoteWriteExporterEndpoint: "",
 	}
 	securityContext := &SecurityContext{
 		privileged:      false,
@@ -152,16 +162,13 @@ func NewInstance(name string) (*Instance, error) {
 
 func (i *Instance) EnableBitTwister() error {
 	if i.IsInState(Started) {
-		return fmt.Errorf("enabling BitTwister is not allowed in state 'Started'")
+		return ErrEnablingBitTwister
 	}
 	i.BitTwister.enable()
 	return nil
 }
 
 func (i *Instance) DisableBitTwister() error {
-	// if !i.IsInState(Preparing) {
-	// 	return fmt.Errorf("disabling BitTwister is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
-	// }
 	i.BitTwister.disable()
 	return nil
 }
@@ -172,7 +179,7 @@ func (i *Instance) DisableBitTwister() error {
 func (i *Instance) SetImage(image string) error {
 	// Check if setting the image is allowed in the current state
 	if !i.IsInState(None, Started) {
-		return fmt.Errorf("setting image is only allowed in state 'None' and 'Started'. Current state is '%s'", i.state.String())
+		return ErrSettingImageNotAllowed.WithParams(i.state.String())
 	}
 
 	// Handle each state accordingly
@@ -181,14 +188,14 @@ func (i *Instance) SetImage(image string) error {
 		// Use the builder to build a new image
 		factory, err := container.NewBuilderFactory(image, i.getBuildDir(), ImageBuilder())
 		if err != nil {
-			return fmt.Errorf("error creating builder: %s", err.Error())
+			return ErrCreatingBuilder.Wrap(err)
 		}
 		i.builderFactory = factory
 		i.state = Preparing
 	case Started:
 
 		if i.isSidecar {
-			return fmt.Errorf("setting image is not allowed for sidecars when in state 'Started'")
+			return ErrSettingImageNotAllowedForSidecarsStarted
 		}
 
 		if err := i.setImageWithGracePeriod(image, nil); err != nil {
@@ -203,21 +210,21 @@ func (i *Instance) SetImage(image string) error {
 // to the registry under the given name and sets the image of the instance.
 func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
 	if !i.IsInState(None) {
-		return fmt.Errorf("setting git repo is only allowed in state 'None'. Current state is '%s'", i.state.String())
+		return ErrSettingGitRepo.WithParams(i.state.String())
 	}
 
 	bCtx, err := gitContext.BuildContext()
 	if err != nil {
-		return fmt.Errorf("error getting build context: %w", err)
+		return ErrGettingBuildContext.Wrap(err)
 	}
 	imageName, err := builder.DefaultImageName(bCtx)
 	if err != nil {
-		return fmt.Errorf("error getting image name: %w", err)
+		return ErrGettingImageName.Wrap(err)
 	}
 
 	factory, err := container.NewBuilderFactory(imageName, i.getBuildDir(), ImageBuilder())
 	if err != nil {
-		return fmt.Errorf("error creating builder: %s", err.Error())
+		return ErrCreatingBuilder.Wrap(err)
 	}
 	i.builderFactory = factory
 	i.state = Preparing
@@ -231,11 +238,11 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 func (i *Instance) SetImageInstant(image string) error {
 	// Check if setting the image is allowed in the current state
 	if !i.IsInState(Started) {
-		return fmt.Errorf("setting image is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrSettingImageNotAllowedForSidecarsStarted.WithParams(i.state.String())
 	}
 
 	if i.isSidecar {
-		return fmt.Errorf("setting image is not allowed for sidecars")
+		return ErrSettingImageNotAllowedForSidecars
 	}
 
 	gracePeriod := int64(0)
@@ -251,7 +258,7 @@ func (i *Instance) SetImageInstant(image string) error {
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (i *Instance) SetCommand(command ...string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting command is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingCommand.WithParams(i.state.String())
 	}
 	i.command = command
 	return nil
@@ -261,7 +268,7 @@ func (i *Instance) SetCommand(command ...string) error {
 // This function can only be called in the states 'Preparing' or 'Committed'
 func (i *Instance) SetArgs(args ...string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting args is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingArgsNotAllowed.WithParams(i.state.String())
 	}
 	i.args = args
 	return nil
@@ -271,14 +278,14 @@ func (i *Instance) SetArgs(args ...string) error {
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortTCP(port int) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 	err := validatePort(port)
 	if err != nil {
 		return err
 	}
 	if i.isTCPPortRegistered(port) {
-		return fmt.Errorf("TCP port '%d' is already in registered", port)
+		return ErrPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsTCP = append(i.portsTCP, port)
 	logrus.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
@@ -289,24 +296,24 @@ func (i *Instance) AddPortTCP(port int) error {
 // This function can only be called in the state 'Started'
 func (i *Instance) PortForwardTCP(port int) (int, error) {
 	if !i.IsInState(Started) {
-		return -1, fmt.Errorf("random port forwarding is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return -1, ErrRandomPortForwardingNotAllowed.WithParams(i.state.String())
 	}
 	err := validatePort(port)
 	if err != nil {
 		return 0, err
 	}
 	if !i.isTCPPortRegistered(port) {
-		return -1, fmt.Errorf("TCP port '%d' is not registered", port)
+		return -1, ErrPortNotRegistered.WithParams(port)
 	}
 	// Get a random port on the host
 	localPort, err := getFreePortTCP()
 	if err != nil {
-		return -1, fmt.Errorf("error getting free port: %v", err)
+		return -1, ErrGettingFreePort.WithParams(port)
 	}
 	// Forward the port
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), i.k8sName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), i.k8sName)
 	if err != nil {
-		return -1, fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 	// We need to retry here because the port forwarding might fail as getFreePortTCP() might not free the port fast enough
 	retries := 5
@@ -317,7 +324,7 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 			break
 		}
 		if retries == r+1 {
-			return -1, fmt.Errorf("error forwarding port after %d retries: %v", retries, err)
+			return -1, ErrForwardingPort.WithParams(retries)
 		}
 		logrus.Debugf("Forwaring port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, wait, r+1, retries)
 		time.Sleep(wait)
@@ -329,14 +336,14 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortUDP(port int) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 	err := validatePort(port)
 	if err != nil {
 		return err
 	}
 	if i.isUDPPortRegistered(port) {
-		return fmt.Errorf("UDP port '%d' is already in registered", port)
+		return ErrUDPPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsUDP = append(i.portsUDP, port)
 	logrus.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
@@ -357,40 +364,40 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 // The context can be used to cancel the command and it is only possible in start state
 func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
 	if !i.IsInState(Preparing, Started) {
-		return "", fmt.Errorf("executing command is only allowed in state 'Preparing' or 'Started'. Current state is '%s'", i.state.String())
+		return "", ErrExecutingCommandNotAllowed.WithParams(i.state.String())
 	}
 
 	if i.IsInState(Preparing) {
 		output, err := i.builderFactory.ExecuteCmdInBuilder(command)
 		if err != nil {
-			return "", fmt.Errorf("error executing command '%s' in instance '%s': %v", command, i.name, err)
+			return "", ErrExecutingCommandInInstance.WithParams(command, i.name).Wrap(err)
 		}
 		return output, nil
 	}
 
 	var (
 		instanceName  string
-		errMsg        error
+		eErr          *Error
 		containerName = i.k8sName
 	)
 
 	if i.isSidecar {
 		instanceName = i.parentInstance.k8sName
-		errMsg = fmt.Errorf("error executing command '%s' in sidecar '%s' of instance '%s'", command, i.k8sName, i.parentInstance.k8sName)
+		eErr = ErrExecutingCommandInSidecar.WithParams(command, i.k8sName, i.parentInstance.k8sName)
 	} else {
 		instanceName = i.k8sName
-		errMsg = fmt.Errorf("error executing command '%s' in instance '%s'", command, i.k8sName)
+		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
 	}
 
-	pod, err := k8s.GetFirstPodFromStatefulSet(k8s.Namespace(), instanceName)
+	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), instanceName)
 	if err != nil {
-		return "", fmt.Errorf("error getting pod from statefulset '%s': %v", i.k8sName, err)
+		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
 	output, err := k8s.RunCommandInPod(ctx, k8s.Namespace(), pod.Name, containerName, commandWithShell)
 	if err != nil {
-		return "", fmt.Errorf("%v: %v", errMsg, err)
+		return "", eErr.Wrap(err)
 	}
 	return output, nil
 }
@@ -398,7 +405,7 @@ func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...str
 // checkStateForAddingFile checks if the current state allows adding a file
 func (i *Instance) checkStateForAddingFile() error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingFileNotAllowed.WithParams(i.state.String())
 	}
 	return nil
 }
@@ -417,7 +424,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 
 	// check if src exists (either as file or as folder)
 	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return fmt.Errorf("src '%s' does not exist", src)
+		return ErrSrcDoesNotExist.WithParams(src).Wrap(err)
 	}
 
 	// copy file to build dir
@@ -426,26 +433,26 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	// make sure dir exists
 	err = os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("error creating directory: %w", err)
+		return ErrCreatingDirectory.Wrap(err)
 	}
 	// Create destination file making sure the path is writeable.
 	dst, err := os.Create(dstPath)
 	if err != nil {
-		return fmt.Errorf("failed to create destination file '%s': %w", dstPath, err)
+		return ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
 	}
 	defer dst.Close()
 
 	// Open source file for reading.
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to open source file '%s': %w", src, err)
+		return ErrFailedToOpenSrcFile.WithParams(src).Wrap(err)
 	}
 	defer srcFile.Close()
 
 	// Copy the contents from source file to destination file
 	_, err = io.Copy(dst, srcFile)
 	if err != nil {
-		return fmt.Errorf("failed to copy from source '%s' to destination '%s': %w", src, dstPath, err)
+		return ErrFailedToCopyFile.WithParams(src, dstPath).Wrap(err)
 	}
 
 	switch i.state {
@@ -458,24 +465,24 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		// only allow files, not folders
 		srcInfo, err := os.Stat(src)
 		if os.IsNotExist(err) || srcInfo.IsDir() {
-			return fmt.Errorf("src '%s' does not exist or is a directory", src)
+			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
 		}
 		file := k8s.NewFile(dstPath, dest)
 
 		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid format")
+			return ErrInvalidFormat
 		}
 
 		// second part of array, base of number is 10, and we want a 64-bit integer
 		group, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
-			return fmt.Errorf("failed to convert to int64: %s", err)
+			return ErrFailedToConvertToInt64.Wrap(err)
 		}
 
 		if i.fsGroup != 0 && i.fsGroup != group {
-			return fmt.Errorf("all files must have the same group")
+			return ErrAllFilesMustHaveSameGroup
 		} else {
 			i.fsGroup = group
 		}
@@ -488,10 +495,10 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 }
 
 // AddFolder adds a folder to the instance
-// This function can only be called in the state 'Preparing'
+// This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing) {
-		return fmt.Errorf("adding folder is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed) {
+		return ErrAddingFolderNotAllowed.WithParams(i.state.String())
 	}
 
 	i.validateFileArgs(src, dest, chown)
@@ -499,7 +506,7 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 	// check if src exists (should be a folder)
 	srcInfo, err := os.Stat(src)
 	if os.IsNotExist(err) || !srcInfo.IsDir() {
-		return fmt.Errorf("src '%s' does not exist or is not a directory", src)
+		return ErrSrcDoesNotExistOrIsNotDirectory.WithParams(src).Wrap(err)
 	}
 
 	// iterate over the files/directories in the src
@@ -518,16 +525,13 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 		if info.IsDir() {
 			// create directory at destination path
 			return os.MkdirAll(dstPath, os.ModePerm)
-		} else {
-			// copy file to destination path
-			return i.AddFile(path, filepath.Join(dest, relPath), chown)
 		}
-
-		return nil
+		// copy file to destination path
+		return i.AddFile(path, filepath.Join(dest, relPath), chown)
 	})
 
 	if err != nil {
-		return fmt.Errorf("error copying folder '%s' to instance '%s': %w", src, i.name, err)
+		return ErrCopyingFolderToInstance.WithParams(src, i.name).Wrap(err)
 	}
 
 	logrus.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
@@ -564,34 +568,64 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 // This function can only be called in the state 'Preparing'
 func (i *Instance) SetUser(user string) error {
 	if !i.IsInState(Preparing) {
-		return fmt.Errorf("setting user is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+		return ErrSettingUserNotAllowed.WithParams(i.state.String())
 	}
 	err := i.builderFactory.SetUser(user)
 	if err != nil {
-		return fmt.Errorf("error setting user '%s' for instance '%s': %w", user, i.name, err)
+		return ErrSettingUser.WithParams(user, i.name).Wrap(err)
 	}
 	logrus.Debugf("Set user '%s' for instance '%s'", user, i.name)
 	return nil
+}
+
+// imageCache maps image hash values to image names
+var imageCache = make(map[string]string)
+
+// checkImageHashInCache checks if the given image hash exists in the cache.
+func checkImageHashInCache(imageHash string) (imageName string, exists bool) {
+	imageName, exists = imageCache[imageHash]
+	return imageName, exists
+}
+
+// updateImageCacheWithHash adds or updates the image cache with the given hash and image name.
+func updateImageCacheWithHash(imageHash, imageName string) {
+	imageCache[imageHash] = imageName // Update the cache with the new hash and image name
 }
 
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
 	if !i.IsInState(Preparing) {
-		return fmt.Errorf("committing is only allowed in state 'Preparing'. Current state is '%s'", i.state.String())
+		return ErrCommittingNotAllowed.WithParams(i.state.String())
 	}
 	if i.builderFactory.Changed() {
 		// TODO: To speed up the process, the image name could be dependent on the hash of the image
 		imageName, err := i.getImageRegistry()
 		if err != nil {
-			return fmt.Errorf("error getting image registry: %w", err)
+			return ErrGettingImageRegistry.Wrap(err)
 		}
-		err = i.builderFactory.PushBuilderImage(imageName)
+
+		// Generate a hash for the current image
+		imageHash, err := i.builderFactory.GenerateImageHash()
 		if err != nil {
-			return fmt.Errorf("error pushing image for instance '%s': %w", i.name, err)
+			return ErrGeneratingImageHash.Wrap(err)
 		}
-		i.imageName = imageName
-		logrus.Debugf("Pushed image for instance '%s'", i.name)
+
+		// Check if the generated image hash already exists in the cache, otherwise, we build it.
+		cachedImageName, exists := checkImageHashInCache(imageHash)
+		if exists {
+			i.imageName = cachedImageName
+			logrus.Debugf("Using cached image for instance '%s'", i.name)
+		} else {
+			logrus.Debugf("Cannot use any cached image for instance '%s'", i.name)
+			err = i.builderFactory.PushBuilderImage(imageName)
+			if err != nil {
+				return ErrPushingImage.WithParams(i.name).Wrap(err)
+			}
+			updateImageCacheWithHash(imageHash, imageName)
+			i.imageName = imageName
+			logrus.Debugf("Pushed new image for instance '%s'", i.name)
+		}
 	} else {
 		i.imageName = i.builderFactory.ImageNameFrom()
 		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
@@ -614,7 +648,7 @@ func (i *Instance) AddVolume(path, size string) error {
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding volume is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
 	volume := k8s.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
@@ -626,7 +660,7 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetMemory(request, limit string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting memory is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
 	i.memoryLimit = limit
@@ -638,7 +672,7 @@ func (i *Instance) SetMemory(request, limit string) error {
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetCPU(request string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting cpu is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
 	logrus.Debugf("Set cpu to '%s' in instance '%s'", request, i.name)
@@ -649,7 +683,7 @@ func (i *Instance) SetCPU(request string) error {
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting environment variable is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingEnvNotAllowed.WithParams(i.state.String())
 	}
 	if i.state == Preparing {
 		err := i.builderFactory.SetEnvVar(key, value)
@@ -677,17 +711,17 @@ func (i *Instance) GetIP() (string, error) {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService()
 		if err != nil {
-			return "", fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
+			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 		svc, err = k8s.GetService(k8s.Namespace(), i.k8sName)
 		if err != nil {
-			return "", fmt.Errorf("error retrieving deployed service '%s': %w", i.k8sName, err)
+			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
 	ip := svc.Spec.ClusterIP
 	if ip == "" {
-		return "", fmt.Errorf("IP address is not available for service '%s'", i.k8sName)
+		return "", ErrGettingServiceIP.WithParams(i.k8sName)
 	}
 
 	// Update i.kubernetesService for future reference
@@ -699,22 +733,49 @@ func (i *Instance) GetIP() (string, error) {
 // GetFileBytes returns the content of the given file
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) GetFileBytes(file string) ([]byte, error) {
-	if !i.IsInState(Preparing, Committed) {
-		return nil, fmt.Errorf("getting file is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+	if !i.IsInState(Preparing, Committed, Started) {
+		return nil, ErrGettingFileNotAllowed.WithParams(i.state.String())
 	}
 
-	bytes, err := i.builderFactory.ReadFileFromBuilder(file)
-	if err != nil {
-		return nil, fmt.Errorf("error getting file '%s' from instance '%s': %w", file, i.name, err)
+	if i.state != Started {
+		bytes, err := i.builderFactory.ReadFileFromBuilder(file)
+		if err != nil {
+			return nil, ErrGettingFile.WithParams(file, i.name).Wrap(err)
+		}
+		return bytes, nil
 	}
-	return bytes, nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), k8s.Timeout())
+	defer cancel()
+
+	rc, err := i.ReadFileFromRunningInstance(ctx, file)
+	if err != nil {
+		return nil, ErrReadingFile.WithParams(file, i.name).Wrap(err)
+	}
+
+	defer rc.Close()
+	return io.ReadAll(rc)
+}
+
+func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath string) (io.ReadCloser, error) {
+	if !i.IsInState(Started) {
+		return nil, ErrReadingFileNotAllowed.WithParams(i.state.String())
+	}
+
+	// Not the best solution, we need to find a better one.
+	// Tested with a 110MB+ file and it worked.
+	fileContent, err := i.ExecuteCommandWithContext(ctx, "cat", filePath)
+	if err != nil {
+		return nil, ErrReadingFileFromInstance.WithParams(filePath, i.name).Wrap(err)
+	}
+	return io.NopCloser(strings.NewReader(fileContent)), nil
 }
 
 // AddPolicyRule adds a policy rule to the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding policy rule is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingPolicyRuleNotAllowed.WithParams(i.state.String())
 	}
 	i.policyRules = append(i.policyRules, rule)
 	return nil
@@ -723,7 +784,7 @@ func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 // checkStateForProbe checks if the current state is allowed for setting a probe
 func (i *Instance) checkStateForProbe() error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting probe is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingProbeNotAllowed.WithParams(i.state.String())
 	}
 	return nil
 }
@@ -772,22 +833,22 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 func (i *Instance) AddSidecar(sidecar *Instance) error {
 
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding sidecar is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingSidecarNotAllowed.WithParams(i.state.String())
 	}
 	if sidecar == nil {
-		return fmt.Errorf("sidecar is nil")
+		return ErrSidecarIsNil
 	}
 	if sidecar == i {
-		return fmt.Errorf("sidecar cannot be the same instance")
+		return ErrSidecarCannotBeSameInstance
 	}
 	if sidecar.state != Committed {
-		return fmt.Errorf("sidecar '%s' is not in state 'Committed'", sidecar.name)
+		return ErrSidecarNotCommitted.WithParams(sidecar.name)
 	}
 	if i.isSidecar {
-		return fmt.Errorf("sidecar '%s' cannot have a sidecar", i.name)
+		return ErrSidecarCannotHaveSidecar.WithParams(i.name)
 	}
 	if sidecar.isSidecar {
-		return fmt.Errorf("sidecar '%s' is already a sidecar", sidecar.name)
+		return ErrSidecarAlreadySidecar.WithParams(sidecar.name)
 	}
 
 	i.sidecars = append(i.sidecars, sidecar)
@@ -825,9 +886,9 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
 		return err
 	}
-	i.obsyConfig.prometheusPort = port
-	i.obsyConfig.prometheusJobName = jobName
-	i.obsyConfig.prometheusScrapeInterval = scapeInterval
+	i.obsyConfig.prometheusEndpointPort = port
+	i.obsyConfig.prometheusEndpointJobName = jobName
+	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
 	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
@@ -869,11 +930,33 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 	return nil
 }
 
+// SetPrometheusExporter sets the Prometheus exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// SetPrometheusRemoteWriteExporter sets the Prometheus remote write exporter for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
+	if err := i.validateStateForObsy("Prometheus remote write exporter"); err != nil {
+		return err
+	}
+	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
+	logrus.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrivileged(privileged bool) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting privileged is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
 	logrus.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
@@ -884,7 +967,7 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddCapability(capability string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding capability is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
 	logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
@@ -895,7 +978,7 @@ func (i *Instance) AddCapability(capability string) error {
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddCapabilities(capabilities []string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("adding capabilities is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", i.state.String())
+		return ErrAddingCapabilitiesNotAllowed.WithParams(i.state.String())
 	}
 	for _, capability := range capabilities {
 		i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
@@ -904,51 +987,61 @@ func (i *Instance) AddCapabilities(capabilities []string) error {
 	return nil
 }
 
+// StartAsync starts the instance without waiting for it to be ready
+// This function can only be called in the state 'Committed' or 'Stopped'
+// This function will replace StartWithoutWait
+func (i *Instance) StartAsync() error {
+	if err := i.StartWithoutWait(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait() error {
 	if !i.IsInState(Committed, Stopped) {
-		return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state is '%s'", i.state.String())
+		return ErrStartingNotAllowed.WithParams(i.state.String())
 	}
 	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		if !sidecar.IsInState(Committed, Stopped) {
-			return fmt.Errorf("starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s'", sidecar.name, sidecar.state.String())
+			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.name, sidecar.state.String())
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
 	if i.isSidecar {
-		return fmt.Errorf("starting a sidecar is not allowed")
+		return ErrStartingSidecarNotAllowed
 	}
 
 	if i.state == Committed {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
 			if err := i.addOtelCollectorSidecar(); err != nil {
-				return fmt.Errorf("error adding OpenTelemetry collector sidecar for instance '%s': %w", i.k8sName, err)
+				return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 
 		if i.BitTwister.Enabled() {
 			if err := i.addBitTwisterSidecar(); err != nil {
-				return fmt.Errorf("error adding network sidecar for instance '%s': %w", i.k8sName, err)
+				return ErrAddingNetworkSidecar.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 
 		if err := i.deployResources(); err != nil {
-			return fmt.Errorf("error deploying resources for instance '%s': %w", i.k8sName, err)
+			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 		if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 			return sidecar.deployResources()
 		}); err != nil {
-			return fmt.Errorf("error deploying resources for sidecars of instance '%s': %w", i.k8sName, err)
+			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
 	err := i.deployPod()
 	if err != nil {
-		return fmt.Errorf("error deploying pod for instance '%s': %w", i.k8sName, err)
+		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 	i.state = Started
 	setStateForSidecars(i.sidecars, Started)
@@ -966,7 +1059,7 @@ func (i *Instance) Start() error {
 
 	err := i.WaitInstanceIsRunning()
 	if err != nil {
-		return fmt.Errorf("error waiting for instance '%s' to be running: %w", i.k8sName, err)
+		return ErrWaitingForInstanceRunning.WithParams(i.k8sName).Wrap(err)
 	}
 
 	return nil
@@ -976,16 +1069,16 @@ func (i *Instance) Start() error {
 // This function can only be called in the state 'Started'
 func (i *Instance) IsRunning() (bool, error) {
 	if !i.IsInState(Started, Stopped) {
-		return false, fmt.Errorf("checking if instance is running is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
-	return k8s.IsStatefulSetRunning(k8s.Namespace(), i.k8sName)
+	return k8s.IsReplicaSetRunning(k8s.Namespace(), i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
 // This function can only be called in the state 'Started'
 func (i *Instance) WaitInstanceIsRunning() error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("waiting for instance is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrWaitingForInstanceNotAllowed.WithParams(i.state.String())
 	}
 	timeout := time.After(1 * time.Minute)
 	tick := time.Tick(1 * time.Second)
@@ -993,11 +1086,11 @@ func (i *Instance) WaitInstanceIsRunning() error {
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timeout while waiting for instance '%s' to be running", i.k8sName)
+			return ErrWaitingForInstanceTimeout.WithParams(i.k8sName)
 		case <-tick:
 			running, err := i.IsRunning()
 			if err != nil {
-				return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
+				return ErrCheckingIfInstanceRunning.WithParams(i.k8sName).Wrap(err)
 			}
 			if running {
 				return nil
@@ -1011,14 +1104,14 @@ func (i *Instance) WaitInstanceIsRunning() error {
 // This function can only be called in the state 'Started'
 func (i *Instance) DisableNetwork() error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("disabling network is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrDisablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 	executorSelectorMap := map[string]string{
 		"knuu.sh/type": ExecutorInstance.String(),
 	}
 	err := k8s.CreateNetworkPolicy(k8s.Namespace(), i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
-		return fmt.Errorf("error disabling network for instance '%s': %w", i.k8sName, err)
+		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }
@@ -1029,10 +1122,10 @@ func (i *Instance) DisableNetwork() error {
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetBandwidthLimit(limit int64) error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("setting bandwidth limit is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrSettingBandwidthLimitNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
-		return fmt.Errorf("setting bandwidth limit is only allowed if BitTwister is enabled")
+		return ErrSettingBandwidthLimitNotAllowedBitTwister
 	}
 
 	// We first need to stop it, otherwise we get an error
@@ -1040,7 +1133,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return fmt.Errorf("error stopping bandwidth limit for instance '%s': %w", i.k8sName, err)
+			return ErrStoppingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -1049,7 +1142,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		Limit:                limit,
 	})
 	if err != nil {
-		return fmt.Errorf("error setting bandwidth limit for instance '%s': %w", i.k8sName, err)
+		return ErrSettingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
 	}
 
 	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
@@ -1063,10 +1156,10 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("setting latency/jitter is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrSettingLatencyJitterNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
-		return fmt.Errorf("setting latency/jitter is only allowed if BitTwister is enabled")
+		return ErrSettingLatencyJitterNotAllowedBitTwister
 	}
 
 	// We first need to stop it, otherwise we get an error
@@ -1074,7 +1167,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return fmt.Errorf("error stopping latency/jitter for instance '%s': %w", i.k8sName, err)
+			return ErrStoppingLatencyJitter.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -1084,7 +1177,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		Jitter:               jitter,
 	})
 	if err != nil {
-		return fmt.Errorf("error setting latency/jitter for instance '%s': %w", i.k8sName, err)
+		return ErrSettingLatencyJitter.WithParams(i.k8sName).Wrap(err)
 	}
 
 	logrus.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
@@ -1097,10 +1190,10 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetPacketLoss(packetLoss int32) error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("setting packetloss is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrSettingPacketLossNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
-		return fmt.Errorf("setting packetloss is only allowed if BitTwister is enabled")
+		return ErrSettingPacketLossNotAllowedBitTwister
 	}
 
 	// We first need to stop it, otherwise we get an error
@@ -1108,7 +1201,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return fmt.Errorf("error stopping packetloss for instance '%s': %w", i.k8sName, err)
+			return ErrStoppingPacketLoss.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -1117,7 +1210,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		PacketLossRate:       packetLoss,
 	})
 	if err != nil {
-		return fmt.Errorf("error setting packetloss for instance '%s': %w", i.k8sName, err)
+		return ErrSettingPacketLoss.WithParams(i.k8sName).Wrap(err)
 	}
 
 	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
@@ -1128,11 +1221,11 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 // This function can only be called in the state 'Started'
 func (i *Instance) EnableNetwork() error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("enabling network is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 	err := k8s.DeleteNetworkPolicy(k8s.Namespace(), i.k8sName)
 	if err != nil {
-		return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }
@@ -1141,7 +1234,7 @@ func (i *Instance) EnableNetwork() error {
 // This function can only be called in the state 'Started'
 func (i *Instance) NetworkIsDisabled() (bool, error) {
 	if !i.IsInState(Started) {
-		return false, fmt.Errorf("checking if network is disabled is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 	return k8s.NetworkPolicyExists(k8s.Namespace(), i.k8sName), nil
 }
@@ -1150,7 +1243,7 @@ func (i *Instance) NetworkIsDisabled() (bool, error) {
 // This function can only be called in the state 'Stopped'
 func (i *Instance) WaitInstanceIsStopped() error {
 	if !i.IsInState(Stopped) {
-		return fmt.Errorf("waiting for instance is only allowed in state 'Stopped'. Current state is '%s'", i.state.String())
+		return ErrWaitingForInstanceStoppedNotAllowed.WithParams(i.state.String())
 	}
 	for {
 		running, err := i.IsRunning()
@@ -1158,7 +1251,7 @@ func (i *Instance) WaitInstanceIsStopped() error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("error checking if instance '%s' is running: %w", i.k8sName, err)
+			return ErrCheckingIfInstanceStopped.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -1170,11 +1263,12 @@ func (i *Instance) WaitInstanceIsStopped() error {
 // This function can only be called in the state 'Started'
 func (i *Instance) Stop() error {
 	if !i.IsInState(Started) {
-		return fmt.Errorf("stopping is only allowed in state 'Started'. Current state is '%s'", i.state.String())
+		return ErrStoppingNotAllowed.WithParams(i.state.String())
+
 	}
 	err := i.destroyPod()
 	if err != nil {
-		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
+		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
 	}
 	i.state = Stopped
 	setStateForSidecars(i.sidecars, Stopped)
@@ -1187,24 +1281,24 @@ func (i *Instance) Stop() error {
 // This function can only be called in the state 'Started' or 'Destroyed'
 func (i *Instance) Destroy() error {
 	if !i.IsInState(Started, Stopped, Destroyed) {
-		return fmt.Errorf("destroying is only allowed in state 'Started' or 'Destroyed'. Current state is '%s'", i.state.String())
+		return ErrDestroyingNotAllowed.WithParams(i.state.String())
 	}
 	if i.state == Destroyed {
 		return nil
 	}
 	err := i.destroyPod()
 	if err != nil {
-		return fmt.Errorf("error destroying pod for instance '%s': %w", i.k8sName, err)
+		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
 	}
 	if err := i.destroyResources(); err != nil {
-		return fmt.Errorf("error destroying resources for instance '%s': %w", i.k8sName, err)
+		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 
 	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
 		return sidecar.destroyResources()
 	}); err != nil {
-		return fmt.Errorf("error destroying resources for sidecars of instance '%s': %w", i.k8sName, err)
+		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 	}
 
 	i.state = Destroyed
@@ -1220,12 +1314,12 @@ func (i *Instance) Destroy() error {
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) Clone() (*Instance, error) {
 	if !i.IsInState(Committed) {
-		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+		return nil, ErrCloningNotAllowed.WithParams(i.state.String())
 	}
 
 	newK8sName, err := generateK8sName(i.name)
 	if err != nil {
-		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", i.name, err)
+		return nil, ErrGeneratingK8sName.WithParams(i.name).Wrap(err)
 	}
 	// Create a new instance with the same attributes as the original instance
 	ins := i.cloneWithSuffix("")
@@ -1239,12 +1333,12 @@ func (i *Instance) Clone() (*Instance, error) {
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
 	if !i.IsInState(Committed) {
-		return nil, fmt.Errorf("cloning is only allowed in state 'Committed'. Current state is '%s'", i.state.String())
+		return nil, ErrCloningNotAllowedForSidecar.WithParams(i.state.String())
 	}
 
 	newK8sName, err := generateK8sName(name)
 	if err != nil {
-		return nil, fmt.Errorf("error generating k8s name for instance '%s': %w", name, err)
+		return nil, ErrGeneratingK8sNameForSidecar.WithParams(name).Wrap(err)
 	}
 	// Create a new instance with the same attributes as the original instance
 	ins := i.cloneWithSuffix("")
