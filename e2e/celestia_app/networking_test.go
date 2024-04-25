@@ -108,6 +108,10 @@ afterTimeout:
 	t.Log("Enabling networking")
 	require.NoError(t, full.EnableNetwork(), "Error enabling network")
 
+	// Wait until validator reaches at least one block higher than what the fullnode has already synced
+	err = utils.WaitForHeight(executor, validator, fullNodeHeight+1)
+	require.NoError(t, err, "Error waiting for height")
+
 	t.Log("Waiting for 30 seconds to allow the full node to start to sync again...")
 	time.Sleep(30 * time.Second)
 
