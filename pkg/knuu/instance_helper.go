@@ -69,16 +69,17 @@ func (i *Instance) getLabels() map[string]string {
 		"knuu.sh/scope":                k8s.SanitizeName(testScope),
 		"knuu.sh/test-started":         startTime,
 		"knuu.sh/name":                 i.name,
-		"knuu.sh/k8s-name":             i.k8sName,
+		"knuu.sh/k8sClient-name":       i.k8sName,
 		"knuu.sh/type":                 i.instanceType.String(),
 	}
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployService() error {
+func (i *Instance) deployService(ctx context.Context) error {
 	labels := i.getLabels()
 	selectorMap := i.getLabels()
-	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
+
+	service, err := k8sClient.DeployService(ctx, i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
 	if err != nil {
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
@@ -88,15 +89,15 @@ func (i *Instance) deployService() error {
 }
 
 // patchService patches the service for the instance
-func (i *Instance) patchService() error {
+func (i *Instance) patchService(ctx context.Context) error {
 	if i.kubernetesService == nil {
-		svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
+		svc, err := k8sClient.GetService(ctx, i.k8sName)
 		if err != nil {
 			return ErrGettingService.WithParams(i.k8sName).Wrap(err)
 		}
 		i.kubernetesService = svc
 	}
-	err := k8s.PatchService(k8s.Namespace(), i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
+	err := k8sClient.PatchService(ctx, i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
 	if err != nil {
 		return ErrPatchingService.WithParams(i.k8sName).Wrap(err)
 	}
@@ -105,29 +106,26 @@ func (i *Instance) patchService() error {
 }
 
 // destroyService destroys the service for the instance
-func (i *Instance) destroyService() error {
-	return k8s.DeleteService(k8s.Namespace(), i.k8sName)
+func (i *Instance) destroyService(ctx context.Context) error {
+	return k8sClient.DeleteService(ctx, i.k8sName)
 }
 
 // deployPod deploys the pod for the instance
-func (i *Instance) deployPod() error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
+func (i *Instance) deployPod(ctx context.Context) error {
 	// Get labels for the pod
 	labels := i.getLabels()
 
 	// create a service account for the pod
-	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
+	if err := k8sClient.CreateServiceAccount(ctx, i.k8sName, labels); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
 	// create a role and role binding for the pod if there are policy rules
 	if len(i.policyRules) > 0 {
-		if err := k8s.CreateRole(k8s.Namespace(), i.k8sName, labels, i.policyRules); err != nil {
+		if err := k8sClient.CreateRole(ctx, i.k8sName, labels, i.policyRules); err != nil {
 			return ErrFailedToCreateRole.Wrap(err)
 		}
-		if err := k8s.CreateRoleBinding(k8s.Namespace(), i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
+		if err := k8sClient.CreateRoleBinding(ctx, i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
 			return ErrFailedToCreateRoleBinding.Wrap(err)
 		}
 	}
@@ -135,7 +133,7 @@ func (i *Instance) deployPod() error {
 	replicaSetSetConfig := i.prepareReplicaSetConfig()
 
 	// Deploy the statefulSet
-	replicaSet, err := k8s.DeployReplicaSet(ctx, replicaSetSetConfig, true)
+	replicaSet, err := k8sClient.DeployReplicaSet(ctx, replicaSetSetConfig, true)
 	if err != nil {
 		return ErrFailedToDeployPod.Wrap(err)
 	}
@@ -152,26 +150,23 @@ func (i *Instance) deployPod() error {
 
 // destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
-func (i *Instance) destroyPod() error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
+func (i *Instance) destroyPod(ctx context.Context) error {
 	grace := int64(0)
-	err := k8s.DeleteReplicaSetWithGracePeriod(ctx, k8s.Namespace(), i.k8sName, &grace)
+	err := k8sClient.DeleteReplicaSetWithGracePeriod(ctx, i.k8sName, &grace)
 	if err != nil {
 		return ErrFailedToDeletePod.Wrap(err)
 	}
 
 	// Delete the service account for the pod
-	if err := k8s.DeleteServiceAccount(k8s.Namespace(), i.k8sName); err != nil {
+	if err := k8sClient.DeleteServiceAccount(ctx, i.k8sName); err != nil {
 		return ErrFailedToDeleteServiceAccount.Wrap(err)
 	}
 	// Delete the role and role binding for the pod if there are policy rules
 	if len(i.policyRules) > 0 {
-		if err := k8s.DeleteRole(k8s.Namespace(), i.k8sName); err != nil {
+		if err := k8sClient.DeleteRole(ctx, i.k8sName); err != nil {
 			return ErrFailedToDeleteRole.Wrap(err)
 		}
-		if err := k8s.DeleteRoleBinding(k8s.Namespace(), i.k8sName); err != nil {
+		if err := k8sClient.DeleteRoleBinding(ctx, i.k8sName); err != nil {
 			return ErrFailedToDeleteRoleBinding.Wrap(err)
 		}
 	}
@@ -180,17 +175,17 @@ func (i *Instance) destroyPod() error {
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployOrPatchService() error {
+func (i *Instance) deployOrPatchService(ctx context.Context) error {
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
 		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := k8s.GetService(k8s.Namespace(), i.k8sName)
+		svc, _ := k8sClient.GetService(ctx, i.k8sName)
 		if svc == nil {
-			err := i.deployService()
+			err := i.deployService(ctx)
 			if err != nil {
 				return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		} else if svc != nil {
-			err := i.patchService()
+			err := i.patchService(ctx)
 			if err != nil {
 				return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
@@ -200,27 +195,27 @@ func (i *Instance) deployOrPatchService() error {
 }
 
 // deployVolume deploys the volume for the instance
-func (i *Instance) deployVolume() error {
+func (i *Instance) deployVolume(ctx context.Context) error {
 	size := resource.Quantity{}
 	for _, volume := range i.volumes {
 		size.Add(resource.MustParse(volume.Size))
 	}
-	k8s.DeployPersistentVolumeClaim(k8s.Namespace(), i.k8sName, i.getLabels(), size)
+	k8sClient.DeployPersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), size)
 	logrus.Debugf("Deployed persistent volume '%s'", i.k8sName)
 
 	return nil
 }
 
 // destroyVolume destroys the volume for the instance
-func (i *Instance) destroyVolume() error {
-	k8s.DeletePersistentVolumeClaim(k8s.Namespace(), i.k8sName)
+func (i *Instance) destroyVolume(ctx context.Context) error {
+	k8sClient.DeletePersistentVolumeClaim(ctx, i.k8sName)
 	logrus.Debugf("Destroyed persistent volume '%s'", i.k8sName)
 
 	return nil
 }
 
 // deployFiles deploys the files for the instance
-func (i *Instance) deployFiles() error {
+func (i *Instance) deployFiles(ctx context.Context) error {
 	data := map[string]string{}
 
 	n := 0
@@ -246,7 +241,7 @@ func (i *Instance) deployFiles() error {
 	}
 
 	// create configmap
-	if _, err := k8s.CreateConfigMap(k8s.Namespace(), i.k8sName, i.getLabels(), data); err != nil {
+	if _, err := k8sClient.CreateConfigMap(ctx, i.k8sName, i.getLabels(), data); err != nil {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
@@ -254,27 +249,27 @@ func (i *Instance) deployFiles() error {
 }
 
 // destroyFiles destroys the files for the instance
-func (i *Instance) destroyFiles() error {
-	if err := k8s.DeleteConfigMap(k8s.Namespace(), i.k8sName); err != nil {
+func (i *Instance) destroyFiles(ctx context.Context) error {
+	if err := k8sClient.DeleteConfigMap(ctx, i.k8sName); err != nil {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 	return nil
 }
 
 // deployResources deploys the resources for the instance
-func (i *Instance) deployResources() error {
+func (i *Instance) deployResources(ctx context.Context) error {
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		if err := i.deployOrPatchService(); err != nil {
+		if err := i.deployOrPatchService(ctx); err != nil {
 			return ErrFailedToDeployOrPatchService.Wrap(err)
 		}
 	}
 	if len(i.volumes) != 0 {
-		if err := i.deployVolume(); err != nil {
+		if err := i.deployVolume(ctx); err != nil {
 			return ErrDeployingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if len(i.files) != 0 {
-		if err := i.deployFiles(); err != nil {
+		if err := i.deployFiles(ctx); err != nil {
 			return ErrDeployingFilesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
@@ -283,21 +278,21 @@ func (i *Instance) deployResources() error {
 }
 
 // destroyResources destroys the resources for the instance
-func (i *Instance) destroyResources() error {
+func (i *Instance) destroyResources(ctx context.Context) error {
 	if len(i.volumes) != 0 {
-		err := i.destroyVolume()
+		err := i.destroyVolume(ctx)
 		if err != nil {
 			return ErrDestroyingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if len(i.files) != 0 {
-		err := i.destroyFiles()
+		err := i.destroyFiles(ctx)
 		if err != nil {
 			return ErrDestroyingFilesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if i.kubernetesService != nil {
-		err := i.destroyService()
+		err := i.destroyService(ctx)
 		if err != nil {
 			return ErrDestroyingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
@@ -491,7 +486,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
-		Namespace:          k8s.Namespace(),
+		Namespace:          k8sClient.Namespace(),
 		Name:               i.k8sName,
 		Labels:             i.getLabels(),
 		ServiceAccountName: i.k8sName,
@@ -501,7 +496,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	}
 	// Generate the ReplicaSet configuration
 	statefulSetConfig := k8s.ReplicaSetConfig{
-		Namespace: k8s.Namespace(),
+		Namespace: k8sClient.Namespace(),
 		Name:      i.k8sName,
 		Labels:    i.getLabels(),
 		Replicas:  1,
@@ -512,13 +507,13 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 }
 
 // setImageWithGracePeriod sets the image of the instance with a grace period
-func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64) error {
+func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod *int64) error {
 	i.imageName = imageName
 
 	replicaSetConfig := i.prepareReplicaSetConfig()
 
 	// Replace the pod with a new one, using the given image
-	_, err := k8s.ReplaceReplicaSetWithGracePeriod(replicaSetConfig, gracePeriod)
+	_, err := k8sClient.ReplaceReplicaSetWithGracePeriod(ctx, replicaSetConfig, gracePeriod)
 	if err != nil {
 		return ErrReplacingPod.Wrap(err)
 	}

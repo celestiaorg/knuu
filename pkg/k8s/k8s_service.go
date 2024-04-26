@@ -10,110 +10,80 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// GetService retrieves a service.
-func GetService(namespace, name string) (*v1.Service, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	svc, err := Clientset().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, error) {
+	svc, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, ErrGettingService.WithParams(name).Wrap(err)
 	}
 	return svc, nil
 }
 
-// DeployService deploys a service if it does not exist.
-func DeployService(
-	namespace,
+func (c *Client) DeployService(
+	ctx context.Context,
 	name string,
 	labels,
 	selectorMap map[string]string,
 	portsTCP,
 	portsUDP []int,
 ) (*v1.Service, error) {
-	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
+	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
 		return nil, ErrPreparingService.WithParams(name).Wrap(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	serv, err := Clientset().CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
+	serv, err := c.clientset.CoreV1().Services(c.namespace).Create(ctx, svc, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("Service %s deployed in namespace %s", name, namespace)
+	logrus.Debugf("Service %s deployed in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
-// PatchService patches an existing service.
-func PatchService(
-	namespace,
+func (c *Client) PatchService(
+	ctx context.Context,
 	name string,
 	labels,
 	selectorMap map[string]string,
 	portsTCP,
 	portsUDP []int,
 ) error {
-	svc, err := prepareService(namespace, name, labels, selectorMap, portsTCP, portsUDP)
+	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
 		return ErrPreparingService.WithParams(name).Wrap(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	_, err = Clientset().CoreV1().Services(namespace).Update(ctx, svc, metav1.UpdateOptions{})
+	_, err = c.clientset.CoreV1().Services(c.namespace).Update(ctx, svc, metav1.UpdateOptions{})
 	if err != nil {
 		return ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s patched in namespace %s", name, namespace)
+	logrus.Debugf("Service %s patched in namespace %s", name, c.namespace)
 	return nil
 }
 
-// DeleteService deletes a service if it exists.
-func DeleteService(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	_, err := GetService(namespace, name)
+func (c *Client) DeleteService(ctx context.Context, name string) error {
+	_, err := c.GetService(ctx, name)
 	if err != nil {
 		return ErrGettingService.WithParams(name).Wrap(err)
 	}
 
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	err = Clientset().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	err = c.clientset.CoreV1().Services(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return ErrDeletingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s deleted in namespace %s", name, namespace)
+	logrus.Debugf("Service %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 
-// GetServiceIP retrieves the IP address of a service.
-func GetServiceIP(namespace, name string) (string, error) {
-	svc, err := GetService(namespace, name)
+func (c *Client) GetServiceIP(ctx context.Context, name string) (string, error) {
+	svc, err := c.GetService(ctx, name)
 	if err != nil {
 		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
 	return svc.Spec.ClusterIP, nil
 }
 
-// buildPorts constructs a list of ServicePort objects from the given TCP and UDP port lists.
 func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
 	ports := make([]v1.ServicePort, 0, len(tcpPorts)+len(udpPorts))
 	for _, port := range tcpPorts {
@@ -135,16 +105,11 @@ func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
 	return ports
 }
 
-// prepareService constructs a new Service object with the specified parameters.
 func prepareService(
-	namespace,
-	name string,
-	labels,
-	selectorMap map[string]string,
-	tcpPorts,
-	udpPorts []int,
+	namespace, name string,
+	labels, selectorMap map[string]string,
+	tcpPorts, udpPorts []int,
 ) (*v1.Service, error) {
-
 	if namespace == "" {
 		return nil, ErrNamespaceRequired
 	}

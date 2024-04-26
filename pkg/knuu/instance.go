@@ -182,6 +182,9 @@ func (i *Instance) SetImage(image string) error {
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	// Handle each state accordingly
 	switch i.state {
 	case None:
@@ -198,7 +201,7 @@ func (i *Instance) SetImage(image string) error {
 			return ErrSettingImageNotAllowedForSidecarsStarted
 		}
 
-		if err := i.setImageWithGracePeriod(image, nil); err != nil {
+		if err := i.setImageWithGracePeriod(ctx, image, nil); err != nil {
 			return err
 		}
 	}
@@ -245,9 +248,11 @@ func (i *Instance) SetImageInstant(image string) error {
 		return ErrSettingImageNotAllowedForSidecars
 	}
 
-	gracePeriod := int64(0)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	if err := i.setImageWithGracePeriod(image, &gracePeriod); err != nil {
+	gracePeriod := int64(0)
+	if err := i.setImageWithGracePeriod(ctx, image, &gracePeriod); err != nil {
 		return err
 	}
 
@@ -310,8 +315,12 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 	if err != nil {
 		return -1, ErrGettingFreePort.WithParams(port)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	// Forward the port
-	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), i.k8sName)
+	pod, err := k8sClient.GetFirstPodFromReplicaSet(ctx, i.k8sName)
 	if err != nil {
 		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
@@ -319,7 +328,7 @@ func (i *Instance) PortForwardTCP(port int) (int, error) {
 	retries := 5
 	wait := 5 * time.Second
 	for r := 0; r < retries; r++ {
-		err = k8s.PortForwardPod(k8s.Namespace(), pod.Name, localPort, port)
+		err = k8sClient.PortForwardPod(ctx, pod.Name, localPort, port)
 		if err == nil {
 			break
 		}
@@ -353,7 +362,7 @@ func (i *Instance) AddPortUDP(port int) error {
 // ExecuteCommand executes the given command in the instance
 // This function can only be called in the states 'Preparing' and 'Started'
 func (i *Instance) ExecuteCommand(command ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), k8s.Timeout())
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	return i.ExecuteCommandWithContext(ctx, command...)
@@ -389,13 +398,16 @@ func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...str
 		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
 	}
 
-	pod, err := k8s.GetFirstPodFromReplicaSet(k8s.Namespace(), instanceName)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	pod, err := k8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
 		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-	output, err := k8s.RunCommandInPod(ctx, k8s.Namespace(), pod.Name, containerName, commandWithShell)
+	output, err := k8sClient.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
 	if err != nil {
 		return "", eErr.Wrap(err)
 	}
@@ -467,7 +479,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		if os.IsNotExist(err) || srcInfo.IsDir() {
 			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
 		}
-		file := k8s.NewFile(dstPath, dest)
+		file := k8sClient.NewFile(dstPath, dest)
 
 		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
@@ -650,7 +662,7 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
-	volume := k8s.NewVolume(path, size, owner)
+	volume := k8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
 	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
 	return nil
@@ -704,16 +716,17 @@ func (i *Instance) GetIP() (string, error) {
 	if i.kubernetesService != nil && i.kubernetesService.Spec.ClusterIP != "" {
 		return i.kubernetesService.Spec.ClusterIP, nil
 	}
-
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
+	svc, err := k8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
-		err := i.deployService()
+		err := i.deployService(ctx)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		svc, err = k8s.GetService(k8s.Namespace(), i.k8sName)
+		svc, err = k8sClient.GetService(ctx, i.k8sName)
 		if err != nil {
 			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
@@ -745,7 +758,7 @@ func (i *Instance) GetFileBytes(file string) ([]byte, error) {
 		return bytes, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), k8s.Timeout())
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	rc, err := i.ReadFileFromRunningInstance(ctx, file)
@@ -791,7 +804,7 @@ func (i *Instance) checkStateForProbe() error {
 
 // SetLivenessProbe sets the liveness probe of the instance
 // A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
-// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// See usage documentation: https://pkg.go.dev/k8sClient.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
@@ -804,7 +817,7 @@ func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 
 // SetReadinessProbe sets the readiness probe of the instance
 // A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
-// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// See usage documentation: https://pkg.go.dev/k8sClient.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
@@ -817,7 +830,7 @@ func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 
 // SetStartupProbe sets the startup probe of the instance
 // A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
-// See usage documentation: https://pkg.go.dev/k8s.io/api/core/v1@v0.27.3#Probe
+// See usage documentation: https://pkg.go.dev/k8sClient.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
@@ -1015,6 +1028,9 @@ func (i *Instance) StartWithoutWait() error {
 		return ErrStartingSidecarNotAllowed
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	if i.state == Committed {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
@@ -1029,17 +1045,17 @@ func (i *Instance) StartWithoutWait() error {
 			}
 		}
 
-		if err := i.deployResources(); err != nil {
+		if err := i.deployResources(ctx); err != nil {
 			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 		if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-			return sidecar.deployResources()
+			return sidecar.deployResources(ctx)
 		}); err != nil {
 			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
-	err := i.deployPod()
+	err := i.deployPod(ctx)
 	if err != nil {
 		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1071,7 +1087,10 @@ func (i *Instance) IsRunning() (bool, error) {
 	if !i.IsInState(Started, Stopped) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
-	return k8s.IsReplicaSetRunning(k8s.Namespace(), i.k8sName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return k8sClient.IsReplicaSetRunning(ctx, i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -1109,7 +1128,10 @@ func (i *Instance) DisableNetwork() error {
 	executorSelectorMap := map[string]string{
 		"knuu.sh/type": ExecutorInstance.String(),
 	}
-	err := k8s.CreateNetworkPolicy(k8s.Namespace(), i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := k8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1223,7 +1245,11 @@ func (i *Instance) EnableNetwork() error {
 	if !i.IsInState(Started) {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
-	err := k8s.DeleteNetworkPolicy(k8s.Namespace(), i.k8sName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := k8sClient.DeleteNetworkPolicy(ctx, i.k8sName)
 	if err != nil {
 		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1236,7 +1262,11 @@ func (i *Instance) NetworkIsDisabled() (bool, error) {
 	if !i.IsInState(Started) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
-	return k8s.NetworkPolicyExists(k8s.Namespace(), i.k8sName), nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return k8sClient.NetworkPolicyExists(ctx, i.k8sName), nil
 }
 
 // WaitInstanceIsStopped waits until the instance is not running anymore
@@ -1266,7 +1296,10 @@ func (i *Instance) Stop() error {
 		return ErrStoppingNotAllowed.WithParams(i.state.String())
 
 	}
-	err := i.destroyPod()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := i.destroyPod(ctx)
 	if err != nil {
 		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1286,17 +1319,21 @@ func (i *Instance) Destroy() error {
 	if i.state == Destroyed {
 		return nil
 	}
-	err := i.destroyPod()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := i.destroyPod(ctx)
 	if err != nil {
 		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
 	}
-	if err := i.destroyResources(); err != nil {
+	if err := i.destroyResources(ctx); err != nil {
 		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 
 	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
 		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
-		return sidecar.destroyResources()
+		return sidecar.destroyResources(ctx)
 	}); err != nil {
 		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 	}

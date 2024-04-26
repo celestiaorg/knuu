@@ -8,9 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateNetworkPolicy creates a new NetworkPolicy resource.
-func CreateNetworkPolicy(
-	namespace,
+func (c *Client) CreateNetworkPolicy(
+	ctx context.Context,
 	name string,
 	selectorMap,
 	ingressSelectorMap,
@@ -48,7 +47,7 @@ func CreateNetworkPolicy(
 
 	np := &v1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
+			Namespace: c.namespace,
 			Name:      name,
 		},
 		Spec: v1.NetworkPolicySpec{
@@ -64,13 +63,7 @@ func CreateNetworkPolicy(
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	_, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Create(ctx, np, metav1.CreateOptions{})
+	_, err := c.clientset.NetworkingV1().NetworkPolicies(c.namespace).Create(ctx, np, metav1.CreateOptions{})
 	if err != nil {
 		return ErrCreatingNetworkPolicy.WithParams(name).Wrap(err)
 	}
@@ -78,15 +71,8 @@ func CreateNetworkPolicy(
 	return nil
 }
 
-// DeleteNetworkPolicy removes a NetworkPolicy resource.
-func DeleteNetworkPolicy(namespace string, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	err := Clientset().NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+func (c *Client) DeleteNetworkPolicy(ctx context.Context, name string) error {
+	err := c.clientset.NetworkingV1().NetworkPolicies(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return ErrDeletingNetworkPolicy.WithParams(name).Wrap(err)
 	}
@@ -94,15 +80,8 @@ func DeleteNetworkPolicy(namespace string, name string) error {
 	return nil
 }
 
-// GetNetworkPolicy retrieves a NetworkPolicy resource.
-func GetNetworkPolicy(namespace string, name string) (*v1.NetworkPolicy, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	np, err := Clientset().NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) GetNetworkPolicy(ctx context.Context, name string) (*v1.NetworkPolicy, error) {
+	np, err := c.clientset.NetworkingV1().NetworkPolicies(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, ErrGettingNetworkPolicy.WithParams(name).Wrap(err)
 	}
@@ -110,9 +89,8 @@ func GetNetworkPolicy(namespace string, name string) (*v1.NetworkPolicy, error) 
 	return np, nil
 }
 
-// NetworkPolicyExists checks if a NetworkPolicy resource exists.
-func NetworkPolicyExists(namespace string, name string) bool {
-	_, err := GetNetworkPolicy(namespace, name)
+func (c *Client) NetworkPolicyExists(ctx context.Context, name string) bool {
+	_, err := c.GetNetworkPolicy(ctx, name)
 	if err != nil {
 		logrus.Debug("NetworkPolicy does not exist, err: ", err)
 		return false
