@@ -69,7 +69,7 @@ func (i *Instance) getLabels() map[string]string {
 		"knuu.sh/scope":                k8s.SanitizeName(testScope),
 		"knuu.sh/test-started":         startTime,
 		"knuu.sh/name":                 i.name,
-		"knuu.sh/k8sClient-name":       i.k8sName,
+		"knuu.sh/k8s-name":             i.k8sName,
 		"knuu.sh/type":                 i.instanceType.String(),
 	}
 }
