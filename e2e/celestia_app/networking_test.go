@@ -54,72 +54,35 @@ func TestNetworking_DisableNetwork(t *testing.T) {
 
 	// Test logic
 
-	err = validator.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = validator.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	require.NoError(t, validator.Start(), "Error starting validator")
 
 	validatorIP, err := validator.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting validator IP: %v", err)
-	}
+	require.NoError(t, err, "Error getting validator IP")
+
 	id, err := utils.NodeIdFromNode(executor, validator)
-	if err != nil {
-		t.Fatalf("Error getting node id: %v", err)
-	}
+	require.NoError(t, err, "Error getting node id")
+
 	persistentPeers := id + "@" + validatorIP + ":26656"
 	err = full.SetArgs("start", "--home=/home/celestia", "--rpc.laddr=tcp://0.0.0.0:26657", "--minimum-gas-prices=0.002utia", "--p2p.persistent_peers", persistentPeers)
-	if err != nil {
-		t.Fatalf("Error setting args: %v", err)
-	}
+	require.NoError(t, err, "Error setting args")
 
 	t.Log("Starting full nodes")
-	err = full.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = full.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	require.NoError(t, full.Start(), "Error starting full node")
 
 	// Wait until validator reaches block height 1 or more
+	err = utils.WaitForHeight(executor, validator, 1)
+	require.NoError(t, err, "Error waiting for height")
+
 	err = utils.WaitForHeight(executor, full, 1)
-	if err != nil {
-		t.Fatalf("Error waiting for height: %v", err)
-	}
-
-	// get the current height of the full node
-	height, err := utils.GetHeight(executor, full)
-	if err != nil && !strings.Contains(err.Error(), "context deadline exceeded") {
-		t.Fatalf("Error getting height: %v", err)
-	}
-
-	assert.EqualValues(t, 1, height, "Height should be 1")
-
-	// it should continue in 1, but start getting updated
-	height, err = utils.GetHeight(executor, full)
-	if err != nil {
-		t.Fatalf("Error getting height: %v", err)
-	}
-	assert.EqualValues(t, 1, height, "Height should be 1")
+	require.NoError(t, err, "Error waiting for full node height to be >= 1")
 
 	// Disable networking
 	t.Log("Disabling networking")
-	err = full.DisableNetwork()
-	if err != nil {
-		t.Fatalf("Error disabling network: %v", err)
-	}
+	require.NoError(t, full.DisableNetwork(), "Error disabling network")
 
 	// Get current block height
-	height, err = utils.GetHeight(executor, full)
-	if err != nil {
-		t.Fatalf("Error getting height: %v", err)
-	}
+	fullNodeHeight, err := utils.GetHeight(executor, full)
+	require.NoError(t, err, "Error getting height")
 
 	// Fail if height increases more than 1 for next 1 minute
 	t.Log("Waiting for height to not increase for 1 minute")
@@ -132,34 +95,30 @@ func TestNetworking_DisableNetwork(t *testing.T) {
 			goto afterTimeout
 		case <-tick:
 			newHeight, err := utils.GetHeight(executor, full)
-			if err != nil {
-				t.Fatalf("Error getting height: %v", err)
+			require.NoError(t, err, "Error getting height")
+			if newHeight > fullNodeHeight+1 {
+				t.Fatalf("Height increased from %d to %d", fullNodeHeight, newHeight)
 			}
-			if newHeight > height+1 {
-				t.Fatalf("Height increased from %d to %d", height, newHeight)
-			}
-			height = newHeight
+			fullNodeHeight = newHeight
 		}
 	}
 
 afterTimeout:
 	// Enable networking
 	t.Log("Enabling networking")
-	err = full.EnableNetwork()
-	if err != nil {
-		t.Fatalf("Error enabling network: %v", err)
-	}
+	require.NoError(t, full.EnableNetwork(), "Error enabling network")
 
-	// Check if blockheight is increasing, timeout after some time
-	t.Log("Waiting for height to increase")
-	height, err = utils.GetHeight(executor, validator)
-	if err != nil {
-		t.Fatalf("Error getting block height: %v", err)
-	}
-	err = utils.WaitForHeight(executor, validator, height+1)
-	if err != nil {
-		t.Fatalf("Error waiting for height: %v", err)
-	}
+	// Wait until validator reaches at least one block higher than what the fullnode has already synced
+	err = utils.WaitForHeight(executor, validator, fullNodeHeight+1)
+	require.NoError(t, err, "Error waiting for height")
+
+	t.Log("Waiting for 30 seconds to allow the full node to start to sync again...")
+	time.Sleep(30 * time.Second)
+
+	height, err := utils.GetHeight(executor, full)
+	require.NoError(t, err, "Error getting block height")
+
+	assert.Greater(t, height, fullNodeHeight, "new height should be greater")
 }
 
 func TestNetworking_SetPacketLossDynamic(t *testing.T) {
