@@ -10,7 +10,7 @@ require (
 	github.com/celestiaorg/celestia-node v0.13.4
 	github.com/celestiaorg/knuu-example v0.0.0-20240422111045-61cd0cbaa37d
 	github.com/cosmos/cosmos-sdk v0.46.16
-	github.com/docker/docker v26.0.2+incompatible
+	github.com/docker/docker v26.1.0+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/rs/zerolog v1.32.0
