@@ -34,7 +34,7 @@ func (p *Preloader) GetImages() []string {
 }
 
 // AddImage adds an image to the list of preloaded images
-func (p *Preloader) AddImage(ctx context.Context, image string) error {
+func (p *Preloader) AddImage(image string) error {
 	// dont add duplicates
 	for _, v := range p.Images {
 		if v == image {
@@ -42,22 +42,32 @@ func (p *Preloader) AddImage(ctx context.Context, image string) error {
 		}
 	}
 	p.Images = append(p.Images, image)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	return p.preloadImages(ctx)
 }
 
 // RemoveImage removes an image from the list of preloaded images
-func (p *Preloader) RemoveImage(ctx context.Context, image string) error {
+func (p *Preloader) RemoveImage(image string) error {
 	for i, v := range p.Images {
 		if v == image {
 			p.Images = append(p.Images[:i], p.Images[i+1:]...)
 		}
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	return p.preloadImages(ctx)
 }
 
 // EmptyImages empties the list of preloaded images
-func (p *Preloader) EmptyImages(ctx context.Context) error {
+func (p *Preloader) EmptyImages() error {
 	p.Images = []string{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	return p.preloadImages(ctx)
 }
 
