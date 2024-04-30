@@ -12,6 +12,7 @@ require (
 	github.com/cosmos/cosmos-sdk v0.46.16
 	github.com/docker/docker v26.1.0+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/rs/zerolog v1.32.0
 	github.com/sirupsen/logrus v1.9.3
@@ -364,3 +365,5 @@ replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/tendermint/tendermint => github.com/celestiaorg/celestia-core v1.35.0-tm-v0.34.29
 )
+
+replace github.com/celestiaorg/knuu => /Volumes/Data/workspace/Celestia/knuu/feature/jose/env-to-json
