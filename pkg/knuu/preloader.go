@@ -19,7 +19,7 @@ type Preloader struct {
 func NewPreloader() (*Preloader, error) {
 	k8sName, err := generateK8sName("knuu-preloader")
 	if err != nil {
-		return nil, fmt.Errorf("error generating k8s name for preloader: %w", err)
+		return nil, ErrGeneratingK8sNameForPreloader.Wrap(err)
 	}
 	return &Preloader{
 		k8sName: k8sName,
@@ -90,7 +90,7 @@ func (p *Preloader) preloadImages() error {
 	labels := map[string]string{
 		"app":                          p.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/test-run-id":          identifier,
+		"knuu.sh/scope":                k8s.SanitizeName(testScope),
 		"knuu.sh/test-started":         startTime,
 	}
 

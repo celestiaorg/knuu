@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +38,7 @@ func CreateRoleBinding(
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if _, err := Clientset().RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{}); err != nil {
 		return err
@@ -54,7 +53,7 @@ func DeleteRoleBinding(namespace, name string) error {
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if err := Clientset().RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return err

@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -38,7 +37,7 @@ func createPersistentVolumeClaim(
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if _, err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
 		return err
@@ -61,10 +60,10 @@ func deletePersistentVolumeClaim(namespace, name string) error {
 	defer cancel()
 
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	if err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("error deleting PersistentVolumeClaim %s: %w", name, err)
+		return ErrDeletingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
 	logrus.Debugf("PersistentVolumeClaim %s deleted", name)
@@ -77,7 +76,7 @@ func getPersistentVolumeClaim(namespace, name string) (*v1.PersistentVolumeClaim
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	pv, err := Clientset().CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -90,13 +89,13 @@ func getPersistentVolumeClaim(namespace, name string) (*v1.PersistentVolumeClaim
 func DeployPersistentVolumeClaim(namespace, name string, labels map[string]string, size resource.Quantity) {
 	accessModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 	if err := createPersistentVolumeClaim(namespace, name, labels, size, accessModes); err != nil {
-		logrus.Fatalf("Error creating PersistentVolumeClaim %s: %v", name, err)
+		logrus.Fatal(ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err))
 	}
 }
 
 // DeletePersistentVolumeClaim deletes the PersistentVolumeClaim with the specified name in the specified namespace.
 func DeletePersistentVolumeClaim(namespace, name string) {
 	if err := deletePersistentVolumeClaim(namespace, name); err != nil {
-		logrus.Fatalf("Error deleting PersistentVolumeClaim %s: %v", name, err)
+		logrus.Fatal(err)
 	}
 }

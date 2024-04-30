@@ -34,7 +34,7 @@ func (i *Instance) getImageRegistry() (string, error) {
 // validatePort validates the port
 func validatePort(port int) error {
 	if port < 1 || port > 65535 {
-		return fmt.Errorf("port number '%d' is out of range", port)
+		return ErrPortNumberOutOfRange.WithParams(port)
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
 		"app":                          i.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/test-run-id":          identifier,
+		"knuu.sh/scope":                k8s.SanitizeName(testScope),
 		"knuu.sh/test-started":         startTime,
 		"knuu.sh/name":                 i.name,
 		"knuu.sh/k8s-name":             i.k8sName,
@@ -80,7 +80,7 @@ func (i *Instance) deployService() error {
 	selectorMap := i.getLabels()
 	service, err := k8s.DeployService(k8s.Namespace(), i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
 	if err != nil {
-		return fmt.Errorf("error deploying service '%s': %w", i.k8sName, err)
+		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
 	i.kubernetesService = service
 	logrus.Debugf("Started service '%s'", i.k8sName)
@@ -92,13 +92,13 @@ func (i *Instance) patchService() error {
 	if i.kubernetesService == nil {
 		svc, err := k8s.GetService(k8s.Namespace(), i.k8sName)
 		if err != nil {
-			return fmt.Errorf("error getting service '%s': %w", i.k8sName, err)
+			return ErrGettingService.WithParams(i.k8sName).Wrap(err)
 		}
 		i.kubernetesService = svc
 	}
 	err := k8s.PatchService(k8s.Namespace(), i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
 	if err != nil {
-		return fmt.Errorf("error patching service '%s': %w", i.k8sName, err)
+		return ErrPatchingService.WithParams(i.k8sName).Wrap(err)
 	}
 	logrus.Debugf("Patched service '%s'", i.k8sName)
 	return nil
@@ -119,16 +119,16 @@ func (i *Instance) deployPod() error {
 
 	// create a service account for the pod
 	if err := k8s.CreateServiceAccount(k8s.Namespace(), i.k8sName, labels); err != nil {
-		return fmt.Errorf("failed to create service account: %v", err)
+		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
 	// create a role and role binding for the pod if there are policy rules
 	if len(i.policyRules) > 0 {
 		if err := k8s.CreateRole(k8s.Namespace(), i.k8sName, labels, i.policyRules); err != nil {
-			return fmt.Errorf("failed to create role: %v", err)
+			return ErrFailedToCreateRole.Wrap(err)
 		}
 		if err := k8s.CreateRoleBinding(k8s.Namespace(), i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
-			return fmt.Errorf("failed to create role binding: %v", err)
+			return ErrFailedToCreateRoleBinding.Wrap(err)
 		}
 	}
 
@@ -137,7 +137,7 @@ func (i *Instance) deployPod() error {
 	// Deploy the statefulSet
 	replicaSet, err := k8s.DeployReplicaSet(ctx, replicaSetSetConfig, true)
 	if err != nil {
-		return fmt.Errorf("failed to deploy pod: %v", err)
+		return ErrFailedToDeployPod.Wrap(err)
 	}
 
 	// Set the state of the instance to started
@@ -159,20 +159,20 @@ func (i *Instance) destroyPod() error {
 	grace := int64(0)
 	err := k8s.DeleteReplicaSetWithGracePeriod(ctx, k8s.Namespace(), i.k8sName, &grace)
 	if err != nil {
-		return fmt.Errorf("failed to delete pod: %v", err)
+		return ErrFailedToDeletePod.Wrap(err)
 	}
 
 	// Delete the service account for the pod
 	if err := k8s.DeleteServiceAccount(k8s.Namespace(), i.k8sName); err != nil {
-		return fmt.Errorf("failed to delete service account: %v", err)
+		return ErrFailedToDeleteServiceAccount.Wrap(err)
 	}
 	// Delete the role and role binding for the pod if there are policy rules
 	if len(i.policyRules) > 0 {
 		if err := k8s.DeleteRole(k8s.Namespace(), i.k8sName); err != nil {
-			return fmt.Errorf("failed to delete role: %v", err)
+			return ErrFailedToDeleteRole.Wrap(err)
 		}
 		if err := k8s.DeleteRoleBinding(k8s.Namespace(), i.k8sName); err != nil {
-			return fmt.Errorf("failed to delete role binding: %v", err)
+			return ErrFailedToDeleteRoleBinding.Wrap(err)
 		}
 	}
 
@@ -187,12 +187,12 @@ func (i *Instance) deployOrPatchService() error {
 		if svc == nil {
 			err := i.deployService()
 			if err != nil {
-				return fmt.Errorf("error deploying service for instance '%s': %w", i.k8sName, err)
+				return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		} else if svc != nil {
 			err := i.patchService()
 			if err != nil {
-				return fmt.Errorf("error patching service for instance '%s': %w", i.k8sName, err)
+				return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 	}
@@ -229,11 +229,11 @@ func (i *Instance) deployFiles() error {
 		// read out file content and assign to variable
 		srcFile, err := os.Open(file.Source)
 		if err != nil {
-			return fmt.Errorf("failed to open file: %v", err)
+			return ErrFailedToOpenFile.Wrap(err)
 		}
 		fileContentBytes, err := io.ReadAll(srcFile)
 		if err != nil {
-			return fmt.Errorf("failed to read file: %v", err)
+			return ErrFailedToReadFile.Wrap(err)
 		}
 		srcFile.Close()
 		fileContent := string(fileContentBytes)
@@ -247,7 +247,7 @@ func (i *Instance) deployFiles() error {
 
 	// create configmap
 	if _, err := k8s.CreateConfigMap(k8s.Namespace(), i.k8sName, i.getLabels(), data); err != nil {
-		return fmt.Errorf("failed to create configmap: %v", err)
+		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
 	return nil
@@ -256,7 +256,7 @@ func (i *Instance) deployFiles() error {
 // destroyFiles destroys the files for the instance
 func (i *Instance) destroyFiles() error {
 	if err := k8s.DeleteConfigMap(k8s.Namespace(), i.k8sName); err != nil {
-		return fmt.Errorf("failed to delete configmap: %v", err)
+		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 	return nil
 }
@@ -265,17 +265,17 @@ func (i *Instance) destroyFiles() error {
 func (i *Instance) deployResources() error {
 	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
 		if err := i.deployOrPatchService(); err != nil {
-			return fmt.Errorf("failed to deploy or patch service: %v", err)
+			return ErrFailedToDeployOrPatchService.Wrap(err)
 		}
 	}
 	if len(i.volumes) != 0 {
 		if err := i.deployVolume(); err != nil {
-			return fmt.Errorf("error deploying volume for instance '%s': %w", i.k8sName, err)
+			return ErrDeployingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if len(i.files) != 0 {
 		if err := i.deployFiles(); err != nil {
-			return fmt.Errorf("error deploying files for instance '%s': %w", i.k8sName, err)
+			return ErrDeployingFilesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -287,19 +287,19 @@ func (i *Instance) destroyResources() error {
 	if len(i.volumes) != 0 {
 		err := i.destroyVolume()
 		if err != nil {
-			return fmt.Errorf("error destroying volume for instance '%s': %w", i.k8sName, err)
+			return ErrDestroyingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if len(i.files) != 0 {
 		err := i.destroyFiles()
 		if err != nil {
-			return fmt.Errorf("error destroying files for instance '%s': %w", i.k8sName, err)
+			return ErrDestroyingFilesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	if i.kubernetesService != nil {
 		err := i.destroyService()
 		if err != nil {
-			return fmt.Errorf("error destroying service for instance '%s': %w", i.k8sName, err)
+			return ErrDestroyingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -309,13 +309,13 @@ func (i *Instance) destroyResources() error {
 		disableNetwork, err := i.NetworkIsDisabled()
 		if err != nil {
 			logrus.Debugf("error checking network status for instance")
-			return fmt.Errorf("error checking network status for instance '%s': %w", i.k8sName, err)
+			return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 		if disableNetwork {
 			err := i.EnableNetwork()
 			if err != nil {
 				logrus.Debugf("error enabling network for instance")
-				return fmt.Errorf("error enabling network for instance '%s': %w", i.k8sName, err)
+				return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 	}
@@ -370,7 +370,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 func generateK8sName(name string) (string, error) {
 	uuid, err := uuid.NewRandom()
 	if err != nil {
-		return "", fmt.Errorf("error generating UUID: %w", err)
+		return "", ErrGeneratingUUID.Wrap(err)
 	}
 	return fmt.Sprintf("%s-%s", name, uuid.String()[:8]), nil
 }
@@ -380,7 +380,7 @@ func getFreePortTCP() (int, error) {
 	// Get a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return 0, fmt.Errorf("error getting free port: %w", err)
+		return 0, ErrGettingFreePort.Wrap(err)
 	}
 	defer listener.Close()
 
@@ -399,19 +399,19 @@ func (i *Instance) getBuildDir() string {
 func (i *Instance) validateFileArgs(src, dest, chown string) error {
 	// check src
 	if src == "" {
-		return fmt.Errorf("src must be set")
+		return ErrSrcMustBeSet
 	}
 	// check dest
 	if dest == "" {
-		return fmt.Errorf("dest must be set")
+		return ErrDestMustBeSet
 	}
 	// check chown
 	if chown == "" {
-		return fmt.Errorf("chown must be set")
+		return ErrChownMustBeSet
 	}
 	// validate chown format
 	if !strings.Contains(chown, ":") || len(strings.Split(chown, ":")) != 2 {
-		return fmt.Errorf("chown must be in format 'user:group'")
+		return ErrChownMustBeInFormatUserGroup
 	}
 
 	return nil
@@ -422,7 +422,7 @@ func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
 	err := i.builderFactory.AddToBuilder(dest, dest, chown)
 	if err != nil {
-		return fmt.Errorf("error adding file '%s' to instance '%s': %w", dest, i.name, err)
+		return ErrAddingFileToInstance.WithParams(dest, i.name).Wrap(err)
 	}
 	return nil
 }
@@ -520,10 +520,10 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 	// Replace the pod with a new one, using the given image
 	_, err := k8s.ReplaceReplicaSetWithGracePeriod(replicaSetConfig, gracePeriod)
 	if err != nil {
-		return fmt.Errorf("error replacing pod: %s", err.Error())
+		return ErrReplacingPod.Wrap(err)
 	}
 	if err := i.WaitInstanceIsRunning(); err != nil {
-		return fmt.Errorf("error waiting for instance to be running: %w", err)
+		return ErrWaitingInstanceIsRunning.Wrap(err)
 	}
 
 	return nil
@@ -533,7 +533,7 @@ func (i *Instance) setImageWithGracePeriod(imageName string, gracePeriod *int64)
 func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
 	for _, i := range instances {
 		if err := function(*i); err != nil {
-			return fmt.Errorf("error applying function to instance '%s': %w", i.k8sName, err)
+			return ErrApplyingFunctionToInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 	return nil
@@ -557,7 +557,7 @@ func (i *Instance) isObservabilityEnabled() bool {
 
 func (i *Instance) validateStateForObsy(endpoint string) error {
 	if !i.IsInState(Preparing, Committed) {
-		return fmt.Errorf("setting %s is only allowed in state 'Preparing' or 'Committed'. Current state is '%s'", endpoint, i.state.String())
+		return ErrSettingNotAllowed.WithParams(endpoint, i.state.String())
 	}
 	return nil
 }
@@ -565,10 +565,10 @@ func (i *Instance) validateStateForObsy(endpoint string) error {
 func (i *Instance) addOtelCollectorSidecar() error {
 	otelSidecar, err := i.createOtelCollectorInstance()
 	if err != nil {
-		return fmt.Errorf("error creating otel collector instance '%s': %w", i.k8sName, err)
+		return ErrCreatingOtelCollectorInstance.WithParams(i.k8sName).Wrap(err)
 	}
 	if err := i.AddSidecar(otelSidecar); err != nil {
-		return fmt.Errorf("error adding otel collector sidecar to instance '%s': %w", i.k8sName, err)
+		return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }
@@ -576,31 +576,31 @@ func (i *Instance) addOtelCollectorSidecar() error {
 func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 	bt, err := NewInstance("bit-twister")
 	if err != nil {
-		return nil, fmt.Errorf("error creating bit-twister instance: %w", err)
+		return nil, ErrCreatingBitTwisterInstance.Wrap(err)
 	}
 
 	if err := bt.SetImage(i.BitTwister.Image()); err != nil {
-		return nil, fmt.Errorf("error setting image for bit-twister instance: %w", err)
+		return nil, ErrSettingBitTwisterImage.Wrap(err)
 	}
 
 	// We need to add the port here so the instance will get an IP
 	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
-		return nil, fmt.Errorf("error adding BitTwister port: %w", err)
+		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
 	ip, err := i.GetIP()
 	if err != nil {
-		return nil, fmt.Errorf("error getting IP of instance '%s': %w", i.name, err)
+		return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
 	}
 	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
 
 	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
 
 	if err := bt.Commit(); err != nil {
-		return nil, fmt.Errorf("error committing bit-twister instance: %w", err)
+		return nil, ErrCommittingBitTwisterInstance.Wrap(err)
 	}
 
 	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
-		return nil, fmt.Errorf("error setting environment variable for bit-twister instance: %w", err)
+		return nil, ErrSettingBitTwisterEnv.Wrap(err)
 	}
 
 	return bt, nil
@@ -609,19 +609,19 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 func (i *Instance) addBitTwisterSidecar() error {
 	networkConfigSidecar, err := i.createBitTwisterInstance()
 	if err != nil {
-		return fmt.Errorf("error creating bit-twister instance '%s': %w", i.k8sName, err)
+		return ErrCreatingBitTwisterInstance.WithParams(i.k8sName).Wrap(err)
 	}
 
 	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
-		return fmt.Errorf("error setting privileged for bit-twister instance '%s': %w", i.k8sName, err)
+		return ErrSettingBitTwisterPrivileged.WithParams(i.k8sName).Wrap(err)
 	}
 
 	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
-		return fmt.Errorf("error adding capability for bit-twister instance '%s': %w", i.k8sName, err)
+		return ErrAddingBitTwisterCapability.WithParams(i.k8sName).Wrap(err)
 	}
 
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {
-		return fmt.Errorf("error adding bit-twister sidecar to instance '%s': %w", i.k8sName, err)
+		return ErrAddingBitTwisterSidecar.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }

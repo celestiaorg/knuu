@@ -25,11 +25,11 @@ func getPod(namespace, name string) (*v1.Pod, error) {
 	defer cancel()
 
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	pod, err := Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pod %s: %w", name, err)
+		return nil, ErrGettingPod.WithParams(name).Wrap(err)
 	}
 
 	return pod, nil
@@ -40,7 +40,7 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 	// Prepare the pod
 	pod, err := preparePod(podConfig, init)
 	if err != nil {
-		return nil, fmt.Errorf("error preparing pod: %s", err)
+		return nil, ErrPreparingPod.Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -48,11 +48,11 @@ func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
 
 	// Try to create the pod
 	if !IsInitialized() {
-		return nil, fmt.Errorf("knuu is not initialized")
+		return nil, ErrKnuuNotInitialized
 	}
 	createdPod, err := Clientset().CoreV1().Pods(podConfig.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pod: %v", err)
+		return nil, ErrCreatingPod.Wrap(err)
 	}
 
 	return createdPod, nil
@@ -124,7 +124,7 @@ func ReplacePodWithGracePeriod(podConfig PodConfig, gracePeriod *int64) (*v1.Pod
 
 	// Delete the existing pod (if any)
 	if err := DeletePodWithGracePeriod(podConfig.Namespace, podConfig.Name, gracePeriod); err != nil {
-		return nil, fmt.Errorf("failed to delete pod: %v", err)
+		return nil, ErrDeletingPod.Wrap(err)
 	}
 
 	// Wait for the pod to be fully deleted
@@ -139,7 +139,7 @@ func ReplacePodWithGracePeriod(podConfig PodConfig, gracePeriod *int64) (*v1.Pod
 	// Deploy the new pod
 	pod, err := DeployPod(podConfig, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy pod: %v", err)
+		return nil, ErrDeployingPod.Wrap(err)
 	}
 
 	// Return the newly created pod
@@ -156,7 +156,7 @@ func IsPodRunning(namespace, name string) (bool, error) {
 	// Get the pod from Kubernetes API server
 	pod, err := getPod(namespace, name)
 	if err != nil {
-		return false, fmt.Errorf("failed to get pod: %v", err)
+		return false, ErrGettingPod.WithParams(name).Wrap(err)
 	}
 
 	// Check if all container are running
@@ -180,12 +180,12 @@ func RunCommandInPod(
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get pod: %v", err)
+		return "", ErrGettingPod.WithParams(podName).Wrap(err)
 	}
 
 	// Construct the request for executing the command in the specified container
 	if !IsInitialized() {
-		return "", fmt.Errorf("knuu is not initialized")
+		return "", ErrKnuuNotInitialized
 	}
 	req := Clientset().CoreV1().RESTClient().Post().
 		Resource("pods").
@@ -204,11 +204,11 @@ func RunCommandInPod(
 	// Create an executor for the command execution
 	k8sConfig, err := getClusterConfig()
 	if err != nil {
-		return "", fmt.Errorf("failed to get k8s config: %v", err)
+		return "", ErrGettingK8sConfig.Wrap(err)
 	}
 	exec, err := remotecommand.NewSPDYExecutor(k8sConfig, "POST", req.URL())
 	if err != nil {
-		return "", fmt.Errorf("failed to create Executor: %v", err)
+		return "", ErrCreatingExecutor.Wrap(err)
 	}
 
 	// Execute the command and capture the output and error streams
@@ -220,12 +220,12 @@ func RunCommandInPod(
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("failed to execute command: %v", err)
+		return "", ErrExecutingCommand.Wrap(err)
 	}
 
 	// Check if there were any errors on the error stream
 	if stderr.Len() != 0 {
-		return "", fmt.Errorf("error while executing command: %s", stderr.String())
+		return "", ErrCommandExecution.WithParams(stderr.String())
 	}
 
 	return stdout.String(), nil
@@ -245,13 +245,13 @@ func DeletePodWithGracePeriod(namespace, name string, gracePeriodSeconds *int64)
 
 	// Delete the pod using the Kubernetes client API
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: gracePeriodSeconds,
 	}
 	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, deleteOptions); err != nil {
-		return fmt.Errorf("failed to delete pod %s: %v", name, err)
+		return ErrDeletingPodFailed.WithParams(name).Wrap(err)
 	}
 
 	return nil
@@ -392,19 +392,19 @@ func buildResources(memoryRequest string, memoryLimit string, cpuRequest string)
 	memoryRequestQuantity, err := resource.ParseQuantity(memoryRequest)
 	if err != nil {
 		if memoryRequest != "" {
-			return resources, fmt.Errorf("failed to parse memory request quantity '%s': %v", memoryRequest, err)
+			return resources, ErrParsingMemoryRequest.WithParams(memoryRequest).Wrap(err)
 		}
 	}
 	memoryLimitQuantity, err := resource.ParseQuantity(memoryLimit)
 	if err != nil {
 		if memoryLimit != "" {
-			return resources, fmt.Errorf("failed to parse memory limit quantity '%s': %v", memoryLimit, err)
+			return resources, ErrParsingMemoryLimit.WithParams(memoryLimit).Wrap(err)
 		}
 	}
 	cpuRequestQuantity, err := resource.ParseQuantity(cpuRequest)
 	if err != nil {
 		if cpuRequest != "" {
-			return resources, fmt.Errorf("failed to parse CPU request quantity '%s': %v", cpuRequest, err)
+			return resources, ErrParsingCPURequest.WithParams(cpuRequest).Wrap(err)
 		}
 	}
 
@@ -430,12 +430,12 @@ func prepareContainer(config ContainerConfig) (v1.Container, error) {
 	// Build container volumes from the given map
 	containerVolumes, err := buildContainerVolumes(config.Name, config.Volumes, config.Files)
 	if err != nil {
-		return v1.Container{}, fmt.Errorf("failed to build container volumes: %v", err)
+		return v1.Container{}, ErrBuildingContainerVolumes.Wrap(err)
 	}
 
 	resources, err := buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest)
 	if err != nil {
-		return v1.Container{}, fmt.Errorf("failed to build resources: %v", err)
+		return v1.Container{}, ErrBuildingResources.Wrap(err)
 	}
 
 	return v1.Container{
@@ -461,11 +461,11 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 
 	initContainerVolumes, err := buildInitContainerVolumes(config.Name, config.Volumes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build init container volumes: %v", err)
+		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}
 	initContainerCommand, err := buildInitContainerCommand(config.Name, config.Volumes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build init container command: %v", err)
+		return nil, ErrBuildingInitContainerCommand.Wrap(err)
 	}
 
 	user := int64(0)
@@ -487,7 +487,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 func preparePodVolumes(config ContainerConfig) ([]v1.Volume, error) {
 	podVolumes, err := buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
 	if err != nil {
-		return nil, fmt.Errorf("failed to build pod volumes: %v", err)
+		return nil, ErrBuildingPodVolumes.Wrap(err)
 	}
 
 	return podVolumes, nil
@@ -504,19 +504,19 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	// Prepare main container
 	mainContainer, err := prepareContainer(spec.ContainerConfig)
 	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to prepare main container: %w", err)
+		return v1.PodSpec{}, ErrPreparingMainContainer.Wrap(err)
 	}
 
 	// Prepare init containers
 	initContainers, err := prepareInitContainers(spec.ContainerConfig, init)
 	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to prepare init containers: %w", err)
+		return v1.PodSpec{}, ErrPreparingInitContainer.Wrap(err)
 	}
 
 	// Prepare volumes
 	podVolumes, err := preparePodVolumes(spec.ContainerConfig)
 	if err != nil {
-		return v1.PodSpec{}, fmt.Errorf("failed to prepare pod volumes: %w", err)
+		return v1.PodSpec{}, ErrPreparingPodVolumes.Wrap(err)
 	}
 
 	podSpec := v1.PodSpec{
@@ -531,12 +531,12 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	for _, sidecarConfig := range spec.SidecarConfigs {
 		sidecar, err := prepareContainer(sidecarConfig)
 		if err != nil {
-			return v1.PodSpec{}, fmt.Errorf("failed to prepare sidecar container: %w", err)
+			return v1.PodSpec{}, ErrPreparingSidecarContainer.Wrap(err)
 		}
 
 		sidecarVolumes, err := preparePodVolumes(sidecarConfig)
 		if err != nil {
-			return v1.PodSpec{}, fmt.Errorf("failed to prepare sidecar volumes: %w", err)
+			return v1.PodSpec{}, ErrPreparingSidecarVolumes.Wrap(err)
 		}
 
 		podSpec.Containers = append(podSpec.Containers, sidecar)
@@ -554,7 +554,7 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 
 	podSpec, err := preparePodSpec(spec, init)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pod spec: %w", err)
+		return nil, ErrCreatingPodSpec.Wrap(err)
 	}
 
 	// Construct the Pod object using the above data
@@ -582,18 +582,18 @@ func PortForwardPod(
 	// Get the pod object
 	_, err := getPod(namespace, podName)
 	if err != nil {
-		return fmt.Errorf("failed to get pod: %v", err)
+		return ErrGettingPod.WithParams(podName).Wrap(err)
 	}
 
 	// Get a config to talk to the apiserver
 	restconfig, err := getClusterConfig()
 	if err != nil {
-		return fmt.Errorf("failed to get cluster config: %v", err)
+		return ErrGettingClusterConfig.Wrap(err)
 	}
 
 	// Setup the port forwarding
 	if !IsInitialized() {
-		return fmt.Errorf("knuu is not initialized")
+		return ErrKnuuNotInitialized
 	}
 	url := Clientset().CoreV1().RESTClient().Post().
 		Resource("pods").
@@ -604,7 +604,7 @@ func PortForwardPod(
 
 	transport, upgrader, err := spdy.RoundTripperFor(restconfig)
 	if err != nil {
-		return fmt.Errorf("failed to create round tripper: %v", err)
+		return ErrCreatingRoundTripper.Wrap(err)
 	}
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
@@ -618,10 +618,10 @@ func PortForwardPod(
 	// Create a new PortForwarder
 	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
 	if err != nil {
-		return fmt.Errorf("failed to create port forwarder: %v", err)
+		return ErrCreatingPortForwarder.Wrap(err)
 	}
 	if stderr != nil {
-		return fmt.Errorf("failed to port forward: %v", stderr)
+		return ErrPortForwarding.WithParams(stderr)
 	}
 	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
 	logrus.Debugf("Port forwarding stdout: %v", stdout)
@@ -644,9 +644,9 @@ func PortForwardPod(
 		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
 	case err := <-errChan:
 		// if there's an error, return it
-		return fmt.Errorf("error forwarding ports: %w", err)
+		return ErrForwardingPorts.Wrap(err)
 	case <-time.After(time.Second * 5):
-		return fmt.Errorf("timed out waiting for port forwarding to be ready")
+		return ErrPortForwardingTimeout
 	}
 
 	return nil
