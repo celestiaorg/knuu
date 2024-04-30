@@ -11,6 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -19,76 +20,9 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-// getPod retrieves a pod from the given namespace and logs any errors.
-func getPod(namespace, name string) (*v1.Pod, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+// the loops that keep checking something and wait for it to be done
+const retryInterval = 100 * time.Millisecond
 
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	pod, err := Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, ErrGettingPod.WithParams(name).Wrap(err)
-	}
-
-	return pod, nil
-}
-
-// DeployPod creates a new pod in the given namespace if it doesn't already exist.
-func DeployPod(podConfig PodConfig, init bool) (*v1.Pod, error) {
-	// Prepare the pod
-	pod, err := preparePod(podConfig, init)
-	if err != nil {
-		return nil, ErrPreparingPod.Wrap(err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Try to create the pod
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	createdPod, err := Clientset().CoreV1().Pods(podConfig.Namespace).Create(ctx, pod, metav1.CreateOptions{})
-	if err != nil {
-		return nil, ErrCreatingPod.Wrap(err)
-	}
-
-	return createdPod, nil
-}
-
-// Volume represents a volume.
-type Volume struct {
-	Path  string
-	Size  string
-	Owner int64
-}
-
-// File represents a file.
-type File struct {
-	Source string
-	Dest   string
-}
-
-// NewVolume creates a new volume with the given path, size and owner.
-func NewVolume(path, size string, owner int64) *Volume {
-	return &Volume{
-		Path:  path,
-		Size:  size,
-		Owner: owner,
-	}
-}
-
-// NewFile creates a new file with the given source and destination.
-func NewFile(source, dest string) *File {
-	return &File{
-		Source: source,
-		Dest:   dest,
-	}
-}
-
-// ContainerConfig contains the specifications for creating a new Container object
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
 	Image           string              // Name of the container image to use for the container
@@ -106,7 +40,6 @@ type ContainerConfig struct {
 	SecurityContext *v1.SecurityContext // Security context for the container
 }
 
-// PodConfig contains the specifications for creating a new Pod object
 type PodConfig struct {
 	Namespace          string            // Kubernetes namespace of the Pod
 	Name               string            // Name to assign to the Pod
@@ -117,44 +50,89 @@ type PodConfig struct {
 	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
 }
 
-// ReplacePodWithGracePeriod replaces a pod in the given namespace and returns the new Pod object with a grace period.
-func ReplacePodWithGracePeriod(podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	// Log a debug message to indicate that we are replacing a pod
+type Volume struct {
+	Path  string
+	Size  string
+	Owner int64
+}
+
+type File struct {
+	Source string
+	Dest   string
+}
+
+// DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
+func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
+	pod, err := preparePod(podConfig, init)
+	if err != nil {
+		return nil, ErrPreparingPod.Wrap(err)
+	}
+	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, ErrCreatingPod.Wrap(err)
+	}
+
+	return createdPod, nil
+}
+
+func (c *Client) NewVolume(path, size string, owner int64) *Volume {
+	return &Volume{
+		Path:  path,
+		Size:  size,
+		Owner: owner,
+	}
+}
+
+func (c *Client) NewFile(source, dest string) *File {
+	return &File{
+		Source: source,
+		Dest:   dest,
+	}
+}
+
+func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
 	logrus.Debugf("Replacing pod %s", podConfig.Name)
 
-	// Delete the existing pod (if any)
-	if err := DeletePodWithGracePeriod(podConfig.Namespace, podConfig.Name, gracePeriod); err != nil {
+	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
 	}
 
 	// Wait for the pod to be fully deleted
 	for {
-		_, err := getPod(podConfig.Namespace, podConfig.Name)
-		if err != nil {
-			break
+		select {
+		case <-ctx.Done():
+			logrus.Errorf("Context cancelled while waiting for pod %s to delete", podConfig.Name)
+			return nil, ctx.Err()
+		case <-time.After(retryInterval):
+			_, err := c.getPod(ctx, podConfig.Name)
+			if err != nil {
+				if apierrs.IsNotFound(err) {
+					logrus.Debugf("Pod %s successfully deleted", podConfig.Name)
+					goto DeployPod
+				}
+				break
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 
+DeployPod:
 	// Deploy the new pod
-	pod, err := DeployPod(podConfig, false)
+	pod, err := c.DeployPod(ctx, podConfig, false)
 	if err != nil {
 		return nil, ErrDeployingPod.Wrap(err)
 	}
 
-	// Return the newly created pod
 	return pod, nil
 }
 
-// ReplacePod replaces a pod in the given namespace and returns the new Pod object.
-func ReplacePod(podConfig PodConfig) (*v1.Pod, error) {
-	return ReplacePodWithGracePeriod(podConfig, nil)
+// ReplacePod replaces a pod and returns the new Pod object.
+func (c *Client) ReplacePod(ctx context.Context, podConfig PodConfig) (*v1.Pod, error) {
+	return c.ReplacePodWithGracePeriod(ctx, podConfig, nil)
 }
 
 // IsPodRunning returns true if all containers in the pod are running.
-func IsPodRunning(namespace, name string) (bool, error) {
-	// Get the pod from Kubernetes API server
-	pod, err := getPod(namespace, name)
+func (c *Client) IsPodRunning(ctx context.Context, name string) (bool, error) {
+	pod, err := c.getPod(ctx, name)
 	if err != nil {
 		return false, ErrGettingPod.WithParams(name).Wrap(err)
 	}
@@ -170,27 +148,21 @@ func IsPodRunning(namespace, name string) (bool, error) {
 }
 
 // RunCommandInPod runs a command in a container within a pod with a context.
-func RunCommandInPod(
+func (c *Client) RunCommandInPod(
 	ctx context.Context,
-	namespace,
 	podName,
 	containerName string,
 	cmd []string,
 ) (string, error) {
-	// Get the pod object
-	_, err := getPod(namespace, podName)
+	_, err := c.getPod(ctx, podName)
 	if err != nil {
 		return "", ErrGettingPod.WithParams(podName).Wrap(err)
 	}
 
-	// Construct the request for executing the command in the specified container
-	if !IsInitialized() {
-		return "", ErrKnuuNotInitialized
-	}
-	req := Clientset().CoreV1().RESTClient().Post().
+	req := c.clientset.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
-		Namespace(namespace).
+		Namespace(c.namespace).
 		SubResource("exec").
 		VersionedParams(&v1.PodExecOptions{
 			Command:   cmd,
@@ -231,35 +203,108 @@ func RunCommandInPod(
 	return stdout.String(), nil
 }
 
-// DeletePodWithGracePeriod deletes a pod with the given name in the specified namespace.
-func DeletePodWithGracePeriod(namespace, name string, gracePeriodSeconds *int64) error {
-	// Get the Pod object from the API server
-	_, err := getPod(namespace, name)
+func (c *Client) DeletePodWithGracePeriod(ctx context.Context, name string, gracePeriodSeconds *int64) error {
+	_, err := c.getPod(ctx, name)
 	if err != nil {
 		// If the pod does not exist, skip and return without error
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Delete the pod using the Kubernetes client API
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: gracePeriodSeconds,
 	}
-	if err := Clientset().CoreV1().Pods(namespace).Delete(ctx, name, deleteOptions); err != nil {
+	if err := c.clientset.CoreV1().Pods(c.namespace).Delete(ctx, name, deleteOptions); err != nil {
 		return ErrDeletingPodFailed.WithParams(name).Wrap(err)
 	}
 
 	return nil
 }
 
-// DeletePod deletes a pod with the given name in the specified namespace.
-func DeletePod(namespace, name string) error {
-	return DeletePodWithGracePeriod(namespace, name, nil)
+func (c *Client) DeletePod(ctx context.Context, name string) error {
+	return c.DeletePodWithGracePeriod(ctx, name, nil)
+}
+
+// PortForwardPod forwards a local port to a port on a pod.
+func (c *Client) PortForwardPod(
+	ctx context.Context,
+	podName string,
+	localPort,
+	remotePort int,
+) error {
+	_, err := c.getPod(ctx, podName)
+	if err != nil {
+		return ErrGettingPod.WithParams(podName).Wrap(err)
+	}
+
+	restConfig, err := getClusterConfig()
+	if err != nil {
+		return ErrGettingClusterConfig.Wrap(err)
+	}
+
+	url := c.clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(c.namespace).
+		Name(podName).
+		SubResource("portforward").
+		URL()
+
+	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
+	if err != nil {
+		return ErrCreatingRoundTripper.Wrap(err)
+	}
+
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
+
+	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+
+	var stdout, stderr io.Writer
+	// Create a new PortForwarder
+	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
+	if err != nil {
+		return ErrCreatingPortForwarder.Wrap(err)
+	}
+	if stderr != nil {
+		return ErrPortForwarding.WithParams(stderr)
+	}
+	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
+	logrus.Debugf("Port forwarding stdout: %v", stdout)
+
+	errChan := make(chan error)
+
+	// Start the port forwarding
+	go func() {
+		if err := pf.ForwardPorts(); err != nil {
+			errChan <- err
+		} else {
+			close(errChan) // if there's no error, close the channel
+		}
+	}()
+
+	// Wait for the port forwarding to be ready or error to occur
+	select {
+	case <-readyChan:
+		// Ready to forward
+		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+	case err := <-errChan:
+		// if there's an error, return it
+		return ErrForwardingPorts.Wrap(err)
+	case <-time.After(time.Second * 5):
+		return ErrPortForwardingTimeout
+	}
+
+	return nil
+}
+
+func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
+	pod, err := c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, ErrGettingPod.WithParams(name).Wrap(err)
+	}
+
+	return pod, nil
 }
 
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
@@ -371,7 +416,7 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(name string, volumes []*Volume) ([]string, error) {
+func buildInitContainerCommand(volumes []*Volume) ([]string, error) {
 	if len(volumes) == 0 {
 		return []string{}, nil // return empty slice if no volumes are specified
 	}
@@ -463,7 +508,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 	if err != nil {
 		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}
-	initContainerCommand, err := buildInitContainerCommand(config.Name, config.Volumes)
+	initContainerCommand, err := buildInitContainerCommand(config.Volumes)
 	if err != nil {
 		return nil, ErrBuildingInitContainerCommand.Wrap(err)
 	}
@@ -570,84 +615,4 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)
 
 	return pod, nil
-}
-
-// PortForwardPod forwards a local port to a port on a pod.
-func PortForwardPod(
-	namespace,
-	podName string,
-	localPort,
-	remotePort int,
-) error {
-	// Get the pod object
-	_, err := getPod(namespace, podName)
-	if err != nil {
-		return ErrGettingPod.WithParams(podName).Wrap(err)
-	}
-
-	// Get a config to talk to the apiserver
-	restconfig, err := getClusterConfig()
-	if err != nil {
-		return ErrGettingClusterConfig.Wrap(err)
-	}
-
-	// Setup the port forwarding
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	url := Clientset().CoreV1().RESTClient().Post().
-		Resource("pods").
-		Namespace(namespace).
-		Name(podName).
-		SubResource("portforward").
-		URL()
-
-	transport, upgrader, err := spdy.RoundTripperFor(restconfig)
-	if err != nil {
-		return ErrCreatingRoundTripper.Wrap(err)
-	}
-
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
-
-	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
-
-	stopChan := make(chan struct{}, 1)
-	readyChan := make(chan struct{})
-
-	var stdout, stderr io.Writer
-	// Create a new PortForwarder
-	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
-	if err != nil {
-		return ErrCreatingPortForwarder.Wrap(err)
-	}
-	if stderr != nil {
-		return ErrPortForwarding.WithParams(stderr)
-	}
-	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	logrus.Debugf("Port forwarding stdout: %v", stdout)
-
-	errChan := make(chan error)
-
-	// Start the port forwarding
-	go func() {
-		if err := pf.ForwardPorts(); err != nil {
-			errChan <- err
-		} else {
-			close(errChan) // if there's no error, close the channel
-		}
-	}()
-
-	// Wait for the port forwarding to be ready or error to occur
-	select {
-	case <-readyChan:
-		// Ready to forward
-		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
-	case err := <-errChan:
-		// if there's an error, return it
-		return ErrForwardingPorts.Wrap(err)
-	case <-time.After(time.Second * 5):
-		return ErrPortForwardingTimeout
-	}
-
-	return nil
 }

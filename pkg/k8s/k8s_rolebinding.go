@@ -7,18 +7,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateRoleBinding creates a roleBinding
-func CreateRoleBinding(
-	namespace,
+func (c *Client) CreateRoleBinding(
+	ctx context.Context,
 	name string,
 	labels map[string]string,
-	role,
-	serviceAccount string,
+	role, serviceAccount string,
 ) error {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: c.namespace,
 			Labels:    labels,
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -29,35 +27,15 @@ func CreateRoleBinding(
 			{
 				Kind:      "ServiceAccount",
 				Name:      serviceAccount,
-				Namespace: namespace,
+				Namespace: c.namespace,
 			},
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if _, err := Clientset().RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := c.clientset.RbacV1().RoleBindings(c.namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	return err
 }
 
-// DeleteRoleBinding deletes a roleBinding
-func DeleteRoleBinding(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if err := Clientset().RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+func (c *Client) DeleteRoleBinding(ctx context.Context, name string) error {
+	return c.clientset.RbacV1().RoleBindings(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

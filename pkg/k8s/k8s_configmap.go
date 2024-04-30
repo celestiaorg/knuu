@@ -4,18 +4,12 @@ import (
 	"context"
 
 	v1 "k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetConfigMap retrieves a configmap
-func GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	cm, err := Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) GetConfigMap(ctx context.Context, name string) (*v1.ConfigMap, error) {
+	cm, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, ErrGettingConfigmap.WithParams(name).Wrap(err)
 	}
@@ -23,33 +17,24 @@ func GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
 	return cm, nil
 }
 
-// ConfigMapExists checks if a configmap exists
-func ConfigMapExists(namespace, name string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return false, ErrKnuuNotInitialized
-	}
-	_, err := Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) ConfigMapExists(ctx context.Context, name string) (bool, error) {
+	_, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		if isNotFound(err) {
+		if apierrs.IsNotFound(err) {
 			return false, nil
 		}
 		return false, ErrGettingConfigmap.WithParams(name).Wrap(err)
 	}
+
 	return true, nil
 }
 
-// CreateConfigMap creates a configmap
-func CreateConfigMap(
-	namespace,
+func (c *Client) CreateConfigMap(
+	ctx context.Context,
 	name string,
-	labels,
-	data map[string]string,
+	labels, data map[string]string,
 ) (*v1.ConfigMap, error) {
-	// check if configmap exists
-	exists, err := ConfigMapExists(namespace, name)
+	exists, err := c.ConfigMapExists(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -57,18 +42,12 @@ func CreateConfigMap(
 		return nil, ErrConfigmapAlreadyExists.WithParams(name)
 	}
 
-	cm, err := prepareConfigMap(namespace, name, labels, data)
+	cm, err := prepareConfigMap(c.namespace, name, labels, data)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	created, err := Clientset().CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+	created, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Create(ctx, cm, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
 	}
@@ -76,10 +55,8 @@ func CreateConfigMap(
 	return created, nil
 }
 
-// DeleteConfigMap deletes a configmap
-func DeleteConfigMap(namespace, name string) error {
-	// check if configmap exists
-	exists, err := ConfigMapExists(namespace, name)
+func (c *Client) DeleteConfigMap(ctx context.Context, name string) error {
+	exists, err := c.ConfigMapExists(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -87,13 +64,7 @@ func DeleteConfigMap(namespace, name string) error {
 		return ErrConfigmapDoesNotExist.WithParams(name)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	err = Clientset().CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	err = c.clientset.CoreV1().ConfigMaps(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return ErrDeletingConfigmap.WithParams(name).Wrap(err)
 	}
@@ -101,12 +72,9 @@ func DeleteConfigMap(namespace, name string) error {
 	return nil
 }
 
-// prepareConfigMap prepares a configmap
 func prepareConfigMap(
-	namespace,
-	name string,
-	labels,
-	data map[string]string,
+	namespace, name string,
+	labels, data map[string]string,
 ) (*v1.ConfigMap, error) {
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

@@ -6,20 +6,14 @@ import (
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// DaemonSetExists checks if a daemonset exists.
-func DaemonSetExists(namespace, name string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return false, ErrKnuuNotInitialized
-	}
-	_, err := Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) DaemonSetExists(ctx context.Context, name string) (bool, error) {
+	_, err := c.clientset.AppsV1().DaemonSets(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		if isNotFound(err) {
+		if apierrs.IsNotFound(err) {
 			return false, nil
 		}
 		return false, ErrGettingDaemonset.WithParams(name).Wrap(err)
@@ -27,94 +21,63 @@ func DaemonSetExists(namespace, name string) (bool, error) {
 	return true, nil
 }
 
-// GetDaemonSet retrieves a daemonset.
-func GetDaemonSet(namespace, name string) (*appv1.DaemonSet, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	ds, err := Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+func (c *Client) GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error) {
+	ds, err := c.clientset.AppsV1().DaemonSets(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, ErrGettingDaemonset.WithParams(name).Wrap(err)
 	}
 	return ds, nil
 }
 
-// CreateDaemonSet creates a new daemonset.
-func CreateDaemonSet(
-	namespace,
+func (c *Client) CreateDaemonSet(
+	ctx context.Context,
 	name string,
 	labels map[string]string,
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
-	ds, err := prepareDaemonSet(namespace, name, labels, initContainers, containers)
+	ds, err := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	created, err := Clientset().AppsV1().DaemonSets(namespace).Create(ctx, ds, metav1.CreateOptions{})
+	created, err := c.clientset.AppsV1().DaemonSets(c.namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s created in namespace %s", name, namespace)
+	logrus.Debugf("DaemonSet %s created in namespace %s", name, c.namespace)
 	return created, nil
 }
 
-// UpdateDaemonSet updates an existing daemonset.
-func UpdateDaemonSet(
-	namespace,
+func (c *Client) UpdateDaemonSet(ctx context.Context,
 	name string,
 	labels map[string]string,
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
-	ds, err := prepareDaemonSet(namespace, name, labels, initContainers, containers)
+	ds, err := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return nil, ErrKnuuNotInitialized
-	}
-	updated, err := Clientset().AppsV1().DaemonSets(namespace).Update(ctx, ds, metav1.UpdateOptions{})
+	updated, err := c.clientset.AppsV1().DaemonSets(c.namespace).Update(ctx, ds, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, ErrUpdatingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s updated in namespace %s", name, namespace)
+	logrus.Debugf("DaemonSet %s updated in namespace %s", name, c.namespace)
 	return updated, nil
 }
 
-// DeleteDaemonSet deletes an existing daemonset.
-func DeleteDaemonSet(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if err := Clientset().AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+func (c *Client) DeleteDaemonSet(ctx context.Context, name string) error {
+	if err := c.clientset.AppsV1().DaemonSets(c.namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return ErrDeletingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s deleted in namespace %s", name, namespace)
+	logrus.Debugf("DaemonSet %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 
-// prepareService constructs a new Service object with the specified parameters.
 func prepareDaemonSet(
-	namespace,
-	name string,
+	namespace, name string,
 	labels map[string]string,
 	initContainers,
 	containers []v1.Container,

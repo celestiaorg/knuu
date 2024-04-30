@@ -7,9 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateRole creates a role
-func CreateRole(
-	namespace,
+func (c *Client) CreateRole(
+	ctx context.Context,
 	name string,
 	labels map[string]string,
 	policyRules []rbacv1.PolicyRule,
@@ -17,36 +16,16 @@ func CreateRole(
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: c.namespace,
 			Labels:    labels,
 		},
 		Rules: policyRules,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if _, err := Clientset().RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := c.clientset.RbacV1().Roles(c.namespace).Create(ctx, role, metav1.CreateOptions{})
+	return err
 }
 
-// DeleteRole deletes a role
-func DeleteRole(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if err := Clientset().RbacV1().Roles(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+func (c *Client) DeleteRole(ctx context.Context, name string) error {
+	return c.clientset.RbacV1().Roles(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
