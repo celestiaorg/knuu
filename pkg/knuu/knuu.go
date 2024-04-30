@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -36,6 +37,11 @@ var (
 
 // Initialize initializes knuu with a unique scope
 func Initialize() error {
+	err := godotenv.Load()
+	if err != nil {
+		return ErrCannotLoadEnv.Wrap(err)
+	}
+
 	t := time.Now()
 	scope := fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 	scope = k8s.SanitizeName(scope)

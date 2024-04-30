@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
@@ -26,11 +25,15 @@ func TestEnvToJSON(t *testing.T) {
 	instances := make([]*knuu.Instance, numberOfInstances)
 
 	// get the values from the .env
-	envVars, err := godotenv.Read()
-	if err != nil {
-		t.Fatalf("Error loading .env file: %v", err)
-	}
-	jsonBytes, err := json.Marshal(envVars)
+
+	test := os.Getenv("TEST")
+	test2 := os.Getenv("TEST_2")
+	test3 := os.Getenv("TEST_3")
+	jsonBytes, err := json.Marshal(map[string]string{
+		"TEST":   test,
+		"TEST_2": test2,
+		"TEST_3": test3,
+	})
 	if err != nil {
 		t.Fatalf("Error converting env vars to JSON: %v", err)
 	}
