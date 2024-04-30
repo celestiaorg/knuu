@@ -20,8 +20,8 @@ type ReplicaSetConfig struct {
 	PodConfig PodConfig         // PodConfig represents the pod configuration
 }
 
-// DeployReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
-func (c *Client) DeployReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
+// CreateReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
+func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
 	// Prepare the pod
 	rsConfig.Namespace = c.namespace
 	rs, err := prepareReplicaSet(rsConfig, init)
@@ -67,7 +67,7 @@ func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSe
 	}
 
 	// Deploy the new replicaSet
-	replicaSet, err := c.DeployReplicaSet(ctx, ReplicaSetConfig, false)
+	replicaSet, err := c.CreateReplicaSet(ctx, ReplicaSetConfig, false)
 	if err != nil {
 		return nil, ErrDeployingReplicaSet.Wrap(err)
 	}

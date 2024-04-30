@@ -133,7 +133,7 @@ func (i *Instance) deployPod(ctx context.Context) error {
 	replicaSetSetConfig := i.prepareReplicaSetConfig()
 
 	// Deploy the statefulSet
-	replicaSet, err := k8sClient.DeployReplicaSet(ctx, replicaSetSetConfig, true)
+	replicaSet, err := k8sClient.CreateReplicaSet(ctx, replicaSetSetConfig, true)
 	if err != nil {
 		return ErrFailedToDeployPod.Wrap(err)
 	}
