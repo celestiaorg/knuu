@@ -200,7 +200,7 @@ func (i *Instance) deployVolume(ctx context.Context) error {
 	for _, volume := range i.volumes {
 		size.Add(resource.MustParse(volume.Size))
 	}
-	k8sClient.DeployPersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), size)
+	k8sClient.CreatePersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), size)
 	logrus.Debugf("Deployed persistent volume '%s'", i.k8sName)
 
 	return nil

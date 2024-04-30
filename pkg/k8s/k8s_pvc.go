@@ -9,11 +9,36 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (c *Client) DeployPersistentVolumeClaim(ctx context.Context, name string, labels map[string]string, size resource.Quantity) error {
-	accessModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
-	if err := c.createPersistentVolumeClaim(ctx, name, labels, size, accessModes); err != nil {
+// CreatePersistentVolumeClaim deploys a PersistentVolumeClaim if it does not exist.
+func (c *Client) CreatePersistentVolumeClaim(
+	ctx context.Context,
+	name string,
+	labels map[string]string,
+	size resource.Quantity,
+) error {
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: c.namespace,
+			Name:      name,
+			Labels:    labels,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{
+				v1.ReadWriteOnce,
+			},
+			Resources: v1.VolumeResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: size,
+				},
+			},
+		},
+	}
+
+	if _, err := c.clientset.CoreV1().PersistentVolumeClaims(c.namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
 		return ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
+
+	logrus.Debugf("PersistentVolumeClaim %s created", name)
 	return nil
 }
 
@@ -29,38 +54,6 @@ func (c *Client) DeletePersistentVolumeClaim(ctx context.Context, name string) e
 	}
 
 	logrus.Debugf("PersistentVolumeClaim %s deleted", name)
-	return nil
-}
-
-// createPersistentVolumeClaim deploys a PersistentVolumeClaim if it does not exist.
-func (c *Client) createPersistentVolumeClaim(
-	ctx context.Context,
-	name string,
-	labels map[string]string,
-	size resource.Quantity,
-	accessModes []v1.PersistentVolumeAccessMode,
-) error {
-	pvc := &v1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: c.namespace,
-			Name:      name,
-			Labels:    labels,
-		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes: accessModes,
-			Resources: v1.VolumeResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceStorage: size,
-				},
-			},
-		},
-	}
-
-	if _, err := c.clientset.CoreV1().PersistentVolumeClaims(c.namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
-		return err
-	}
-
-	logrus.Debugf("PersistentVolumeClaim %s created", name)
 	return nil
 }
 
