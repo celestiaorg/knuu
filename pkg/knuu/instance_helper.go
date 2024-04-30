@@ -79,7 +79,7 @@ func (i *Instance) deployService(ctx context.Context) error {
 	labels := i.getLabels()
 	selectorMap := i.getLabels()
 
-	service, err := k8sClient.DeployService(ctx, i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
+	service, err := k8sClient.CreateService(ctx, i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
 	if err != nil {
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}

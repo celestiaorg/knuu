@@ -18,7 +18,7 @@ func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, erro
 	return svc, nil
 }
 
-func (c *Client) DeployService(
+func (c *Client) CreateService(
 	ctx context.Context,
 	name string,
 	labels,
@@ -35,7 +35,7 @@ func (c *Client) DeployService(
 	if err != nil {
 		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("Service %s deployed in namespace %s", name, c.namespace)
+	logrus.Debugf("Service %s created in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
