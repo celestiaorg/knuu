@@ -3,7 +3,6 @@ package knuu
 import (
 	"fmt"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"gopkg.in/yaml.v3"
 )
 
@@ -434,7 +433,7 @@ func (i *Instance) createProcessors() Processors {
 		Actions: []Action{
 			{
 				Key:    "namespace",
-				Value:  k8s.Namespace(),
+				Value:  k8sClient.Namespace(),
 				Action: "insert",
 			},
 		},

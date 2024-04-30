@@ -2,79 +2,81 @@
 package k8s
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var (
-	// clientset is a global variable that holds a kubernetes clientset.
-	clientset *kubernetes.Clientset
-
+const (
 	// tokenPath path in the filesystem to the service account token
 	tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
 	// certPath path in the filesystem to the ca.crt
 	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
-// Initialize sets up the Kubernetes client.
-func Initialize() error {
-	k8sConfig, err := getClusterConfig()
-	if err != nil {
-		return ErrRetrievingKubernetesConfig.Wrap(err)
-	}
-
-	clientset, err = kubernetes.NewForConfig(k8sConfig)
-	if err != nil {
-		return ErrCreatingClientset.Wrap(err)
-	}
-
-	return nil
+type Client struct {
+	clientset *kubernetes.Clientset
+	namespace string
 }
 
-// IsInitialized checks if the Kubernetes clientset has been initialized.
-func IsInitialized() bool {
-	return clientset != nil
+func New(ctx context.Context, namespace string) (*Client, error) {
+	config, err := getClusterConfig()
+	if err != nil {
+		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
+	}
+
+	cs, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, ErrCreatingClientset.Wrap(err)
+	}
+	kc := &Client{clientset: cs}
+
+	namespace = SanitizeName(namespace)
+	kc.namespace = namespace
+	if kc.NamespaceExists(ctx, namespace) {
+		logrus.Debugf("Namespace %s already exists, continuing.\n", namespace)
+		return kc, nil
+	}
+
+	if err := kc.CreateNamespace(ctx, namespace); err != nil {
+		return nil, ErrCreatingNamespace.WithParams(namespace).Wrap(err)
+	}
+
+	return kc, nil
 }
 
-// Clientset returns the Kubernetes clientset.
-func Clientset() *kubernetes.Clientset {
-	return clientset
+func (c *Client) Clientset() *kubernetes.Clientset {
+	return c.clientset
+}
+
+func (c *Client) Namespace() string {
+	return c.namespace
 }
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
 func isClusterEnvironment() bool {
-	if _, err := os.Stat(tokenPath); err != nil {
-		return false
-	}
-	if _, err := os.Stat(certPath); err != nil {
-		return false
-	}
-
-	return true
+	_, errToken := os.Stat(tokenPath)
+	_, errCert := os.Stat(certPath)
+	return errToken == nil && errCert == nil
 }
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.
 func getClusterConfig() (*rest.Config, error) {
-	// Check if the program is running in a Kubernetes cluster environment
 	if isClusterEnvironment() {
 		return rest.InClusterConfig()
 	}
 
-	// If not running in a Kubernetes cluster environment, build the configuration from the kubeconfig file
+	// build the configuration from the kubeconfig file
 	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
-}
-
-// isNotFound checks if the error is a NotFound error
-func isNotFound(err error) bool {
-	return apierrs.IsNotFound(err)
 }
 
 // precompile the regular expression to avoid recompiling it on every function call

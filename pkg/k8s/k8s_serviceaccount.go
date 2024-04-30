@@ -7,40 +7,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateServiceAccount creates a service account
-func CreateServiceAccount(namespace, name string, labels map[string]string) error {
+func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error {
 	serviceAccount := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: c.namespace,
 			Labels:    labels,
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if _, err := Clientset().CoreV1().ServiceAccounts(namespace).Create(ctx, serviceAccount, metav1.CreateOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := c.clientset.CoreV1().ServiceAccounts(c.namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+	return err
 }
 
-// DeleteServiceAccount deletes a service account
-func DeleteServiceAccount(namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if !IsInitialized() {
-		return ErrKnuuNotInitialized
-	}
-	if err := Clientset().CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return err
-	}
-
-	return nil
+func (c *Client) DeleteServiceAccount(ctx context.Context, name string) error {
+	return c.clientset.CoreV1().ServiceAccounts(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
