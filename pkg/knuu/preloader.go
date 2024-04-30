@@ -90,7 +90,7 @@ func (p *Preloader) preloadImages() error {
 	labels := map[string]string{
 		"app":                          p.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/scope":                k8s.SanitizeName(testScope),
+		"knuu.sh/scope":                testScope,
 		"knuu.sh/test-started":         startTime,
 	}
 
