@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -416,18 +417,33 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(volumes []*Volume) ([]string, error) {
-	if len(volumes) == 0 {
-		return []string{}, nil // return empty slice if no volumes are specified
+func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
+	var commands = []string{"sh", "-c"}
+	dirsProcessed := make(map[string]bool)
+	baseCmd := "mkdir -p /knuu && "
+	cmds := []string{baseCmd}
+
+	for _, file := range files {
+		// get the directory of the file
+		folder := filepath.Dir(file.Dest)
+		if _, processed := dirsProcessed[folder]; !processed {
+			parentDirCmd := fmt.Sprintf("mkdir -p /knuu%s && chmod -R 777 /knuu/%s && ", folder, folder)
+			cmds = append(cmds, parentDirCmd)
+			dirsProcessed[folder] = true
+		}
 	}
 
-	var command = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
 	for _, volume := range volumes {
-		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
-		command = append(command, cmd) // add each command to the command slice
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/* ;fi", volume.Path, volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
+		cmds = append(cmds, cmd)
+		logrus.Debugf("Init container command for volume: %s", cmd)
 	}
 
-	return command, nil
+	fullCommand := strings.Join(cmds, "")
+	commands = append(commands, fullCommand)
+
+	logrus.Debugf("Init container command: %s", fullCommand)
+	return commands, nil
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
@@ -508,7 +524,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 	if err != nil {
 		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}
-	initContainerCommand, err := buildInitContainerCommand(config.Volumes)
+	initContainerCommand, err := buildInitContainerCommand(config.Volumes, config.Files)
 	if err != nil {
 		return nil, ErrBuildingInitContainerCommand.Wrap(err)
 	}
