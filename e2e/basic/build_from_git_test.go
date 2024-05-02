@@ -1,0 +1,61 @@
+package basic
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/knuu"
+)
+
+// This test is just an example to show how to
+// setup the test instance to be built from a git repo
+func TestBuildFromGit(t *testing.T) {
+	t.Parallel()
+	// Setup
+
+	// This code is a bit dirty due to the current limitations of knuu
+	// After refactoring knuu, this test must be either removed or updated
+	require.NoError(t, os.Setenv("KNUU_BUILDER", "kubernetes"), "Error setting KNUU_BUILDER Env")
+	require.NoError(t, knuu.CleanUp(), "Error cleaning up knuu")
+	require.NoError(t, knuu.Initialize(), "Error initializing knuu")
+
+	instance, err := knuu.NewInstance("my-instance")
+	require.NoError(t, err, "Error creating instance")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// This is a blocking call which builds the image from git repo
+	err = instance.SetGitRepo(ctx, builder.GitContext{
+		Repo:     "https://github.com/celestiaorg/celestia-app.git",
+		Branch:   "main",
+		Commit:   "",
+		Username: "",
+		Password: "",
+	})
+	require.NoError(t, err, "Error setting git repo")
+
+	require.NoError(t, instance.Commit(), "Error committing instance")
+
+	t.Cleanup(func() {
+		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
+			t.Log("Skipping cleanup")
+			return
+		}
+
+		require.NoError(t, instance.Destroy(), "Error destroying instance")
+	})
+
+	// Test logic
+
+	require.NoError(t, instance.Start(), "Error starting instance")
+
+	t.Log("Waiting 10 seconds...")
+	time.Sleep(10 * time.Second)
+	t.Log("Done waiting")
+}
