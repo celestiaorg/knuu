@@ -37,11 +37,6 @@ var (
 
 // Initialize initializes knuu with a unique scope
 func Initialize() error {
-	err := godotenv.Load()
-	if err != nil {
-		return ErrCannotLoadEnv.Wrap(err)
-	}
-
 	t := time.Now()
 	scope := fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 	scope = k8s.SanitizeName(scope)
@@ -55,6 +50,12 @@ func Scope() string {
 
 // InitializeWithScope initializes knuu with a given scope
 func InitializeWithScope(scope string) error {
+	var err error
+	err = godotenv.Load()
+	if err != nil {
+		return ErrCannotLoadEnv.Wrap(err)
+	}
+
 	if scope == "" {
 		return ErrCannotInitializeKnuuWithEmptyScope
 	}
@@ -90,7 +91,6 @@ func InitializeWithScope(scope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var err error
 	k8sClient, err = k8s.New(ctx, scope)
 	if err != nil {
 		return ErrCannotInitializeK8s.Wrap(err)
