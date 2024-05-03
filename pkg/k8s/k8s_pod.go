@@ -434,8 +434,13 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 		}
 	}
 
-	for _, volume := range volumes {
-		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/* ;fi", volume.Path, volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
+	for i, volume := range volumes {
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
+		if i < len(volumes)-1 {
+			cmd += " ;fi && "
+		} else {
+			cmd += " ;fi"
+		}
 		cmds = append(cmds, cmd)
 		logrus.Debugf("Init container command for volume: %s", cmd)
 	}
