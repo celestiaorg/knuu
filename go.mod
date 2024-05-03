@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	github.com/celestiaorg/bittwister v0.0.0-20231213180407-65cdbaf5b8c7
-	github.com/celestiaorg/celestia-app v1.8.0
+	github.com/celestiaorg/celestia-app v1.9.0
 	github.com/celestiaorg/celestia-node v0.13.4
 	github.com/celestiaorg/knuu-example v0.0.0-20240422111045-61cd0cbaa37d
 	github.com/cosmos/cosmos-sdk v0.46.16

@@ -442,7 +442,6 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 			cmd += " ;fi"
 		}
 		cmds = append(cmds, cmd)
-		logrus.Debugf("Init container command for volume: %s", cmd)
 	}
 
 	fullCommand := strings.Join(cmds, "")
