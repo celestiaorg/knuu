@@ -21,7 +21,13 @@ import (
 )
 
 // the loops that keep checking something and wait for it to be done
-const retryInterval = 100 * time.Millisecond
+const (
+	// retryInterval is the interval to wait between retries
+	retryInterval = 100 * time.Millisecond
+
+	// knuuPath is the path where the knuu volume is mounted
+	knuuPath = "/knuu"
+)
 
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
@@ -410,7 +416,7 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 	containerVolumes := []v1.VolumeMount{
 		{
 			Name:      name,
-			MountPath: "/knuu", // set the path to "/knuu" as per the requirements
+			MountPath: knuuPath, // set the path to "/knuu" as per the requirements
 		},
 	}
 
@@ -421,21 +427,23 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
 	var commands = []string{"sh", "-c"}
 	dirsProcessed := make(map[string]bool)
-	baseCmd := "mkdir -p /knuu && "
+	baseCmd := fmt.Sprintf("mkdir -p %s && ", knuuPath)
 	cmds := []string{baseCmd}
 
 	for _, file := range files {
 		// get the directory of the file
 		folder := filepath.Dir(file.Dest)
 		if _, processed := dirsProcessed[folder]; !processed {
-			parentDirCmd := fmt.Sprintf("mkdir -p /knuu%s && chmod -R 777 /knuu/%s && ", folder, folder)
+			knuuFolder := fmt.Sprintf("%s%s", knuuPath, folder)
+			parentDirCmd := fmt.Sprintf("mkdir -p %s && chmod -R 777 %s && ", knuuFolder, knuuFolder)
 			cmds = append(cmds, parentDirCmd)
 			dirsProcessed[folder] = true
 		}
 	}
 
 	for i, volume := range volumes {
-		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
+		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
 		if i < len(volumes)-1 {
 			cmd += " ;fi && "
 		} else {
