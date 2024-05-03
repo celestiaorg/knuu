@@ -40,6 +40,11 @@ func TestBuildFromGit(t *testing.T) {
 	})
 	require.NoError(t, err, "Error setting git repo")
 
+	require.NoError(t, instance.SetCommand("sleep", "infinity"), "Error setting command")
+
+	err = instance.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
+	require.NoError(t, err, "Error adding file")
+
 	require.NoError(t, instance.Commit(), "Error committing instance")
 
 	t.Cleanup(func() {
@@ -55,7 +60,8 @@ func TestBuildFromGit(t *testing.T) {
 
 	require.NoError(t, instance.Start(), "Error starting instance")
 
-	t.Log("Waiting 10 seconds...")
-	time.Sleep(10 * time.Second)
-	t.Log("Done waiting")
+	data, err := instance.GetFileBytes("/home/hello.txt")
+	require.NoError(t, err, "Error getting file bytes")
+
+	require.Equal(t, []byte("Hello, world!"), data, "File bytes do not match")
 }
