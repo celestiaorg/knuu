@@ -186,7 +186,7 @@ You can set the following environment variables to change the behavior of knuu:
 | --- | --- | --- | --- |
 | `KNUU_TIMEOUT` | The timeout for the tests. | Any valid duration | `60m` |
 | `KNUU_BUILDER` | The builder to use for building images. | `docker`, `kubernetes` | `docker` |
-| `DEBUG_LEVEL` | The debug level. | `debug`, `info`, `warn`, `error` | `info` |
+| `LOG_LEVEL` | The debug level. | `debug`, `info`, `warn`, `error` | `info` |
 
 ---
 
