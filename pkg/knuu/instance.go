@@ -667,6 +667,11 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
+	// temporary feat, we will remove it once we can add multiple volumes
+	if len(i.volumes) > 0 {
+		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		return ErrMaximumVolumesExceeded.WithParams(i.name)
+	}
 	volume := k8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
 	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
