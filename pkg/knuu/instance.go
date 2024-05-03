@@ -653,6 +653,11 @@ func (i *Instance) Commit() error {
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddVolume(path, size string) error {
 	i.AddVolumeWithOwner(path, size, 0)
+	// temporary feat, we will remove it once we can add multiple volumes
+	if len(i.volumes) > 0 {
+		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		return ErrMaximumVolumesExceeded.WithParams(i.name)
+	}
 	return nil
 }
 
