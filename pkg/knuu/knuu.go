@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -49,6 +50,12 @@ func Scope() string {
 
 // InitializeWithScope initializes knuu with a given scope
 func InitializeWithScope(scope string) error {
+	var err error
+	err = godotenv.Load()
+	if err != nil {
+		return ErrCannotLoadEnv.Wrap(err)
+	}
+
 	if scope == "" {
 		return ErrCannotInitializeKnuuWithEmptyScope
 	}
@@ -84,7 +91,6 @@ func InitializeWithScope(scope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var err error
 	k8sClient, err = k8s.New(ctx, scope)
 	if err != nil {
 		return ErrCannotInitializeK8s.Wrap(err)

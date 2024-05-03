@@ -211,4 +211,5 @@ var (
 	ErrCannotStartInstance                       = &Error{Code: "Cannot Start Instance", Message: "cannot start instance"}
 	ErrMinioNotInitialized                       = &Error{Code: "MinioNotInitialized", Message: "minio not initialized"}
 	ErrGeneratingK8sNameForPreloader             = &Error{Code: "GeneratingK8sNameForPreloader", Message: "error generating k8s name for preloader"}
+	ErrCannotLoadEnv                             = &Error{Code: "Cannot Load Env", Message: "cannot load env"}
 )

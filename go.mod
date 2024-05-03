@@ -12,6 +12,7 @@ require (
 	github.com/cosmos/cosmos-sdk v0.46.16
 	github.com/docker/docker v26.1.0+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/rs/zerolog v1.32.0
 	github.com/sirupsen/logrus v1.9.3
