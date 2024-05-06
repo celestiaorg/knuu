@@ -30,7 +30,7 @@ func TestUpgradePreloaded(t *testing.T) {
 		t.Fatalf("Error adding preloaded image: %v", err)
 	}
 
-	preloadedImages := preloader.Images()
+	preloadedImages := preloader.GetImages()
 	t.Log("Preloaded images:")
 	for _, image := range preloadedImages {
 		t.Logf("- %v", image)

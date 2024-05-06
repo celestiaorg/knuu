@@ -2,6 +2,7 @@
 package knuu
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -24,12 +26,13 @@ import (
 
 var (
 	// testScope is the testScope of the current knuu instance
-	testScope string
-	// namespaceCreated is true if the namespace was created by knuu and false if it already existed
-	namespaceCreated bool
-	startTime        string
-	timeout          time.Duration
-	imageBuilder     builder.Builder
+	testScope    string
+	startTime    string
+	timeout      time.Duration
+	imageBuilder builder.Builder
+
+	// TODO: this temporary until we refactor knuu pkg
+	k8sClient *k8s.Client
 )
 
 // Initialize initializes knuu with a unique scope
@@ -46,6 +49,12 @@ func Scope() string {
 
 // InitializeWithScope initializes knuu with a given scope
 func InitializeWithScope(scope string) error {
+	var err error
+	err = godotenv.Load()
+	if err != nil {
+		return ErrCannotLoadEnv.Wrap(err)
+	}
+
 	if scope == "" {
 		return ErrCannotInitializeKnuuWithEmptyScope
 	}
@@ -67,24 +76,6 @@ func InitializeWithScope(scope string) error {
 
 	logrus.Infof("Initializing knuu with scope: %s", scope)
 
-	err := k8s.Initialize()
-	if err != nil {
-		return ErrCannotInitializeK8s.Wrap(err)
-	}
-
-	namespace := k8s.SanitizeName(scope)
-	namespaceExists := k8s.NamespaceExists(namespace)
-
-	if !namespaceExists {
-		namespaceCreated = true
-		err := k8s.CreateNamespace(namespace)
-		if err != nil {
-			return ErrCreatingNamespace.WithParams(namespace).Wrap(err)
-		}
-	}
-
-	k8s.SetNamespace(namespace)
-
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
 	if timeoutString == "" {
@@ -97,27 +88,35 @@ func InitializeWithScope(scope string) error {
 		timeout = parsedTimeout
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	k8sClient, err = k8s.New(ctx, scope)
+	if err != nil {
+		return ErrCannotInitializeK8s.Wrap(err)
+	}
+
 	if err := handleTimeout(); err != nil {
 		return ErrCannotHandleTimeout.Wrap(err)
 	}
 
 	minioClient = &minio.Minio{
-		Clientset: k8s.Clientset(),
-		Namespace: k8s.Namespace(),
+		Clientset: k8sClient.Clientset(),
+		Namespace: k8sClient.Namespace(),
 	}
 
 	builderType := os.Getenv("KNUU_BUILDER")
 	switch builderType {
 	case "kubernetes":
 		SetImageBuilder(&kaniko.Kaniko{
-			K8sClientset: k8s.Clientset(),
-			K8sNamespace: k8s.Namespace(),
+			K8sClientset: k8sClient.Clientset(),
+			K8sNamespace: k8sClient.Namespace(),
 			Minio:        minioClient, // same client is used to make the best use of the resources
 		})
 	case "docker", "":
 		SetImageBuilder(&docker.Docker{
-			K8sClientset: k8s.Clientset(),
-			K8sNamespace: k8s.Namespace(),
+			K8sClientset: k8sClient.Clientset(),
+			K8sNamespace: k8sClient.Namespace(),
 		})
 	default:
 		return ErrInvalidKnuuBuilder.WithParams(builderType)
@@ -183,14 +182,14 @@ func ImageBuilder() builder.Builder {
 
 // IsInitialized returns true if knuu is initialized, and false otherwise
 func IsInitialized() bool {
-	return k8s.IsInitialized()
+	return k8sClient != nil
 }
 
 func CleanUp() error {
-	if namespaceCreated {
-		return k8s.DeleteNamespace(testScope)
-	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return k8sClient.DeleteNamespace(ctx, testScope)
 }
 
 func HandleStopSignal() {
@@ -227,17 +226,15 @@ func handleTimeout() error {
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
-	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", testScope, k8s.Namespace(), TimeoutHandlerInstance.String(), k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", testScope, k8sClient.Namespace(), TimeoutHandlerInstance.String(), k8sClient.Namespace()))
 
-	// Delete the namespace if it was created by knuu.
-	if namespaceCreated {
-		logrus.Debugf("The namespace generated [%s] will be deleted", k8s.Namespace())
-		commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8s.Namespace()))
-	}
+	// Delete the namespace as it was created by knuu.
+	logrus.Debugf("The namespace generated [%s] will be deleted", k8sClient.Namespace())
+	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k8sClient.Namespace()))
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", testScope, k8s.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", testScope, k8sClient.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
