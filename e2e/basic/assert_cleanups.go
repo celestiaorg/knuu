@@ -24,7 +24,6 @@ func assertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*
 		err := executor.Destroy()
 		if err != nil {
 			t.Fatalf("Error destroying executor: %v", err)
-			return err
 		}
 
 		for _, instance := range instances {
