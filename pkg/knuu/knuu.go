@@ -52,9 +52,12 @@ func InitializeWithScope(scope string) error {
 	var err error
 	err = godotenv.Load()
 	if err != nil {
-		return ErrCannotLoadEnv.Wrap(err)
+		if os.IsNotExist(err) {
+			logrus.Warn("The .env file does not exist, continuing without loading environment variables.")
+		} else {
+			return ErrCannotLoadEnv.Wrap(err)
+		}
 	}
-
 	if scope == "" {
 		return ErrCannotInitializeKnuuWithEmptyScope
 	}
