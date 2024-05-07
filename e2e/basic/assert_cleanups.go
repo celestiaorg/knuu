@@ -38,3 +38,16 @@ func assertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*
 	}
 	return nil
 }
+
+// BatchDestroy destroys a list of instances.
+func BatchDestroy(instances ...*knuu.Instance) error {
+	for _, instance := range instances {
+		if instance != nil {
+			err := instance.Destroy()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
