@@ -13,7 +13,6 @@ func assertCleanupInstance(t *testing.T, instance *knuu.Instance) error {
 		err := instance.Destroy()
 		if err != nil {
 			t.Fatalf("Error destroying instance: %v", err)
-			return err
 		}
 	}
 	return nil
@@ -33,7 +32,6 @@ func assertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*
 				err := instance.Destroy()
 				if err != nil {
 					t.Fatalf("Error destroying instance: %v", err)
-					return err
 				}
 			}
 		}
