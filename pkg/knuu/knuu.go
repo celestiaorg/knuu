@@ -53,7 +53,7 @@ func InitializeWithScope(scope string) error {
 	err = godotenv.Load()
 	if err != nil {
 		if os.IsNotExist(err) {
-			logrus.Warn("The .env file does not exist, continuing without loading environment variables.")
+			logrus.Info("The .env file does not exist, continuing without loading environment variables.")
 		} else {
 			return ErrCannotLoadEnv.Wrap(err)
 		}
