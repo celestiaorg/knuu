@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -265,29 +266,27 @@ func (c *Client) PortForwardPod(
 
 	stopChan := make(chan struct{}, 1)
 	readyChan := make(chan struct{})
-	defer func() {
-		close(stopChan)
-		close(readyChan)
-	}()
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr io.Writer
 	// Create a new PortForwarder
-	pf, err := portforward.New(dialer, ports, stopChan, readyChan, &stdout, &stderr)
+	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
 	if err != nil {
 		return ErrCreatingPortForwarder.Wrap(err)
 	}
-	if stderr.Len() > 0 {
-		return ErrPortForwarding.WithParams(stderr.String())
+	if stderr != nil {
+		return ErrPortForwarding.WithParams(stderr)
 	}
 	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
 	logrus.Debugf("Port forwarding stdout: %v", stdout)
 
-	// Start the port forwarding
 	errChan := make(chan error)
-	defer close(errChan)
+
+	// Start the port forwarding
 	go func() {
 		if err := pf.ForwardPorts(); err != nil {
 			errChan <- err
+		} else {
+			close(errChan) // if there's no error, close the channel
 		}
 	}()
 
