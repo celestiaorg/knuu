@@ -39,7 +39,6 @@ var (
 func Initialize() error {
 	t := time.Now()
 	scope := fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
-	scope = k8s.SanitizeName(scope)
 	return InitializeWithScope(scope)
 }
 
@@ -53,14 +52,18 @@ func InitializeWithScope(scope string) error {
 	var err error
 	err = godotenv.Load()
 	if err != nil {
-		return ErrCannotLoadEnv.Wrap(err)
+		if os.IsNotExist(err) {
+			logrus.Warn("The .env file does not exist, continuing without loading environment variables.")
+		} else {
+			return ErrCannotLoadEnv.Wrap(err)
+		}
 	}
-
 	if scope == "" {
 		return ErrCannotInitializeKnuuWithEmptyScope
 	}
 
-	testScope = scope
+	// Sanitize the scope to ensure it is a valid Kubernetes name and match the namespace
+	testScope = k8s.SanitizeName(scope)
 
 	t := time.Now()
 	startTime = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
@@ -226,7 +229,7 @@ func handleTimeout() error {
 	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
-	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", k8s.SanitizeName(testScope), k8sClient.Namespace(), TimeoutHandlerInstance.String(), k8sClient.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s", testScope, k8sClient.Namespace(), TimeoutHandlerInstance.String(), k8sClient.Namespace()))
 
 	// Delete the namespace as it was created by knuu.
 	logrus.Debugf("The namespace generated [%s] will be deleted", k8sClient.Namespace())
@@ -234,7 +237,7 @@ func handleTimeout() error {
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k8s.SanitizeName(testScope), k8sClient.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", testScope, k8sClient.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
