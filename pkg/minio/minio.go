@@ -481,7 +481,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
-			Resources: v1.VolumeResourceRequirements{
+			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: storageQt,
 				},

@@ -26,7 +26,7 @@ func (c *Client) CreatePersistentVolumeClaim(
 			AccessModes: []v1.PersistentVolumeAccessMode{
 				v1.ReadWriteOnce,
 			},
-			Resources: v1.VolumeResourceRequirements{
+			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: size,
 				},
