@@ -249,7 +249,7 @@ By participating in this project, you agree to abide by the [CNCF Code of Conduc
 
 See the [Contributing Guide](./CONTRIBUTING.md) for more information.
 
-To ensure that your contribution is working as expected, please run [knuu-example](https://github.com/celestiaorg/knuu-example) with your fork and branch.
+To ensure that your contribution is working as expected, please run the tests in the `e2e` folder.
 
 <!---
 ## Governance
