@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/celestiaorg/knuu-example/celestia_app/utils"
+	"github.com/celestiaorg/knuu/e2e/celestia_app/utils"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

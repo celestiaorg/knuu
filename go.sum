@@ -368,8 +368,6 @@ github.com/celestiaorg/go-header v0.6.1 h1:bbmfNTpL9BA7dZU4/pdzH4DlOnxHTd9F5LLVK
 github.com/celestiaorg/go-header v0.6.1/go.mod h1:PAEtQmVDqw0nhvkVgfhq2JB7oLnv3GqephFUOeaJqIs=
 github.com/celestiaorg/go-libp2p-messenger v0.2.0 h1:/0MuPDcFamQMbw9xTZ73yImqgTO3jHV7wKHvWD/Irao=
 github.com/celestiaorg/go-libp2p-messenger v0.2.0/go.mod h1:s9PIhMi7ApOauIsfBcQwbr7m+HBzmVfDIS+QLdgzDSo=
-github.com/celestiaorg/knuu-example v0.0.0-20240422111045-61cd0cbaa37d h1:xxikVKTaJY8fTWxXnOPNQHvHHPDVGBa2syBGu9HYqvM=
-github.com/celestiaorg/knuu-example v0.0.0-20240422111045-61cd0cbaa37d/go.mod h1:MRuQKHkpV/yzdPdPjO1w9Lb89p+p20ly3nZA9th2xew=
 github.com/celestiaorg/merkletree v0.0.0-20230308153949-c33506a7aa26 h1:P2RI1xJ49EZ8cuHMcH+ZSBonfRDtBS8OS9Jdt1BWX3k=
 github.com/celestiaorg/merkletree v0.0.0-20230308153949-c33506a7aa26/go.mod h1:2m8ukndOegwB0PU0AfJCwDUQHqd7QQRlSXvQL5VToVY=
 github.com/celestiaorg/nmt v0.20.0 h1:9i7ultZ8Wv5ytt8ZRaxKQ5KOOMo4A2K2T/aPGjIlSas=

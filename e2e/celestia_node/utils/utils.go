@@ -7,7 +7,7 @@ import (
 	"github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/sirupsen/logrus"
 
-	app_utils "github.com/celestiaorg/knuu-example/celestia_app/utils"
+	app_utils "github.com/celestiaorg/knuu/e2e/celestia_app/utils"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
