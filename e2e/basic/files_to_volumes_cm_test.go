@@ -322,7 +322,7 @@ func TestOneVolumeOneFile(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Equal(t, "hello from 1", wget)
+		assert.Equal(t, "hello from 1\n", wget)
 	}
 }
 
