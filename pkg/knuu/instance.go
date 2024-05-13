@@ -12,6 +12,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/sirupsen/logrus"
 
@@ -171,6 +172,11 @@ func (i *Instance) EnableBitTwister() error {
 func (i *Instance) DisableBitTwister() error {
 	i.BitTwister.disable()
 	return nil
+}
+
+// Name returns the name of the instance
+func (i *Instance) Name() string {
+	return i.name
 }
 
 // SetImage sets the image of the instance.
@@ -652,6 +658,11 @@ func (i *Instance) Commit() error {
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddVolume(path, size string) error {
+	// temporary feat, we will remove it once we can add multiple volumes
+	if len(i.volumes) > 0 {
+		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		return ErrMaximumVolumesExceeded.WithParams(i.name)
+	}
 	i.AddVolumeWithOwner(path, size, 0)
 	return nil
 }
@@ -661,6 +672,11 @@ func (i *Instance) AddVolume(path, size string) error {
 func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
+	}
+	// temporary feat, we will remove it once we can add multiple volumes
+	if len(i.volumes) > 0 {
+		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
 	volume := k8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
@@ -1382,4 +1398,24 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 	ins.name = name
 	ins.k8sName = newK8sName
 	return ins, nil
+}
+
+// CreateCustomResource creates a custom resource for the instance
+// The names and namespace are set and overridden by knuu
+func (i *Instance) CreateCustomResource(gvr *schema.GroupVersionResource, obj *map[string]interface{}) error {
+
+	crdExists, err := i.CustomResourceDefinitionExists(gvr)
+	if err != nil {
+		return err
+	}
+	if !crdExists {
+		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
+	}
+
+	return k8sClient.CreateCustomResource(context.TODO(), i.k8sName, gvr, obj)
+}
+
+// CustomResourceDefinitionExists checks if the custom resource definition exists
+func (i *Instance) CustomResourceDefinitionExists(gvr *schema.GroupVersionResource) (bool, error) {
+	return k8sClient.CustomResourceDefinitionExists(context.TODO(), gvr), nil
 }

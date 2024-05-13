@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -101,7 +100,7 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	labels := map[string]string{
 		"app":                          p.K8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/scope":                k8s.SanitizeName(testScope),
+		"knuu.sh/scope":                testScope,
 		"knuu.sh/test-started":         startTime,
 	}
 

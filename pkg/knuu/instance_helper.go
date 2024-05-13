@@ -68,12 +68,17 @@ func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
 		"app":                          i.k8sName,
 		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/scope":                k8s.SanitizeName(testScope),
+		"knuu.sh/scope":                testScope,
 		"knuu.sh/test-started":         startTime,
 		"knuu.sh/name":                 i.name,
 		"knuu.sh/k8s-name":             i.k8sName,
 		"knuu.sh/type":                 i.instanceType.String(),
 	}
+}
+
+// Labels returns the labels for the instance
+func (i *Instance) Labels() map[string]string {
+	return i.getLabels()
 }
 
 // deployService deploys the service for the instance
