@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -23,8 +25,10 @@ const (
 )
 
 type Client struct {
-	clientset *kubernetes.Clientset
-	namespace string
+	clientset       *kubernetes.Clientset
+	discoveryClient *discovery.DiscoveryClient
+	dynamicClient   dynamic.Interface
+	namespace       string
 }
 
 func New(ctx context.Context, namespace string) (*Client, error) {
@@ -37,7 +41,19 @@ func New(ctx context.Context, namespace string) (*Client, error) {
 	if err != nil {
 		return nil, ErrCreatingClientset.Wrap(err)
 	}
-	kc := &Client{clientset: cs}
+
+	// create discovery client
+	dc, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, ErrCreatingDiscoveryClient.Wrap(err)
+	}
+
+	// Create the dynamic client
+	dC, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, ErrCreatingDynamicClient.Wrap(err)
+	}
+	kc := &Client{clientset: cs, discoveryClient: dc, dynamicClient: dC}
 
 	namespace = SanitizeName(namespace)
 	kc.namespace = namespace
