@@ -7,8 +7,8 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
 
-	app_utils "github.com/celestiaorg/knuu-example/celestia_app/utils"
-	"github.com/celestiaorg/knuu-example/celestia_node/utils"
+	app_utils "github.com/celestiaorg/knuu/e2e/celestia_app/utils"
+	"github.com/celestiaorg/knuu/e2e/celestia_node/utils"
 )
 
 func TestBasic(t *testing.T) {

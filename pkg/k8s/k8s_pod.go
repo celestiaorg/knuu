@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,7 +22,13 @@ import (
 )
 
 // the loops that keep checking something and wait for it to be done
-const retryInterval = 100 * time.Millisecond
+const (
+	// retryInterval is the interval to wait between retries
+	retryInterval = 100 * time.Millisecond
+
+	// knuuPath is the path where the knuu volume is mounted
+	knuuPath = "/knuu"
+)
 
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
@@ -258,29 +266,27 @@ func (c *Client) PortForwardPod(
 
 	stopChan := make(chan struct{}, 1)
 	readyChan := make(chan struct{})
-	defer func() {
-		close(stopChan)
-		close(readyChan)
-	}()
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr io.Writer
 	// Create a new PortForwarder
-	pf, err := portforward.New(dialer, ports, stopChan, readyChan, &stdout, &stderr)
+	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
 	if err != nil {
 		return ErrCreatingPortForwarder.Wrap(err)
 	}
-	if stderr.Len() > 0 {
-		return ErrPortForwarding.WithParams(stderr.String())
+	if stderr != nil {
+		return ErrPortForwarding.WithParams(stderr)
 	}
 	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
 	logrus.Debugf("Port forwarding stdout: %v", stdout)
 
-	// Start the port forwarding
 	errChan := make(chan error)
-	defer close(errChan)
+
+	// Start the port forwarding
 	go func() {
 		if err := pf.ForwardPorts(); err != nil {
 			errChan <- err
+		} else {
+			close(errChan) // if there's no error, close the channel
 		}
 	}()
 
@@ -409,7 +415,7 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 	containerVolumes := []v1.VolumeMount{
 		{
 			Name:      name,
-			MountPath: "/knuu", // set the path to "/knuu" as per the requirements
+			MountPath: knuuPath, // set the path to "/knuu" as per the requirements
 		},
 	}
 
@@ -417,18 +423,39 @@ func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(volumes []*Volume) ([]string, error) {
-	if len(volumes) == 0 {
-		return []string{}, nil // return empty slice if no volumes are specified
+func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
+	var commands = []string{"sh", "-c"}
+	dirsProcessed := make(map[string]bool)
+	baseCmd := fmt.Sprintf("mkdir -p %s && ", knuuPath)
+	cmds := []string{baseCmd}
+
+	for _, file := range files {
+		// get the directory of the file
+		folder := filepath.Dir(file.Dest)
+		if _, processed := dirsProcessed[folder]; !processed {
+			knuuFolder := fmt.Sprintf("%s%s", knuuPath, folder)
+			parentDirCmd := fmt.Sprintf("mkdir -p %s && chmod -R 777 %s && ", knuuFolder, knuuFolder)
+			cmds = append(cmds, parentDirCmd)
+			dirsProcessed[folder] = true
+		}
 	}
 
-	var command = []string{"sh", "-c"} // initialize the command slice with the required shell interpreter
-	for _, volume := range volumes {
-		cmd := fmt.Sprintf("mkdir -p /knuu/%s && cp -r %s/* /knuu/%s && chown -R %d:%d /knuu/*", volume.Path, volume.Path, volume.Path, volume.Owner, volume.Owner)
-		command = append(command, cmd) // add each command to the command slice
+	for i, volume := range volumes {
+		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
+		if i < len(volumes)-1 {
+			cmd += " ;fi && "
+		} else {
+			cmd += " ;fi"
+		}
+		cmds = append(cmds, cmd)
 	}
 
-	return command, nil
+	fullCommand := strings.Join(cmds, "")
+	commands = append(commands, fullCommand)
+
+	logrus.Debugf("Init container command: %s", fullCommand)
+	return commands, nil
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
@@ -509,7 +536,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 	if err != nil {
 		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}
-	initContainerCommand, err := buildInitContainerCommand(config.Volumes)
+	initContainerCommand, err := buildInitContainerCommand(config.Volumes, config.Files)
 	if err != nil {
 		return nil, ErrBuildingInitContainerCommand.Wrap(err)
 	}

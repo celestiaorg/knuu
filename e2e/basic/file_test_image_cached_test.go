@@ -63,20 +63,9 @@ func TestFileCached(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") != "true" {
-			err := executor.Destroy()
-			if err != nil {
-				t.Fatalf("Error destroying executor: %v", err)
-			}
-
-			for _, instance := range instances {
-				if instance != nil {
-					err := instance.Destroy()
-					if err != nil {
-						t.Fatalf("Error destroying instance: %v", err)
-					}
-				}
-			}
+		err := assertCleanupInstances(t, executor, instances)
+		if err != nil {
+			t.Fatalf("Error cleaning up: %v", err)
 		}
 	})
 
