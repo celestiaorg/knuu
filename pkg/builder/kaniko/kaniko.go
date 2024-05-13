@@ -12,6 +12,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/names"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -24,7 +25,8 @@ const (
 	DefaultParallelism  = int32(1)
 	DefaultBackoffLimit = int32(5)
 
-	MinioBucketName = "kaniko"
+	MinioBucketName  = "kaniko"
+	EphemeralStorage = "10Gi"
 )
 
 type Kaniko struct {
@@ -171,6 +173,11 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 		return nil, ErrGeneratingUUID.Wrap(err)
 	}
 
+	ephemeralStorage, err := resource.ParseQuantity(EphemeralStorage)
+	if err != nil {
+		return nil, ErrParsingQuantity.Wrap(err)
+	}
+
 	parallelism := DefaultParallelism
 	backoffLimit := DefaultBackoffLimit
 	job := &batchv1.Job{
@@ -194,6 +201,11 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 								// TODO: we might need to add some options to get the auth token for the registry
 								"--destination=" + b.Destination,
 								// "--verbosity=debug", // log level
+							},
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: ephemeralStorage,
+								},
 							},
 						},
 					},

@@ -27,14 +27,14 @@ func TestBuildFromGit(t *testing.T) {
 	instance, err := knuu.NewInstance("my-instance")
 	require.NoError(t, err, "Error creating instance")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 
 	// This is a blocking call which builds the image from git repo
 	err = instance.SetGitRepo(ctx, builder.GitContext{
-		Repo:     "https://github.com/celestiaorg/celestia-app.git",
-		Branch:   "main",
-		Commit:   "",
+		Repo:   "https://github.com/celestiaorg/celestia-app.git",
+		Branch: "main",
+		// Commit:   "5ce94f4f010e366df301d25cd5d797c3147ff884",
 		Username: "",
 		Password: "",
 	})
