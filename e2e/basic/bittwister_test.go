@@ -600,6 +600,6 @@ func forwardBitTwisterPort(t *testing.T, i *knuu.Instance) {
 	fwdBtPort, err := i.PortForwardTCP(i.BitTwister.Port())
 	require.NoError(t, err, "Error port forwarding")
 	i.BitTwister.SetPort(fwdBtPort)
-	i.BitTwister.SetNewClientByIPAddr("http://localhost")
+	i.BitTwister.SetNewClientByURL("http://localhost")
 	t.Logf("BitTwister listening on http://localhost:%d", fwdBtPort)
 }

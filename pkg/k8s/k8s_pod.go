@@ -47,6 +47,7 @@ type PodConfig struct {
 	FsGroup            int64             // FSGroup to apply to the Pod
 	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
 	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
+	Annotations        map[string]string // Annotations to apply to the Pod
 }
 
 type Volume struct {
@@ -306,6 +307,24 @@ func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
 	}
 
 	return pod, nil
+}
+
+func (c *Client) WaitForDeployment(ctx context.Context, name string) error {
+	for {
+		deployment, err := c.clientset.AppsV1().Deployments(c.namespace).Get(ctx, name, metav1.GetOptions{})
+		if err == nil && deployment.Status.ReadyReplicas > 0 {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return ErrWaitingForDeployment.WithParams(name).Wrap(err)
+		case <-time.After(waitRetry):
+			// Retry after some seconds
+		}
+	}
+
+	return nil
 }
 
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
@@ -606,9 +625,10 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	// Construct the Pod object using the above data
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    labels,
+			Namespace:   namespace,
+			Name:        name,
+			Labels:      labels,
+			Annotations: spec.Annotations,
 		},
 		Spec: podSpec,
 	}

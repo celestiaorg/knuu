@@ -212,4 +212,6 @@ var (
 	ErrMinioNotInitialized                       = &Error{Code: "MinioNotInitialized", Message: "minio not initialized"}
 	ErrGeneratingK8sNameForPreloader             = &Error{Code: "GeneratingK8sNameForPreloader", Message: "error generating k8s name for preloader"}
 	ErrCannotLoadEnv                             = &Error{Code: "Cannot Load Env", Message: "cannot load env"}
+	ErrCannotDeployTraefik                       = &Error{Code: "Cannot Deploy Traefik", Message: "cannot deploy Traefik"}
+	ErrGettingBitTwisterPath                     = &Error{Code: "GettingBitTwisterPath", Message: "error getting BitTwister path"}
 )

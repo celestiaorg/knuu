@@ -3,6 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -141,4 +143,93 @@ func prepareService(
 		},
 	}
 	return svc, nil
+}
+
+func (c *Client) WaitForService(ctx context.Context, name string) error {
+	for {
+		service, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return ErrGettingService.WithParams(name).Wrap(err)
+		}
+
+		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
+			if len(service.Status.LoadBalancer.Ingress) == 0 {
+				time.Sleep(waitRetry)
+				continue // Wait until the LoadBalancer IP is available
+			}
+		} else if service.Spec.Type == v1.ServiceTypeNodePort {
+			if service.Spec.Ports[0].NodePort == 0 {
+				return ErrNodePortNotSet
+			}
+		} else if len(service.Spec.ExternalIPs) == 0 {
+			return ErrExternalIPsNotSet
+		}
+
+		// Check if service is reachable
+		endpoint, err := c.GetServiceEndpoint(ctx, name)
+		if err != nil {
+			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
+		}
+
+		if err := checkServiceConnectivity(endpoint); err != nil {
+			time.Sleep(waitRetry) // Retry after some seconds if Minio is not reachable
+			continue
+		}
+
+		break // Service is reachable, exit the loop
+	}
+
+	select {
+	case <-ctx.Done():
+		return ErrTimeoutWaitingForServiceReady
+	default:
+		return nil
+	}
+}
+
+func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, error) {
+	minioService, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", ErrGettingService.WithParams(name).Wrap(err)
+	}
+
+	if minioService.Spec.Type == v1.ServiceTypeLoadBalancer {
+		// Use the LoadBalancer's external IP
+		if len(minioService.Status.LoadBalancer.Ingress) > 0 {
+			return fmt.Sprintf("%s:%d", minioService.Status.LoadBalancer.Ingress[0].IP, minioService.Spec.Ports[0].Port), nil
+		}
+		return "", ErrLoadBalancerIPNotAvailable
+	}
+
+	if minioService.Spec.Type == v1.ServiceTypeNodePort {
+		// Use the Node IP and NodePort
+		nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return "", ErrGettingNodes.Wrap(err)
+		}
+		if len(nodes.Items) == 0 {
+			return "", ErrNoNodesFound
+		}
+
+		// Use the first node for simplicity, you might need to handle multiple nodes
+		var nodeIP string
+		for _, address := range nodes.Items[0].Status.Addresses {
+			if address.Type == "ExternalIP" {
+				nodeIP = address.Address
+				break
+			}
+		}
+		return fmt.Sprintf("%s:%d", nodeIP, minioService.Spec.Ports[0].NodePort), nil
+	}
+
+	return fmt.Sprintf("%s:%d", minioService.Spec.ClusterIP, minioService.Spec.Ports[0].Port), nil
+}
+
+func checkServiceConnectivity(serviceEndpoint string) error {
+	conn, err := net.DialTimeout("tcp", serviceEndpoint, 2*time.Second)
+	if err != nil {
+		return ErrFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
+	}
+	defer conn.Close()
+	return nil // success
 }

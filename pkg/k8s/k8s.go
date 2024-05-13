@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -20,6 +21,9 @@ const (
 
 	// certPath path in the filesystem to the ca.crt
 	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+	// waitRetry is the time to wait between retries for a readiness checking
+	waitRetry = 2 * time.Second
 )
 
 type Client struct {

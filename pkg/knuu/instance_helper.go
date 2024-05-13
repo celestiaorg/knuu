@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/traefik"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -466,6 +468,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	}
 	// Generate the sidecar configurations
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
+	annotations := make(map[string]string)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
 			Name:            sidecar.k8sName,
@@ -483,6 +486,12 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 			Files:           sidecar.files,
 			SecurityContext: prepareSecurityContext(sidecar.securityContext),
 		})
+
+		sann := traefik.Annotate(sidecar.k8sName, sidecar.portsTCP[0])
+		// append sann to the annotations
+		for k, v := range sann {
+			annotations[k] = v
+		}
 	}
 	// Generate the pod configuration
 	podConfig := k8s.PodConfig{
@@ -493,6 +502,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		FsGroup:            i.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
+		Annotations:        annotations,
 	}
 	// Generate the ReplicaSet configuration
 	statefulSetConfig := k8s.ReplicaSetConfig{
@@ -578,17 +588,33 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 		return nil, ErrSettingBitTwisterImage.Wrap(err)
 	}
 
-	// We need to add the port here so the instance will get an IP
-	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+	// This is needed for reverse proxy annotation
+	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
-	ip, err := i.GetIP()
-	if err != nil {
-		return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
-	}
-	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
 
-	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+	// We need to add the port here so the instance will get an IP
+	// if err := i.AddPortTCP(1234); err != nil {
+	// 	return nil, ErrAddingBitTwisterPort.Wrap(err)
+	// }
+	// ip, err := i.GetIP()
+	// if err != nil {
+	// 	return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
+	// }
+	// logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+
+	// TODO: remove this when pkg refactor
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	btURL, err := traefikClient.URL(ctx, bt.k8sName)
+	if err != nil {
+		return nil, ErrGettingBitTwisterPath.Wrap(err)
+	}
+	logrus.Debugf("BitTwister URL: ", btURL)
+	logrus.Info("BitTwister URL: ", btURL)
+
+	i.BitTwister.SetNewClientByURL(btURL)
 
 	if err := bt.Commit(); err != nil {
 		return nil, ErrCommittingBitTwisterInstance.Wrap(err)
