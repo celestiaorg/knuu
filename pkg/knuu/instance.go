@@ -480,6 +480,11 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 			return err
 		}
 	case Committed:
+		// check if the dest is a sub folder of added volumes and print a warning if not
+		if !i.isSubFolderOfVolumes(dest) {
+			return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
+		}
+
 		// only allow files, not folders
 		srcInfo, err := os.Stat(src)
 		if os.IsNotExist(err) || srcInfo.IsDir() {
