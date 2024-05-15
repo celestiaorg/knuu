@@ -96,4 +96,9 @@ var (
 	ErrNoPortsSpecified              = &Error{Code: "NoPortsSpecified", Message: "no ports specified for service %s"}
 	ErrRetrievingKubernetesConfig    = &Error{Code: "RetrievingKubernetesConfig", Message: "retrieving the Kubernetes config"}
 	ErrCreatingClientset             = &Error{Code: "CreatingClientset", Message: "creating clientset for Kubernetes"}
+	ErrCreatingDiscoveryClient       = &Error{Code: "CreatingDiscoveryClient", Message: "creating discovery client for Kubernetes"}
+	ErrCreatingDynamicClient         = &Error{Code: "CreatingDynamicClient", Message: "creating dynamic client for Kubernetes"}
+	ErrGettingResourceList           = &Error{Code: "GettingResourceList", Message: "getting resource list for group version %s"}
+	ErrResourceDoesNotExist          = &Error{Code: "ResourceDoesNotExist", Message: "resource %s does not exist in group version %s"}
+	ErrCreatingCustomResource        = &Error{Code: "CreatingCustomResource", Message: "creating custom resource %s"}
 )

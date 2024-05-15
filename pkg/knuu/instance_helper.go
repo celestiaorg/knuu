@@ -74,6 +74,11 @@ func (i *Instance) getLabels() map[string]string {
 	}
 }
 
+// Labels returns the labels for the instance
+func (i *Instance) Labels() map[string]string {
+	return i.getLabels()
+}
+
 // deployService deploys the service for the instance
 func (i *Instance) deployService(ctx context.Context) error {
 	labels := i.getLabels()
