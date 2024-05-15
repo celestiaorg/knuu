@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"testing"
 	"time"
 
@@ -48,7 +49,22 @@ func TestReverseProxy(t *testing.T) {
 	{
 		out, err := main.BitTwister.Client().AllServicesStatus()
 		fmt.Printf("err: %v\n", err)
-		time.Sleep(10 * time.Minute)
+
+		// wait for Ctrl+C signal for 10 minutes
+		// Setup a channel to listen for the interrupt signal (Ctrl+C)
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt)
+
+		// Create a timeout to stop waiting after 10 minutes
+		timeout := time.After(30 * time.Minute)
+
+		select {
+		case <-sigChan:
+			fmt.Println("Ctrl+C received, stopping the test.")
+		case <-timeout:
+			fmt.Println("30 minutes passed without Ctrl+C, continuing the test.")
+		}
+
 		require.NoError(t, err, "Error getting all services status")
 		assert.NotEmpty(t, out, "No services found")
 	}
@@ -69,4 +85,4 @@ func TestReverseProxy(t *testing.T) {
 	}
 }
 
-// reset && LOG_LEVEL=debug go test -v ./e2e/basic/ --run TestReverseProxy
+// reset && LOG_LEVEL=debug go test -v ./e2e/basic/ --run TestReverseProxy -timeout 60m

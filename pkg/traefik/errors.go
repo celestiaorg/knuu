@@ -43,4 +43,7 @@ var (
 	ErrTraefikRoleCreationFailed         = &Error{Code: "TraefikRoleCreationFailed", Message: "error creating Traefik role"}
 	ErrTraefikRoleBindingCreationFailed  = &Error{Code: "TraefikRoleBindingCreationFailed", Message: "error creating Traefik role binding"}
 	ErrFailedToCreateServiceAccount      = &Error{Code: "FailedToCreateServiceAccount", Message: "error creating service account"}
+	ErrTraefikMiddlewareCreationFailed   = &Error{Code: "TraefikMiddlewareCreationFailed", Message: "error creating Traefik middleware"}
+	ErrTraefikIngressRouteCreationFailed = &Error{Code: "TraefikIngressRouteCreationFailed", Message: "error creating Traefik ingress route"}
+	ErrGeneratingRandomK8sName           = &Error{Code: "GeneratingRandomK8sName", Message: "error generating random K8s name"}
 )

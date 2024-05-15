@@ -77,6 +77,10 @@ func (c *Client) Clientset() *kubernetes.Clientset {
 	return c.clientset
 }
 
+func (c *Client) DynamicClient() dynamic.Interface {
+	return c.dynamicClient
+}
+
 func (c *Client) Namespace() string {
 	return c.namespace
 }

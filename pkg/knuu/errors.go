@@ -216,4 +216,8 @@ var (
 	ErrCustomResourceDefinitionDoesNotExist      = &Error{Code: "CustomResourceDefinitionDoesNotExist", Message: "custom resource definition %s does not exist"}
 	ErrCannotDeployTraefik                       = &Error{Code: "Cannot Deploy Traefik", Message: "cannot deploy Traefik"}
 	ErrGettingBitTwisterPath                     = &Error{Code: "GettingBitTwisterPath", Message: "error getting BitTwister path"}
+	ErrFailedToAddHostToTraefik                  = &Error{Code: "FailedToAddHostToTraefik", Message: "failed to add host to traefik"}
+	ErrParentInstanceIsNil                       = &Error{Code: "ParentInstanceIsNil", Message: "parent instance is nil for the sidecar '%s'"}
+	ErrFailedToGetIP                             = &Error{Code: "FailedToGetIP", Message: "failed to get IP for service %s"}
+	ErrFailedToEnsureEndpointWithPort            = &Error{Code: "FailedToEnsureEndpointWithPort", Message: "failed to ensure endpoint with port"}
 )
