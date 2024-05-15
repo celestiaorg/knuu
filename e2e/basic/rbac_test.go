@@ -1,11 +1,12 @@
 package basic
 
 import (
+	"testing"
+
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/rbac/v1"
-	"os"
-	"testing"
 )
 
 func TestRBAC(t *testing.T) {
@@ -39,16 +40,7 @@ func TestRBAC(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = instance.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(instance))
 	})
 
 	// Test logic

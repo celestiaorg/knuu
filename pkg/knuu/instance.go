@@ -1326,41 +1326,6 @@ func (i *Instance) Stop() error {
 	return nil
 }
 
-// Destroy destroys the instance
-// This function can only be called in the state 'Started' or 'Destroyed'
-func (i *Instance) Destroy() error {
-	if !i.IsInState(Started, Stopped, Destroyed) {
-		return ErrDestroyingNotAllowed.WithParams(i.state.String())
-	}
-	if i.state == Destroyed {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	err := i.destroyPod(ctx)
-	if err != nil {
-		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
-	}
-	if err := i.destroyResources(ctx); err != nil {
-		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
-	}
-
-	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
-		return sidecar.destroyResources(ctx)
-	}); err != nil {
-		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
-	}
-
-	i.state = Destroyed
-	setStateForSidecars(i.sidecars, Destroyed)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
-
-	return nil
-}
-
 // Clone creates a clone of the instance
 // This function can only be called in the state 'Committed'
 // When cloning an instance that is a sidecar, the clone will be not a sidecar

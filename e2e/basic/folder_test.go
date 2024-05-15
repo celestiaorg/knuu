@@ -1,11 +1,11 @@
 package basic
 
 import (
-	"os"
 	"testing"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFolder(t *testing.T) {
@@ -40,21 +40,7 @@ func TestFolder(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = web.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic

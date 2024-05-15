@@ -47,21 +47,7 @@ func TestFile(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = web.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic
@@ -101,13 +87,7 @@ func TestDownloadFileFromRunningInstance(t *testing.T) {
 	require.NoError(t, target.Start(), "Error starting instance")
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, target.Destroy(), "Error destroying instance")
+		require.NoError(t, knuu.BatchDestroy(target))
 	})
 
 	// Test logic
@@ -137,13 +117,7 @@ func TestMinio(t *testing.T) {
 	require.NoError(t, target.Start(), "Error starting instance")
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, target.Destroy(), "Error destroying instance")
+		require.NoError(t, knuu.BatchDestroy(target))
 	})
 
 	fileContent := "Hello World!"

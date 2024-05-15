@@ -48,12 +48,7 @@ func TestBuildFromGit(t *testing.T) {
 	require.NoError(t, instance.Commit(), "Error committing instance")
 
 	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, instance.Destroy(), "Error destroying instance")
+		require.NoError(t, knuu.BatchDestroy(instance))
 	})
 
 	// Test logic

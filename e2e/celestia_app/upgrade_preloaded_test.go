@@ -6,6 +6,7 @@ import (
 
 	"github.com/celestiaorg/knuu/e2e/celestia_app/utils"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/stretchr/testify/require"
 )
 
 var imageToUpgrade = "ghcr.io/celestiaorg/celestia-app:v1.6.0"
@@ -56,16 +57,7 @@ func TestUpgradePreloaded(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error emptying preloaded images: %v", err)
 		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = validator.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, validator))
 	})
 
 	// Test logic
