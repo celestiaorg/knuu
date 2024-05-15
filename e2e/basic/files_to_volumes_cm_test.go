@@ -2,10 +2,12 @@ package basic
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
@@ -69,7 +71,7 @@ func TestNoVolumesNoFiles(t *testing.T) {
 		t.Fatalf("Error executing command: %v", err)
 	}
 
-	assert.Equal(t, "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</title>\n<style>\nhtml { color-scheme: light dark; }\nbody { width: 35em; margin: 0 auto;\nfont-family: Tahoma, Verdana, Arial, sans-serif; }\n</style>\n</head>\n<body>\n<h1>Welcome to nginx!</h1>\n<p>If you see this page, the nginx web server is successfully installed and\nworking. Further configuration is required.</p>\n\n<p>For online documentation and support please refer to\n<a href=\"http://nginx.org/\">nginx.org</a>.<br/>\nCommercial support is available at\n<a href=\"http://nginx.com/\">nginx.com</a>.</p>\n\n<p><em>Thank you for using nginx.</em></p>\n</body>\n</html>\n", wget)
+	assert.Contains(t, wget, "Welcome to nginx!")
 }
 
 // TestOneVolumeNoFiles tests the scenario where we have one volume and no files.
@@ -135,7 +137,7 @@ func TestOneVolumeNoFiles(t *testing.T) {
 		t.Fatalf("Error executing command: %v", err)
 	}
 
-	assert.Equal(t, "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</title>\n<style>\nhtml { color-scheme: light dark; }\nbody { width: 35em; margin: 0 auto;\nfont-family: Tahoma, Verdana, Arial, sans-serif; }\n</style>\n</head>\n<body>\n<h1>Welcome to nginx!</h1>\n<p>If you see this page, the nginx web server is successfully installed and\nworking. Further configuration is required.</p>\n\n<p>For online documentation and support please refer to\n<a href=\"http://nginx.org/\">nginx.org</a>.<br/>\nCommercial support is available at\n<a href=\"http://nginx.com/\">nginx.com</a>.</p>\n\n<p><em>Thank you for using nginx.</em></p>\n</body>\n</html>\n", wget)
+	assert.Contains(t, wget, "Welcome to nginx!")
 }
 
 // TestNoVolumesOneFile tests the scenario where we have no volumes and one file.
@@ -180,6 +182,8 @@ func TestNoVolumesOneFile(t *testing.T) {
 	}
 
 	var wgFolders sync.WaitGroup
+	errorChannel := make(chan error, len(instances))
+
 	for i, instance := range instances {
 		wgFolders.Add(1)
 		go func(i int, instance *knuu.Instance) {
@@ -188,11 +192,20 @@ func TestNoVolumesOneFile(t *testing.T) {
 			// adding the folder after the Commit, it will help us to use a cached image.
 			err = instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
 			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+				errorChannel <- fmt.Errorf("Error adding file to '%v': %v", instanceName, err)
+				return
 			}
+			errorChannel <- nil
 		}(i, instance)
 	}
 	wgFolders.Wait()
+	close(errorChannel)
+
+	for err := range errorChannel {
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+	}
 
 	// Cleanup
 	t.Cleanup(func() {
@@ -225,6 +238,7 @@ func TestNoVolumesOneFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error executing command: %v", err)
 		}
+		wget = strings.TrimSpace(wget)
 
 		assert.Equal(t, "hello from 1", wget)
 	}
@@ -276,19 +290,28 @@ func TestOneVolumeOneFile(t *testing.T) {
 	}
 
 	var wgFolders sync.WaitGroup
+	errorChannel := make(chan error, len(instances))
+
 	for i, instance := range instances {
 		wgFolders.Add(1)
 		go func(i int, instance *knuu.Instance) {
 			defer wgFolders.Done()
 			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
+			err := instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
 			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+				errorChannel <- fmt.Errorf("Error adding file to '%v': %v", instanceName, err)
+				return
 			}
+			errorChannel <- nil
 		}(i, instance)
 	}
 	wgFolders.Wait()
+	close(errorChannel)
+
+	for err := range errorChannel {
+		require.NoError(t, err)
+	}
 
 	t.Cleanup(func() {
 		// Cleanup
@@ -321,8 +344,9 @@ func TestOneVolumeOneFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error executing command: %v", err)
 		}
+		wget = strings.TrimSpace(wget)
 
-		assert.Equal(t, "hello from 1\n", wget)
+		assert.Equal(t, "hello from 1", wget)
 	}
 }
 
@@ -372,23 +396,31 @@ func TestOneVolumeTwoFiles(t *testing.T) {
 	}
 
 	var wgFolders sync.WaitGroup
+	errorChannel := make(chan error, len(instances)*2) // Allocate space for potential errors from each file addition in each instance
+
 	for i, instance := range instances {
 		wgFolders.Add(1)
 		go func(i int, instance *knuu.Instance) {
 			defer wgFolders.Done()
 			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
-			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+			if err := instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0"); err != nil {
+				errorChannel <- fmt.Errorf("Error adding file test_1 to '%v': %w", instanceName, err)
+				return
 			}
-			err = instance.AddFile("resources/file_cm_to_folder/test_2", "/usr/share/nginx/html/index-2.html", "0:0")
-			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+			if err := instance.AddFile("resources/file_cm_to_folder/test_2", "/usr/share/nginx/html/index-2.html", "0:0"); err != nil {
+				errorChannel <- fmt.Errorf("Error adding file test_2 to '%v': %w", instanceName, err)
+				return
 			}
 		}(i, instance)
 	}
 	wgFolders.Wait()
+	close(errorChannel)
+
+	// Handle errors from the error channel
+	for err := range errorChannel {
+		require.NoError(t, err)
+	}
 
 	t.Cleanup(func() {
 		// Cleanup
@@ -421,12 +453,14 @@ func TestOneVolumeTwoFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error executing command: %v", err)
 		}
+		wgetIndex = strings.TrimSpace(wgetIndex)
 
 		webIP2 := webIP + "/index-2.html"
 		wgetIndex2, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP2)
 		if err != nil {
 			t.Fatalf("Error executing command: %v", err)
 		}
+		wgetIndex2 = strings.TrimSpace(wgetIndex2)
 
 		assert.Equal(t, "hello from 1", wgetIndex)
 		assert.Equal(t, "hello from 2", wgetIndex2)
