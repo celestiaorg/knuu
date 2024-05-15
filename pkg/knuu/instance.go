@@ -482,7 +482,6 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 	case Committed:
 		// check if the dest is a sub folder of added volumes and print a warning if not
 		if !i.isSubFolderOfVolumes(dest) {
-			// TODO
 			return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
 		}
 
