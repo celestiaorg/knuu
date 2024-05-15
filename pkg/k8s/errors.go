@@ -81,6 +81,7 @@ var (
 	ErrGettingReplicaSet             = &Error{Code: "ErrorGettingReplicaSet", Message: "failed to get ReplicaSet %s"}
 	ErrCreatingReplicaSet            = &Error{Code: "ErrorCreatingReplicaSet", Message: "failed to create ReplicaSet"}
 	ErrDeletingReplicaSet            = &Error{Code: "ErrorDeletingReplicaSet", Message: "failed to delete ReplicaSet %s"}
+	ErrCheckingReplicaSetExists      = &Error{Code: "ErrorCheckingReplicaSetExists", Message: "failed to check if ReplicaSet %s exists"}
 	ErrWaitingForReplicaSet          = &Error{Code: "ErrorWaitingForReplicaSet", Message: "error waiting for ReplicaSet to delete"}
 	ErrDeployingReplicaSet           = &Error{Code: "ErrorDeployingReplicaSet", Message: "failed to deploy ReplicaSet"}
 	ErrPreparingPodSpec              = &Error{Code: "ErrorPreparingPodSpec", Message: "failed to prepare pod spec"}

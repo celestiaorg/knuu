@@ -214,4 +214,5 @@ var (
 	ErrCannotLoadEnv                             = &Error{Code: "Cannot Load Env", Message: "cannot load env"}
 	ErrMaximumVolumesExceeded                    = &Error{Code: "MaximumVolumesExceeded", Message: "maximum volumes exceeded for instance '%s'"}
 	ErrCustomResourceDefinitionDoesNotExist      = &Error{Code: "CustomResourceDefinitionDoesNotExist", Message: "custom resource definition %s does not exist"}
+	ErrFileIsNotSubFolderOfVolumes               = &Error{Code: "FileIsNotSubFolderOfVolumes", Message: "the file '%s' is not a sub folder of any added volume"}
 )
