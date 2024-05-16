@@ -1,11 +1,7 @@
 package knuu
 
-import (
-	"context"
-)
-
 type Executor struct {
-	instances *Instance
+	*Instance
 }
 
 func NewExecutor() (*Executor, error) {
@@ -42,19 +38,17 @@ func NewExecutor() (*Executor, error) {
 	if err != nil {
 		return nil, ErrWaitingInstanceIsRunning.Wrap(err)
 	}
-	return &Executor{
-		instances: instance,
-	}, nil
+	return &Executor{Instance: instance}, nil
 }
 
-func (e *Executor) ExecuteCommand(command ...string) (string, error) {
-	return e.instances.ExecuteCommand(command...)
-}
+// func (e *Executor) ExecuteCommand(command ...string) (string, error) {
+// 	return e.ExecuteCommand(command...)
+// }
 
-func (e *Executor) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
-	return e.instances.ExecuteCommandWithContext(ctx, command...)
-}
+// func (e *Executor) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
+// 	return e.ExecuteCommandWithContext(ctx, command...)
+// }
 
-func (e *Executor) Destroy() error {
-	return e.instances.Destroy()
-}
+// func (e *Executor) Destroy() error {
+// 	return e.Destroy()
+// }

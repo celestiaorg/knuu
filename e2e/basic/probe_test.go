@@ -1,12 +1,13 @@
 package basic
 
 import (
+	"testing"
+
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"os"
-	"testing"
 )
 
 func TestProbe(t *testing.T) {
@@ -54,21 +55,7 @@ func TestProbe(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = web.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic

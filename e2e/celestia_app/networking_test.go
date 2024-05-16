@@ -1,7 +1,6 @@
 package celestia_app
 
 import (
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -31,25 +30,7 @@ func TestNetworking_DisableNetwork(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = validator.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
-		err = full.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, validator, full))
 	})
 
 	// Test logic
@@ -140,25 +121,7 @@ func TestNetworking_SetPacketLossDynamic(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-
-		err = validator.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
-		err = full.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, validator, full))
 	})
 
 	// Test logic

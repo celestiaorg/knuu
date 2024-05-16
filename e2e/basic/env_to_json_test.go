@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
@@ -81,22 +82,8 @@ func TestEnvToJSON(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") != "true" {
-			err := executor.Destroy()
-			if err != nil {
-				t.Fatalf("Error destroying executor: %v", err)
-			}
-
-			for _, instance := range instances {
-				if instance != nil {
-					err := instance.Destroy()
-					if err != nil {
-						t.Fatalf("Error destroying instance: %v", err)
-					}
-				}
-			}
-		}
+		all := append(instances, executor.Instance)
+		require.NoError(t, knuu.BatchDestroy(all...))
 	})
 
 	// Test logic
