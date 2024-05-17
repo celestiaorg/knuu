@@ -743,7 +743,7 @@ func (i *Instance) GetIP() (string, error) {
 	svc, err := k8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
-		err := i.deployService(ctx)
+		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}

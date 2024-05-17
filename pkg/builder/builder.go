@@ -40,7 +40,7 @@ func (c *CacheOptions) Default(buildContext string) (*CacheOptions, error) {
 		Dir:     "",
 		// ttl.sh with the hash of build context is used as the cache repo
 		// Kaniko adds a string tag to the image name, so we don't need to add it here
-		Repo: fmt.Sprintf("ttl.sh/%s", ctxHash),
+		Repo: fmt.Sprintf("ttl.sh/%s:24h", ctxHash),
 	}, nil
 }
 

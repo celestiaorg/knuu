@@ -81,21 +81,17 @@ func (i *Instance) Labels() map[string]string {
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployService(ctx context.Context) error {
-	labels := i.getLabels()
-
-	// sidecars are deployed as services to the parent instance
-	// therefore the service name is the parent instance name
-	serviceName := i.k8sName
+func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) error {
+	// a sidecar instance should use the parent instance's service
 	if i.isSidecar {
-		if i.parentInstance == nil {
-			return ErrParentInstanceIsNil.WithParams(i.k8sName)
-		}
-		labels["app"] = i.parentInstance.k8sName
-		serviceName = i.parentInstance.k8sName
+		return ErrDeployingServiceForSidecar.WithParams(i.k8sName)
 	}
 
-	service, err := k8sClient.CreateService(ctx, serviceName, labels, labels, i.portsTCP, i.portsUDP)
+	serviceName := i.k8sName
+	labels := i.getLabels()
+	labelSelectors := labels
+
+	service, err := k8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
@@ -105,27 +101,21 @@ func (i *Instance) deployService(ctx context.Context) error {
 }
 
 // patchService patches the service for the instance
-func (i *Instance) patchService(ctx context.Context) error {
-	// sidecars are deployed as services to the parent instance
-	// therefore the service name is the parent instance name
-	serviceName := i.k8sName
+func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) error {
+	// a sidecar instance should use the parent instance's service
 	if i.isSidecar {
-		if i.parentInstance == nil {
-			return ErrParentInstanceIsNil.WithParams(i.k8sName)
-		}
-		serviceName = i.parentInstance.k8sName
+		return ErrPatchingServiceForSidecar.WithParams(i.k8sName)
 	}
-	if i.kubernetesService == nil {
-		svc, err := k8sClient.GetService(ctx, serviceName)
-		if err != nil {
-			return ErrGettingService.WithParams(serviceName).Wrap(err)
-		}
-		i.kubernetesService = svc
-	}
-	err := k8sClient.PatchService(ctx, serviceName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
+
+	serviceName := i.k8sName
+	labels := i.getLabels()
+	labelSelectors := labels
+
+	service, err := k8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}
+	i.kubernetesService = service
 	logrus.Debugf("Patched service '%s'", serviceName)
 	return nil
 }
@@ -200,25 +190,17 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployOrPatchService(ctx context.Context) error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		serviceName := i.k8sName
-		if i.isSidecar {
-			if i.parentInstance == nil {
-				return ErrParentInstanceIsNil.WithParams(i.k8sName)
-			}
-			serviceName = i.parentInstance.k8sName
-		}
-
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", serviceName)
-		svc, _ := k8sClient.GetService(ctx, serviceName)
+func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP []int) error {
+	if len(portsTCP) != 0 || len(portsUDP) != 0 {
+		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		svc, _ := k8sClient.GetService(ctx, i.k8sName)
 		if svc == nil {
-			err := i.deployService(ctx)
+			err := i.deployService(ctx, portsTCP, portsUDP)
 			if err != nil {
 				return ErrDeployingServiceForInstance.WithParams(serviceName).Wrap(err)
 			}
 		} else if svc != nil {
-			err := i.patchService(ctx)
+			err := i.patchService(ctx, portsTCP, portsUDP)
 			if err != nil {
 				return ErrPatchingServiceForInstance.WithParams(serviceName).Wrap(err)
 			}
@@ -291,33 +273,18 @@ func (i *Instance) destroyFiles(ctx context.Context) error {
 
 // deployResources deploys the resources for the instance
 func (i *Instance) deployResources(ctx context.Context) error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		if err := i.deployOrPatchService(ctx); err != nil {
-			return ErrFailedToDeployOrPatchService.Wrap(err)
+	// only a non-sidecar instance should deploy a service, all sidecars will use the parent instance's service
+	if !i.isSidecar {
+		portsTCP := i.portsTCP
+		portsUDP := i.portsUDP
+		for _, sidecar := range i.sidecars {
+			portsTCP = append(portsTCP, sidecar.portsTCP...)
+			portsUDP = append(portsUDP, sidecar.portsUDP...)
 		}
-
-		serviceName := i.k8sName
-		if i.isSidecar {
-			if i.parentInstance == nil {
-				return ErrParentInstanceIsNil.WithParams(i.k8sName)
+		if len(portsTCP) != 0 || len(portsUDP) != 0 {
+			if err := i.deployOrPatchService(ctx, portsTCP, portsUDP); err != nil {
+				return ErrFailedToDeployOrPatchService.Wrap(err)
 			}
-			serviceName = i.parentInstance.k8sName
-		}
-
-		serviceIP, err := i.GetIP()
-		if err != nil {
-			return ErrFailedToGetIP.Wrap(err)
-		}
-		for _, port := range i.portsTCP {
-			err := k8sClient.EnsureEndpointWithPort(ctx, serviceName, serviceIP, port)
-			if err != nil {
-				return ErrFailedToEnsureEndpointWithPort.Wrap(err)
-			}
-		}
-
-		err = traefikClient.AddHost(ctx, serviceName, i.k8sName, i.portsTCP...)
-		if err != nil {
-			return ErrFailedToAddHostToTraefik.Wrap(err)
 		}
 	}
 	if len(i.volumes) != 0 {

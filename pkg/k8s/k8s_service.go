@@ -48,19 +48,19 @@ func (c *Client) PatchService(
 	selectorMap map[string]string,
 	portsTCP,
 	portsUDP []int,
-) error {
+) (*v1.Service, error) {
 	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
-		return ErrPreparingService.WithParams(name).Wrap(err)
+		return nil, ErrPreparingService.WithParams(name).Wrap(err)
 	}
 
-	_, err = c.clientset.CoreV1().Services(c.namespace).Update(ctx, svc, metav1.UpdateOptions{})
+	serv, err := c.clientset.CoreV1().Services(c.namespace).Update(ctx, svc, metav1.UpdateOptions{})
 	if err != nil {
-		return ErrPatchingService.WithParams(name).Wrap(err)
+		return nil, ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
 	logrus.Debugf("Service %s patched in namespace %s", name, c.namespace)
-	return nil
+	return serv, nil
 }
 
 func (c *Client) DeleteService(ctx context.Context, name string) error {
