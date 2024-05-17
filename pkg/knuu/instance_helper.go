@@ -88,7 +88,7 @@ func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) 
 
 	serviceName := i.k8sName
 	labels := i.getLabels()
-	labelSelectors := i.getLabels()
+	labelSelectors := labels
 
 	service, err := k8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
@@ -108,7 +108,7 @@ func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) e
 
 	serviceName := i.k8sName
 	labels := i.getLabels()
-	labelSelectors := i.getLabels()
+	labelSelectors := labels
 
 	service, err := k8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
