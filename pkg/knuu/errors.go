@@ -12,6 +12,10 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	if e.Err == e {
+		return e.Message
+	}
+
 	msg := fmt.Sprintf(e.Message, e.Params...)
 	if e.Err != nil {
 		return fmt.Sprintf("%s: %v", msg, e.Err)
@@ -214,6 +218,7 @@ var (
 	ErrCannotLoadEnv                             = &Error{Code: "Cannot Load Env", Message: "cannot load env"}
 	ErrMaximumVolumesExceeded                    = &Error{Code: "MaximumVolumesExceeded", Message: "maximum volumes exceeded for instance '%s'"}
 	ErrCustomResourceDefinitionDoesNotExist      = &Error{Code: "CustomResourceDefinitionDoesNotExist", Message: "custom resource definition %s does not exist"}
+	ErrFileIsNotSubFolderOfVolumes               = &Error{Code: "FileIsNotSubFolderOfVolumes", Message: "the file '%s' is not a sub folder of any added volume"}
 	ErrCannotDeployTraefik                       = &Error{Code: "Cannot Deploy Traefik", Message: "cannot deploy Traefik"}
 	ErrGettingBitTwisterPath                     = &Error{Code: "GettingBitTwisterPath", Message: "error getting BitTwister path"}
 	ErrFailedToAddHostToTraefik                  = &Error{Code: "FailedToAddHostToTraefik", Message: "failed to add host to traefik"}

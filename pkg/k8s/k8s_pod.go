@@ -389,12 +389,11 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) ([]v1.Volume, 
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.VolumeMount, error) {
+func buildContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
 	var containerVolumes []v1.VolumeMount
-	var containerFiles []v1.VolumeMount
 
 	// return empty slice if no volumes or files are specified
-	if len(volumes) == 0 && len(files) == 0 {
+	if len(volumes) == 0 {
 		return containerVolumes, nil
 	}
 
@@ -407,6 +406,24 @@ func buildContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.
 				SubPath:   strings.TrimLeft(volume.Path, "/"),
 			})
 		}
+	}
+
+	return containerVolumes, nil
+}
+
+// buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
+func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.VolumeMount, error) {
+	if len(volumes) == 0 && len(files) == 0 {
+		return []v1.VolumeMount{}, nil // return empty slice if no volumes are specified
+	}
+
+	var containerFiles []v1.VolumeMount
+
+	containerVolumes := []v1.VolumeMount{
+		{
+			Name:      name,
+			MountPath: knuuPath, // set the path to "/knuu" as per the requirements
+		},
 	}
 
 	if len(files) != 0 {
@@ -425,40 +442,29 @@ func buildContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.
 	return append(containerVolumes, containerFiles...), nil
 }
 
-// buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
-func buildInitContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
-	if len(volumes) == 0 {
-		return []v1.VolumeMount{}, nil // return empty slice if no volumes are specified
-	}
-
-	containerVolumes := []v1.VolumeMount{
-		{
-			Name:      name,
-			MountPath: knuuPath, // set the path to "/knuu" as per the requirements
-		},
-	}
-
-	return containerVolumes, nil
-}
-
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
 func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
 	var commands = []string{"sh", "-c"}
 	dirsProcessed := make(map[string]bool)
-	baseCmd := fmt.Sprintf("mkdir -p %s && ", knuuPath)
-	cmds := []string{baseCmd}
+	baseCmd := "set -xe && "
+	createKnuuPath := fmt.Sprintf("mkdir -p %s && ", knuuPath)
+	cmds := []string{baseCmd, createKnuuPath}
 
+	// for each file, get the directory and create the parent directory if it doesn't exist
 	for _, file := range files {
 		// get the directory of the file
 		folder := filepath.Dir(file.Dest)
 		if _, processed := dirsProcessed[folder]; !processed {
 			knuuFolder := fmt.Sprintf("%s%s", knuuPath, folder)
-			parentDirCmd := fmt.Sprintf("mkdir -p %s && chmod -R 777 %s && ", knuuFolder, knuuFolder)
+			parentDirCmd := fmt.Sprintf("mkdir -p %s && ", knuuFolder)
 			cmds = append(cmds, parentDirCmd)
 			dirsProcessed[folder] = true
 		}
+		copyFileToKnuu := fmt.Sprintf("cp %s %s && ", file.Dest, filepath.Join(knuuPath, file.Dest))
+		cmds = append(cmds, copyFileToKnuu)
 	}
 
+	// for each volume, copy the contents of the volume to the knuu volume
 	for i, volume := range volumes {
 		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
 		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
@@ -520,7 +526,7 @@ func prepareContainer(config ContainerConfig) (v1.Container, error) {
 	podEnv := buildEnv(config.Env)
 
 	// Build container volumes from the given map
-	containerVolumes, err := buildContainerVolumes(config.Name, config.Volumes, config.Files)
+	containerVolumes, err := buildContainerVolumes(config.Name, config.Volumes)
 	if err != nil {
 		return v1.Container{}, ErrBuildingContainerVolumes.Wrap(err)
 	}
@@ -551,7 +557,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 		return nil, nil
 	}
 
-	initContainerVolumes, err := buildInitContainerVolumes(config.Name, config.Volumes)
+	initContainerVolumes, err := buildInitContainerVolumes(config.Name, config.Volumes, config.Files)
 	if err != nil {
 		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}

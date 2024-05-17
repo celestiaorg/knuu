@@ -55,12 +55,13 @@ func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSe
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
-			_, err := c.getReplicaSet(ctx, ReplicaSetConfig.Name)
-			if errors.IsNotFound(err) {
+			exists, err := c.ReplicaSetExists(ctx, ReplicaSetConfig.Name)
+			if err != nil {
+				return nil, ErrCheckingReplicaSetExists.WithParams(ReplicaSetConfig.Name).Wrap(err)
+			}
+			if !exists {
 				// ReplicaSet has been deleted
 				deleted = true
-			} else if err != nil {
-				return nil, ErrWaitingForReplicaSet.Wrap(err)
 			}
 			// If ReplicaSet still exists, wait for the next tick
 		}
@@ -91,9 +92,11 @@ func (c *Client) IsReplicaSetRunning(ctx context.Context, name string) (bool, er
 }
 
 func (c *Client) DeleteReplicaSetWithGracePeriod(ctx context.Context, name string, gracePeriodSeconds *int64) error {
-	_, err := c.getReplicaSet(ctx, name)
+	exists, err := c.ReplicaSetExists(ctx, name)
 	if err != nil {
-		// If the ReplicaSet does not exist, skip and return without error
+		return ErrCheckingReplicaSetExists.WithParams(name).Wrap(err)
+	}
+	if !exists {
 		return nil
 	}
 
@@ -169,4 +172,17 @@ func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) (*appv1.ReplicaSet, e
 
 	logrus.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
 	return rs, nil
+}
+
+// ReplicaSetExists checks if a ReplicaSet exists in the namespace that k8s is initialized with.
+func (c *Client) ReplicaSetExists(ctx context.Context, name string) (bool, error) {
+	_, err := c.getReplicaSet(ctx, name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, ErrGettingReplicaSet.WithParams(name).Wrap(err)
+	}
+
+	return true, nil
 }

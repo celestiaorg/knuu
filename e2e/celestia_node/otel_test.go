@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/stretchr/testify/require"
 
 	app_utils "github.com/celestiaorg/knuu/e2e/celestia_app/utils"
 	"github.com/celestiaorg/knuu/e2e/celestia_node/utils"
@@ -104,32 +105,7 @@ func TestOtel(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		// Cleanup
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		err = executor.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-		err = consensus.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying executor: %v", err)
-		}
-		err = bridge.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
-		err = full.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
-		err = light.Destroy()
-		if err != nil {
-			t.Fatalf("Error destroying instance: %v", err)
-		}
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, consensus, bridge, full, light))
 	})
 
 	// Test logic

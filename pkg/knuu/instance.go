@@ -480,6 +480,11 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 			return err
 		}
 	case Committed:
+		// check if the dest is a sub folder of added volumes and print a warning if not
+		if !i.isSubFolderOfVolumes(dest) {
+			return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
+		}
+
 		// only allow files, not folders
 		srcInfo, err := os.Stat(src)
 		if os.IsNotExist(err) || srcInfo.IsDir() {
@@ -1321,41 +1326,6 @@ func (i *Instance) Stop() error {
 	}
 	i.state = Stopped
 	setStateForSidecars(i.sidecars, Stopped)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
-
-	return nil
-}
-
-// Destroy destroys the instance
-// This function can only be called in the state 'Started' or 'Destroyed'
-func (i *Instance) Destroy() error {
-	if !i.IsInState(Started, Stopped, Destroyed) {
-		return ErrDestroyingNotAllowed.WithParams(i.state.String())
-	}
-	if i.state == Destroyed {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	err := i.destroyPod(ctx)
-	if err != nil {
-		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
-	}
-	if err := i.destroyResources(ctx); err != nil {
-		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
-	}
-
-	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
-		return sidecar.destroyResources(ctx)
-	}); err != nil {
-		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
-	}
-
-	i.state = Destroyed
-	setStateForSidecars(i.sidecars, Destroyed)
 	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil

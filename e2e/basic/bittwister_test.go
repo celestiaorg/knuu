@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -50,13 +49,7 @@ func TestBittwister_Bandwidth(t *testing.T) {
 	require.NoError(t, err, "Error cloning instance")
 
 	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, iperfServer.Destroy(), "Error destroying iperf-server instance")
-		require.NoError(t, iperfClient.Destroy(), "Error destroying iperf-client instance")
+		require.NoError(t, knuu.BatchDestroy(iperfServer, iperfClient))
 	})
 
 	// Prepare iperf client & server
@@ -190,13 +183,7 @@ func TestBittwister_Packetloss(t *testing.T) {
 	require.NoError(t, err, "Error cloning instance")
 
 	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, executor.Destroy(), "Error destroying executor instance")
-		require.NoError(t, target.Destroy(), "Error destroying target instance")
+		require.NoError(t, knuu.BatchDestroy(executor, target))
 	})
 
 	// Prepare ping executor & target
@@ -326,13 +313,7 @@ func TestBittwister_Latency(t *testing.T) {
 	require.NoError(t, err, "Error cloning instance")
 
 	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, executor.Destroy(), "Error destroying executor instance")
-		require.NoError(t, target.Destroy(), "Error destroying target instance")
+		require.NoError(t, knuu.BatchDestroy(executor, target))
 	})
 
 	// Prepare ping executor & target
@@ -479,13 +460,7 @@ func TestBittwister_Jitter(t *testing.T) {
 	require.NoError(t, err, "Error cloning instance")
 
 	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, executor.Destroy(), "Error destroying executor instance")
-		require.NoError(t, target.Destroy(), "Error destroying target instance")
+		require.NoError(t, knuu.BatchDestroy(executor, target))
 	})
 
 	// Prepare ping executor & target
