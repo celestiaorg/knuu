@@ -197,12 +197,12 @@ func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP 
 		if svc == nil {
 			err := i.deployService(ctx, portsTCP, portsUDP)
 			if err != nil {
-				return ErrDeployingServiceForInstance.WithParams(serviceName).Wrap(err)
+				return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		} else if svc != nil {
 			err := i.patchService(ctx, portsTCP, portsUDP)
 			if err != nil {
-				return ErrPatchingServiceForInstance.WithParams(serviceName).Wrap(err)
+				return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 	}
@@ -607,26 +607,21 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
 
-	// We need to add the port here so the instance will get an IP
-	// if err := i.AddPortTCP(1234); err != nil {
-	// 	return nil, ErrAddingBitTwisterPort.Wrap(err)
-	// }
-	// ip, err := i.GetIP()
-	// if err != nil {
-	// 	return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
-	// }
-	// logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
-
 	// TODO: remove this when pkg refactor
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+
+	serviceName := i.k8sName // the main instance name
+	err = traefikClient.AddHost(ctx, serviceName, bt.k8sName, i.BitTwister.Port())
+	if err != nil {
+		return nil, ErrAddingToTraefikProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
+	}
 
 	btURL, err := traefikClient.URL(ctx, bt.k8sName)
 	if err != nil {
 		return nil, ErrGettingBitTwisterPath.Wrap(err)
 	}
-	// logrus.Debugf("BitTwister URL: ", btURL)
-	logrus.Info("BitTwister URL: ", btURL)
+	logrus.Debugf("BitTwister URL: %s", btURL)
 
 	i.BitTwister.SetNewClientByURL(btURL)
 

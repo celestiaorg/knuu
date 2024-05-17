@@ -2,9 +2,7 @@ package basic
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/signal"
 	"testing"
 	"time"
 
@@ -38,40 +36,15 @@ func TestReverseProxy(t *testing.T) {
 		require.NoError(t, main.Destroy(), "Error destroying instance")
 	})
 
-	// Prepare iperf client & server
-
 	require.NoError(t, main.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, main.Start(), "Error starting main instance")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	{
-		out, err := main.BitTwister.Client().AllServicesStatus()
-		fmt.Printf("err: %v\n", err)
-
-		// wait for Ctrl+C signal for 10 minutes
-		// Setup a channel to listen for the interrupt signal (Ctrl+C)
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt)
-
-		// Create a timeout to stop waiting after 10 minutes
-		timeout := time.After(30 * time.Minute)
-
-		select {
-		case <-sigChan:
-			fmt.Println("Ctrl+C received, stopping the test.")
-		case <-timeout:
-			fmt.Println("30 minutes passed without Ctrl+C, continuing the test.")
-		}
-
-		require.NoError(t, err, "Error getting all services status")
-		assert.NotEmpty(t, out, "No services found")
-	}
 	require.NoError(t, main.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
 
 	// test if BitTwister running in a sidecar is accessible
-
 	err = main.SetBandwidthLimit(1000)
 	assert.NoError(t, err, "Error setting bandwidth limit")
 
@@ -79,10 +52,4 @@ func TestReverseProxy(t *testing.T) {
 	out, err := main.BitTwister.Client().AllServicesStatus()
 	require.NoError(t, err, "Error getting all services status")
 	assert.NotEmpty(t, out, "No services found")
-
-	for _, svc := range out {
-		fmt.Printf("\nsvc: %#v\n", svc)
-	}
 }
-
-// reset && LOG_LEVEL=debug go test -v ./e2e/basic/ --run TestReverseProxy -timeout 60m

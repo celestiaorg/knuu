@@ -154,14 +154,14 @@ func (t *Traefik) IP(ctx context.Context) (string, error) {
 	return t.K8s.GetServiceIP(ctx, traefikServiceName)
 }
 
-func (t *Traefik) URL(ctx context.Context, serviceName string) (string, error) {
+func (t *Traefik) URL(ctx context.Context, prefix string) (string, error) {
 	if t.endpoint == "" {
 		var err error
 		if t.endpoint, err = t.Endpoint(ctx); err != nil {
 			return "", ErrTraefikIPNotFound.Wrap(err)
 		}
 	}
-	return fmt.Sprintf("http://%s/%s", t.endpoint, serviceName), nil
+	return fmt.Sprintf("http://%s/%s", t.endpoint, prefix), nil
 }
 
 func (t *Traefik) Endpoint(ctx context.Context) (string, error) {
@@ -171,7 +171,7 @@ func (t *Traefik) Endpoint(ctx context.Context) (string, error) {
 	return t.K8s.GetServiceEndpoint(ctx, traefikServiceName)
 }
 
-func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portsTCP ...int) error {
+func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portTCP int) error {
 	middlewareName, err := names.NewRandomK8("strip-" + prefix)
 	if err != nil {
 		return ErrGeneratingRandomK8sName.Wrap(err)
@@ -182,7 +182,7 @@ func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, ports
 		return err
 	}
 
-	return t.createIngressRoute(ctx, serviceName, prefix, []string{middlewareName}, portsTCP)
+	return t.createIngressRoute(ctx, serviceName, prefix, middlewareName, portTCP)
 }
 
 // TODO: need to update the k8s pkg to handle service creation in more custom way
@@ -256,8 +256,8 @@ func (t *Traefik) createMiddleware(ctx context.Context, serviceName, middlewareN
 func (t *Traefik) createIngressRoute(
 	ctx context.Context,
 	serviceName, prefix string,
-	middlewaresNames []string,
-	ports []int,
+	middlewareName string,
+	port int,
 ) error {
 	ingressRouteGVR := schema.GroupVersionResource{
 		Group:    "traefik.io",
@@ -268,21 +268,6 @@ func (t *Traefik) createIngressRoute(
 	ingressRouteName, err := names.NewRandomK8("ing-route-" + prefix)
 	if err != nil {
 		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
-	}
-
-	services := make([]interface{}, len(ports))
-	for i, port := range ports {
-		services[i] = map[string]interface{}{
-			"name": serviceName,
-			"port": port,
-		}
-	}
-
-	middlewares := make([]interface{}, len(middlewaresNames))
-	for i, name := range middlewaresNames {
-		middlewares[i] = map[string]interface{}{
-			"name": name,
-		}
 	}
 
 	ingressRoute := &unstructured.Unstructured{
@@ -297,10 +282,19 @@ func (t *Traefik) createIngressRoute(
 				"entryPoints": []string{"web"},
 				"routes": []interface{}{
 					map[string]interface{}{
-						"match":       fmt.Sprintf("PathPrefix(`/%s`)", prefix),
-						"kind":        "Rule",
-						"services":    services,
-						"middlewares": middlewares,
+						"match": fmt.Sprintf("PathPrefix(`/%s`)", prefix),
+						"kind":  "Rule",
+						"services": []interface{}{
+							map[string]interface{}{
+								"name": serviceName,
+								"port": port,
+							},
+						},
+						"middlewares": []interface{}{
+							map[string]interface{}{
+								"name": middlewareName,
+							},
+						},
 					},
 				},
 			},
