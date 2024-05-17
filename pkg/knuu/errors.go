@@ -62,6 +62,8 @@ var (
 	ErrFailedToCreateConfigMap                   = &Error{Code: "FailedToCreateConfigMap", Message: "failed to create configmap"}
 	ErrFailedToDeleteConfigMap                   = &Error{Code: "FailedToDeleteConfigMap", Message: "failed to delete configmap"}
 	ErrFailedToDeployOrPatchService              = &Error{Code: "FailedToDeployOrPatchService", Message: "failed to deploy or patch service"}
+	ErrDeployingServiceForSidecar                = &Error{Code: "DeployingServiceForSidecar", Message: "error deploying service for sidecar '%s' of instance '%s', a sidecar cannot have a service"}
+	ErrPatchingServiceForSidecar                 = &Error{Code: "PatchingServiceForSidecar", Message: "error patching service for sidecar '%s' of instance '%s', a sidecar cannot have a service"}
 	ErrDeployingVolumeForInstance                = &Error{Code: "DeployingVolumeForInstance", Message: "error deploying volume for instance '%s'"}
 	ErrDeployingFilesForInstance                 = &Error{Code: "DeployingFilesForInstance", Message: "error deploying files for instance '%s'"}
 	ErrDestroyingVolumeForInstance               = &Error{Code: "DestroyingVolumeForInstance", Message: "error destroying volume for instance '%s'"}
