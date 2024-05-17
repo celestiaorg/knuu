@@ -256,7 +256,7 @@ func handleTimeout() error {
 	if err := instance.AddPolicyRule(rule); err != nil {
 		return ErrCannotAddPolicyRule.Wrap(err)
 	}
-	if err := instance.Start(); err != nil {
+	if err := instance.StartWithoutWait(); err != nil {
 		return ErrCannotStartInstance.Wrap(err)
 	}
 
