@@ -80,11 +80,17 @@ func (i *Instance) Labels() map[string]string {
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployService(ctx context.Context) error {
-	labels := i.getLabels()
-	selectorMap := i.getLabels()
+func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) error {
+	// a sidecar instance should use the parent instance's service
+	if i.isSidecar {
+		return ErrDeployingServiceForSidecar.WithParams(i.k8sName)
+	}
 
-	service, err := k8sClient.CreateService(ctx, i.k8sName, labels, selectorMap, i.portsTCP, i.portsUDP)
+	serviceName := i.k8sName
+	labels := i.getLabels()
+	labelSelectors := labels
+
+	service, err := k8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
@@ -94,19 +100,22 @@ func (i *Instance) deployService(ctx context.Context) error {
 }
 
 // patchService patches the service for the instance
-func (i *Instance) patchService(ctx context.Context) error {
-	if i.kubernetesService == nil {
-		svc, err := k8sClient.GetService(ctx, i.k8sName)
-		if err != nil {
-			return ErrGettingService.WithParams(i.k8sName).Wrap(err)
-		}
-		i.kubernetesService = svc
+func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) error {
+	// a sidecar instance should use the parent instance's service
+	if i.isSidecar {
+		return ErrPatchingServiceForSidecar.WithParams(i.k8sName)
 	}
-	err := k8sClient.PatchService(ctx, i.k8sName, i.kubernetesService.ObjectMeta.Labels, i.kubernetesService.Spec.Selector, i.portsTCP, i.portsUDP)
+
+	serviceName := i.k8sName
+	labels := i.getLabels()
+	labelSelectors := labels
+
+	service, err := k8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
-		return ErrPatchingService.WithParams(i.k8sName).Wrap(err)
+		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}
-	logrus.Debugf("Patched service '%s'", i.k8sName)
+	i.kubernetesService = service
+	logrus.Debugf("Patched service '%s'", serviceName)
 	return nil
 }
 
@@ -180,17 +189,17 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 }
 
 // deployService deploys the service for the instance
-func (i *Instance) deployOrPatchService(ctx context.Context) error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
+func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP []int) error {
+	if len(portsTCP) != 0 || len(portsUDP) != 0 {
 		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
 		svc, _ := k8sClient.GetService(ctx, i.k8sName)
 		if svc == nil {
-			err := i.deployService(ctx)
+			err := i.deployService(ctx, portsTCP, portsUDP)
 			if err != nil {
 				return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
 		} else if svc != nil {
-			err := i.patchService(ctx)
+			err := i.patchService(ctx, portsTCP, portsUDP)
 			if err != nil {
 				return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 			}
@@ -263,9 +272,18 @@ func (i *Instance) destroyFiles(ctx context.Context) error {
 
 // deployResources deploys the resources for the instance
 func (i *Instance) deployResources(ctx context.Context) error {
-	if len(i.portsTCP) != 0 || len(i.portsUDP) != 0 {
-		if err := i.deployOrPatchService(ctx); err != nil {
-			return ErrFailedToDeployOrPatchService.Wrap(err)
+	// only a non-sidecar instance should deploy a service, all sidecars will use the parent instance's service
+	if !i.isSidecar {
+		portsTCP := i.portsTCP
+		portsUDP := i.portsUDP
+		for _, sidecar := range i.sidecars {
+			portsTCP = append(portsTCP, sidecar.portsTCP...)
+			portsUDP = append(portsUDP, sidecar.portsUDP...)
+		}
+		if len(portsTCP) != 0 || len(portsUDP) != 0 {
+			if err := i.deployOrPatchService(ctx, portsTCP, portsUDP); err != nil {
+				return ErrFailedToDeployOrPatchService.Wrap(err)
+			}
 		}
 	}
 	if len(i.volumes) != 0 {
