@@ -259,6 +259,8 @@ func (i *Instance) deployFiles(ctx context.Context) error {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
+	logrus.Debugf("Deployed configmap '%s'", i.k8sName)
+
 	return nil
 }
 
@@ -267,6 +269,9 @@ func (i *Instance) destroyFiles(ctx context.Context) error {
 	if err := k8sClient.DeleteConfigMap(ctx, i.k8sName); err != nil {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
+
+	logrus.Debugf("Destroyed configmap '%s'", i.k8sName)
+
 	return nil
 }
 
