@@ -315,24 +315,6 @@ func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
 	return pod, nil
 }
 
-func (c *Client) WaitForDeployment(ctx context.Context, name string) error {
-	for {
-		deployment, err := c.clientset.AppsV1().Deployments(c.namespace).Get(ctx, name, metav1.GetOptions{})
-		if err == nil && deployment.Status.ReadyReplicas > 0 {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return ErrWaitingForDeployment.WithParams(name).Wrap(err)
-		case <-time.After(waitRetry):
-			// Retry after some seconds
-		}
-	}
-
-	return nil
-}
-
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
 func buildEnv(envMap map[string]string) []v1.EnvVar {
 	envVars := make([]v1.EnvVar, 0, len(envMap))

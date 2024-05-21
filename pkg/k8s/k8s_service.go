@@ -172,7 +172,7 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 		}
 
 		if err := checkServiceConnectivity(endpoint); err != nil {
-			time.Sleep(waitRetry) // Retry after some seconds if Minio is not reachable
+			time.Sleep(waitRetry) // Retry after some seconds if the service is not reachable
 			continue
 		}
 
@@ -188,20 +188,20 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 }
 
 func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, error) {
-	minioService, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
+	srv, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
 
-	if minioService.Spec.Type == v1.ServiceTypeLoadBalancer {
+	if srv.Spec.Type == v1.ServiceTypeLoadBalancer {
 		// Use the LoadBalancer's external IP
-		if len(minioService.Status.LoadBalancer.Ingress) > 0 {
-			return fmt.Sprintf("%s:%d", minioService.Status.LoadBalancer.Ingress[0].IP, minioService.Spec.Ports[0].Port), nil
+		if len(srv.Status.LoadBalancer.Ingress) > 0 {
+			return fmt.Sprintf("%s:%d", srv.Status.LoadBalancer.Ingress[0].IP, srv.Spec.Ports[0].Port), nil
 		}
 		return "", ErrLoadBalancerIPNotAvailable
 	}
 
-	if minioService.Spec.Type == v1.ServiceTypeNodePort {
+	if srv.Spec.Type == v1.ServiceTypeNodePort {
 		// Use the Node IP and NodePort
 		nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -219,10 +219,10 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 				break
 			}
 		}
-		return fmt.Sprintf("%s:%d", nodeIP, minioService.Spec.Ports[0].NodePort), nil
+		return fmt.Sprintf("%s:%d", nodeIP, srv.Spec.Ports[0].NodePort), nil
 	}
 
-	return fmt.Sprintf("%s:%d", minioService.Spec.ClusterIP, minioService.Spec.Ports[0].Port), nil
+	return fmt.Sprintf("%s:%d", srv.Spec.ClusterIP, srv.Spec.Ports[0].Port), nil
 }
 
 func checkServiceConnectivity(serviceEndpoint string) error {

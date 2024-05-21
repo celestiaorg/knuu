@@ -46,4 +46,5 @@ var (
 	ErrTraefikMiddlewareCreationFailed   = &Error{Code: "TraefikMiddlewareCreationFailed", Message: "error creating Traefik middleware"}
 	ErrTraefikIngressRouteCreationFailed = &Error{Code: "TraefikIngressRouteCreationFailed", Message: "error creating Traefik ingress route"}
 	ErrGeneratingRandomK8sName           = &Error{Code: "GeneratingRandomK8sName", Message: "error generating random K8s name"}
+	ErrTraefikFailedToParseQuantity      = &Error{Code: "TraefikFailedToParseQuantity", Message: "error parsing resource quantity"}
 )

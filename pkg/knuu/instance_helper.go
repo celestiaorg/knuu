@@ -602,7 +602,7 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 		return nil, ErrSettingBitTwisterImage.Wrap(err)
 	}
 
-	// This is needed for reverse proxy annotation
+	// This is needed to make BT reachable
 	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}

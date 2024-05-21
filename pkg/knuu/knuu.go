@@ -110,9 +110,9 @@ func InitializeWithScope(scope string) error {
 
 	publicIP, err := traefikClient.Endpoint(ctx)
 	if err != nil {
-		fmt.Printf("Error getting traefik Endpoint: %v", err)
+		return ErrCannotGetTraefikEndpoint.Wrap(err)
 	}
-	fmt.Printf("Traefik publicIP: %v\n", publicIP)
+	logrus.Debugf("Traefik publicIP: %v\n", publicIP)
 
 	minioClient = &minio.Minio{
 		Clientset: k8sClient.Clientset(),

@@ -226,7 +226,7 @@ var (
 	ErrFailedToAddHostToTraefik                  = &Error{Code: "FailedToAddHostToTraefik", Message: "failed to add host to traefik"}
 	ErrParentInstanceIsNil                       = &Error{Code: "ParentInstanceIsNil", Message: "parent instance is nil for the sidecar '%s'"}
 	ErrFailedToGetIP                             = &Error{Code: "FailedToGetIP", Message: "failed to get IP for service %s"}
-	ErrFailedToEnsureEndpointWithPort            = &Error{Code: "FailedToEnsureEndpointWithPort", Message: "failed to ensure endpoint with port"}
 	ErrNoParentInstance                          = &Error{Code: "NoParentInstance", Message: "no parent instance for the sidecar '%s'"}
 	ErrAddingToTraefikProxy                      = &Error{Code: "AddingToTraefikProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
+	ErrCannotGetTraefikEndpoint                  = &Error{Code: "CannotGetTraefikEndpoint", Message: "cannot get traefik endpoint"}
 )

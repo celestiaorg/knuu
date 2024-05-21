@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,8 +29,13 @@ const (
 	image              = "traefik:v3.0"
 	appLabel           = "app"
 	appLabelValue      = "traefik"
-	replicas           = 2
+	replicas           = 1
 	waitRetry          = 5 * time.Second
+
+	defaultCPURequest    = "1000m"
+	defaultMemoryRequest = "512Mi"
+	maxCPULimit          = "2000m"
+	maxMemoryLimit       = "1024Mi"
 )
 
 type Traefik struct {
@@ -87,6 +93,23 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 		return ErrTraefikRoleBindingCreationFailed.Wrap(err)
 	}
 
+	cpuReq, err := resource.ParseQuantity(defaultCPURequest)
+	if err != nil {
+		return ErrTraefikFailedToParseQuantity.Wrap(err)
+	}
+	memReq, err := resource.ParseQuantity(defaultMemoryRequest)
+	if err != nil {
+		return ErrTraefikFailedToParseQuantity.Wrap(err)
+	}
+	cpuLimit, err := resource.ParseQuantity(maxCPULimit)
+	if err != nil {
+		return ErrTraefikFailedToParseQuantity.Wrap(err)
+	}
+	memLimit, err := resource.ParseQuantity(maxMemoryLimit)
+	if err != nil {
+		return ErrTraefikFailedToParseQuantity.Wrap(err)
+	}
+
 	// Create the Traefik deployment using the service account
 	traefikDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,6 +142,16 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 							Ports: []v1.ContainerPort{
 								{ContainerPort: Port, Name: "web"},
 								{ContainerPort: PortSecure, Name: "websecure"},
+							},
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    cpuReq,
+									v1.ResourceMemory: memReq,
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    cpuLimit,
+									v1.ResourceMemory: memLimit,
+								},
 							},
 						},
 					},
