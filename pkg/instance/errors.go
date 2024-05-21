@@ -1,4 +1,4 @@
-package knuu
+package instance
 
 import (
 	"fmt"

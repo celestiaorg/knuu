@@ -1,6 +1,7 @@
-package knuu
+package instance
 
 import (
+	"context"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -175,13 +176,13 @@ type Action struct {
 	Action string `yaml:"action,omitempty"`
 }
 
-func (i *Instance) createOtelCollectorInstance() (*Instance, error) {
-	otelAgent, err := NewInstance("otel-agent")
+func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, error) {
+	otelAgent, err := New("otel-agent", i.SystemDependencies)
 	if err != nil {
 		return nil, ErrCreatingOtelAgentInstance.Wrap(err)
 	}
 
-	if err := otelAgent.SetImage(fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
+	if err := otelAgent.SetImage(ctx, fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
 		return nil, ErrSettingOtelAgentImage.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(8888); err != nil {
@@ -433,7 +434,7 @@ func (i *Instance) createProcessors() Processors {
 		Actions: []Action{
 			{
 				Key:    "namespace",
-				Value:  k8sClient.Namespace(),
+				Value:  i.K8sCli.Namespace(),
 				Action: "insert",
 			},
 		},

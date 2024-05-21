@@ -1,4 +1,4 @@
-package knuu
+package instance
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 // Destroy destroys the instance
 // This function can only be called in the state 'Started' or 'Destroyed'
-func (i *Instance) Destroy() error {
+func (i *Instance) Destroy(ctx context.Context) error {
 	if i.state == Destroyed {
 		return nil
 	}
@@ -17,10 +17,6 @@ func (i *Instance) Destroy() error {
 	if !i.IsInState(Started, Stopped, Destroyed) {
 		return ErrDestroyingNotAllowed.WithParams(i.state.String())
 	}
-
-	// TODO: receive context from the user in the breaking refactor
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	if err := i.destroyPod(ctx); err != nil {
 		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
@@ -45,7 +41,7 @@ func (i *Instance) Destroy() error {
 }
 
 // BatchDestroy destroys a list of instances.
-func BatchDestroy(instances ...*Instance) error {
+func BatchDestroy(ctx context.Context, instances ...*Instance) error {
 	if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
 		logrus.Info("Skipping cleanup")
 		return nil
@@ -55,7 +51,7 @@ func BatchDestroy(instances ...*Instance) error {
 		if instance == nil {
 			continue
 		}
-		if err := instance.Destroy(); err != nil {
+		if err := instance.Destroy(ctx); err != nil {
 			return err
 		}
 	}

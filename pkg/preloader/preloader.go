@@ -1,10 +1,21 @@
-package knuu
+package preloader
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/celestiaorg/knuu/pkg/names"
+	"github.com/celestiaorg/knuu/pkg/system"
 	v1 "k8s.io/api/core/v1"
+)
+
+const (
+	preloaderName        = "knuu-preloader"
+	managedByLabel       = "knuu"
+	pauseContainerImage  = "k8s.gcr.io/pause"
+	preloaderCommand     = "/bin/sh"
+	preloaderCommandArgs = "-c"
+	preloaderCommandExit = "exit 0"
 )
 
 // Preloader is a struct that contains the list of preloaded images.
@@ -13,17 +24,19 @@ import (
 type Preloader struct {
 	K8sName string   `json:"k8sName"`
 	Images  []string `json:"images"`
+	system.SystemDependencies
 }
 
-// NewPreloader creates a new preloader
-func NewPreloader() (*Preloader, error) {
-	k8sName, err := generateK8sName("knuu-preloader")
+// New creates a new preloader
+func New(sysDeps system.SystemDependencies) (*Preloader, error) {
+	k8sName, err := names.NewRandomK8(preloaderName)
 	if err != nil {
 		return nil, ErrGeneratingK8sNameForPreloader.Wrap(err)
 	}
 	return &Preloader{
-		K8sName: k8sName,
-		Images:  []string{},
+		K8sName:            k8sName,
+		Images:             []string{},
+		SystemDependencies: sysDeps,
 	}, nil
 }
 
@@ -33,8 +46,8 @@ func (p *Preloader) GetImages() []string {
 }
 
 // AddImage adds an image to the list of preloaded images
-func (p *Preloader) AddImage(image string) error {
-	// dont add duplicates
+func (p *Preloader) AddImage(ctx context.Context, image string) error {
+	// don't add duplicates
 	for _, v := range p.Images {
 		if v == image {
 			return nil
@@ -42,31 +55,23 @@ func (p *Preloader) AddImage(image string) error {
 	}
 	p.Images = append(p.Images, image)
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
 	return p.preloadImages(ctx)
 }
 
 // RemoveImage removes an image from the list of preloaded images
-func (p *Preloader) RemoveImage(image string) error {
+func (p *Preloader) RemoveImage(ctx context.Context, image string) error {
 	for i, v := range p.Images {
 		if v == image {
 			p.Images = append(p.Images[:i], p.Images[i+1:]...)
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 	return p.preloadImages(ctx)
 }
 
 // EmptyImages empties the list of preloaded images
-func (p *Preloader) EmptyImages() error {
+func (p *Preloader) EmptyImages(ctx context.Context) error {
 	p.Images = []string{}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 	return p.preloadImages(ctx)
 }
 
@@ -74,7 +79,7 @@ func (p *Preloader) EmptyImages() error {
 func (p *Preloader) preloadImages(ctx context.Context) error {
 	// delete the daemonset if no images are preloaded
 	if len(p.Images) == 0 {
-		return k8sClient.DeleteDaemonSet(ctx, p.K8sName)
+		return p.K8sCli.DeleteDaemonSet(ctx, p.K8sName)
 	}
 	var initContainers []v1.Container
 
@@ -83,9 +88,9 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 			Name:  fmt.Sprintf("image%d-preloader", i),
 			Image: image,
 			Command: []string{
-				"/bin/sh",
-				"-c",
-				"exit 0",
+				preloaderCommand,
+				preloaderCommandArgs,
+				preloaderCommandExit,
 			},
 		})
 	}
@@ -94,28 +99,28 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 
 	containers = append(containers, v1.Container{
 		Name:  "pause-container",
-		Image: "k8s.gcr.io/pause",
+		Image: pauseContainerImage,
 	})
 
 	labels := map[string]string{
 		"app":                          p.K8sName,
-		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/scope":                testScope,
-		"knuu.sh/test-started":         startTime,
+		"k8s.kubernetes.io/managed-by": managedByLabel,
+		"knuu.sh/scope":                p.TestScope,
+		"knuu.sh/test-started":         p.StartTime,
 	}
 
-	exists, err := k8sClient.DaemonSetExists(ctx, p.K8sName)
+	exists, err := p.K8sCli.DaemonSetExists(ctx, p.K8sName)
 	if err != nil {
 		return err
 	}
 
 	// update the daemonset if it already exists
 	if exists {
-		_, err = k8sClient.UpdateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+		_, err = p.K8sCli.UpdateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 		return err
 	}
 
 	// create the daemonset if it doesn't exist
-	_, err = k8sClient.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+	_, err = p.K8sCli.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 	return err
 }
