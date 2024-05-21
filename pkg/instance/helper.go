@@ -382,6 +382,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		obsyConfig:           i.obsyConfig,
 		securityContext:      &clonedSecurityContext,
 		BitTwister:           &clonedBitTwister,
+		SystemDependencies:   i.SystemDependencies,
 	}
 }
 
