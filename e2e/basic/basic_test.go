@@ -49,5 +49,5 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }

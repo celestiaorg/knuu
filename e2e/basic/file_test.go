@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
+
 	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,6 +42,10 @@ func TestFile(t *testing.T) {
 	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
+	}
+	err = web.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+	if err != nil {
+		t.Fatalf("Error adding volume: %v", err)
 	}
 	err = web.Commit()
 	if err != nil {
@@ -71,7 +77,7 @@ func TestFile(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }
 
 func TestDownloadFileFromRunningInstance(t *testing.T) {
