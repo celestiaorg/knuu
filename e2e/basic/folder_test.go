@@ -30,6 +30,10 @@ func TestFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
+	err = web.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+	if err != nil {
+		t.Fatalf("Error adding volume: %v", err)
+	}
 	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)

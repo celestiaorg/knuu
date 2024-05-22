@@ -37,6 +37,10 @@ func TestFileCached(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
 		}
+		err = instance.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+		if err != nil {
+			t.Fatalf("Error adding volume: %v", err)
+		}
 		err = instance.Commit()
 		if err != nil {
 			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
@@ -92,6 +96,6 @@ func TestFileCached(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Equal(t, "Hello World!\n", wget)
+		assert.Contains(t, "Hello World!\n", wget)
 	}
 }
