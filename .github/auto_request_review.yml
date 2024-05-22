@@ -1,0 +1,20 @@
+reviewers:
+  defaults:
+    - devops
+  groups:
+    devops:
+      - mojtaba-esk
+      - smuu
+      - sysrex
+      - jrmanes
+      - aWN4Y25pa2EK
+      - MSevey
+files:
+  ".github/**":
+    - MSevey
+    - devops
+options:
+  ignore_draft: true
+  ignored_keywords:
+    - WIP
+  number_of_reviewers: 3

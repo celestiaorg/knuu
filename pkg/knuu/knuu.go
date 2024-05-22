@@ -77,7 +77,7 @@ func InitializeWithScope(scope string) error {
 		logrus.Warnf("KNUU_NAMESPACE is deprecated. Scope overridden to: %s", scope)
 	}
 
-	logrus.Infof("Initializing knuu with scope: %s", scope)
+	logrus.Infof("Initializing knuu with scope: %s", testScope)
 
 	// read timeout from env
 	timeoutString := os.Getenv("KNUU_TIMEOUT")
@@ -256,7 +256,7 @@ func handleTimeout() error {
 	if err := instance.AddPolicyRule(rule); err != nil {
 		return ErrCannotAddPolicyRule.Wrap(err)
 	}
-	if err := instance.Start(); err != nil {
+	if err := instance.StartWithoutWait(); err != nil {
 		return ErrCannotStartInstance.Wrap(err)
 	}
 

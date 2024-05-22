@@ -621,6 +621,12 @@ func (i *Instance) Commit() error {
 	if !i.IsInState(Preparing) {
 		return ErrCommittingNotAllowed.WithParams(i.state.String())
 	}
+	// in the case ports are already set before commit, we already can deploy the service
+	if len(i.portsTCP) > 0 || len(i.portsUDP) > 0 {
+		go func() {
+			i.deployOrPatchService(context.TODO(), i.portsTCP, i.portsUDP)
+		}()
+	}
 	if i.builderFactory.Changed() {
 		// TODO: To speed up the process, the image name could be dependent on the hash of the image
 		imageName, err := i.getImageRegistry()
@@ -743,7 +749,7 @@ func (i *Instance) GetIP() (string, error) {
 	svc, err := k8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
-		err := i.deployService(ctx)
+		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
