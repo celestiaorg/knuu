@@ -96,6 +96,6 @@ func TestFileCached(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Contains(t, "Hello World!\n", wget)
+		assert.Contains(t, "Hello World!", wget)
 	}
 }
