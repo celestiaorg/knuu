@@ -146,44 +146,36 @@ func prepareService(
 }
 
 func (c *Client) WaitForService(ctx context.Context, name string) error {
+	ticker := time.NewTicker(waitRetry)
+	defer ticker.Stop()
+
 	for {
-		service, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return ErrGettingService.WithParams(name).Wrap(err)
-		}
+		select {
+		case <-ctx.Done():
+			return ErrTimeoutWaitingForServiceReady
 
-		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
-			if len(service.Status.LoadBalancer.Ingress) == 0 {
-				time.Sleep(waitRetry)
-				continue // Wait until the LoadBalancer IP is available
+		case <-ticker.C:
+			ready, err := c.isServiceReady(ctx, name)
+			if err != nil {
+				return ErrCheckingServiceReady.WithParams(name).Wrap(err)
 			}
-		} else if service.Spec.Type == v1.ServiceTypeNodePort {
-			if service.Spec.Ports[0].NodePort == 0 {
-				return ErrNodePortNotSet
+			if !ready {
+				continue
 			}
-		} else if len(service.Spec.ExternalIPs) == 0 {
-			return ErrExternalIPsNotSet
+
+			// Check if service is reachable
+			endpoint, err := c.GetServiceEndpoint(ctx, name)
+			if err != nil {
+				return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
+			}
+
+			if err := checkServiceConnectivity(endpoint); err != nil {
+				continue
+			}
+
+			// Service is reachable
+			return nil
 		}
-
-		// Check if service is reachable
-		endpoint, err := c.GetServiceEndpoint(ctx, name)
-		if err != nil {
-			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
-		}
-
-		if err := checkServiceConnectivity(endpoint); err != nil {
-			time.Sleep(waitRetry) // Retry after some seconds if the service is not reachable
-			continue
-		}
-
-		break // Service is reachable, exit the loop
-	}
-
-	select {
-	case <-ctx.Done():
-		return ErrTimeoutWaitingForServiceReady
-	default:
-		return nil
 	}
 }
 
@@ -226,10 +218,25 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 }
 
 func checkServiceConnectivity(serviceEndpoint string) error {
-	conn, err := net.DialTimeout("tcp", serviceEndpoint, 2*time.Second)
+	conn, err := net.DialTimeout("tcp", serviceEndpoint, waitRetry)
 	if err != nil {
 		return ErrFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
 	}
 	defer conn.Close()
 	return nil // success
+}
+
+func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) {
+	service, err := c.GetService(ctx, name)
+	if err != nil {
+		return false, ErrGettingService.WithParams(name).Wrap(err)
+	}
+	switch service.Spec.Type {
+	case v1.ServiceTypeLoadBalancer:
+		return len(service.Status.LoadBalancer.Ingress) > 0, nil
+	case v1.ServiceTypeNodePort:
+		return service.Spec.Ports[0].NodePort != 0, nil
+	default:
+		return len(service.Spec.ExternalIPs) > 0, nil
+	}
 }

@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -24,7 +25,7 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Wrap(err error) error {
-	e.Err = err
+	e.Err = errors.Join(e.Err, err)
 	return e
 }
 
@@ -123,4 +124,5 @@ var (
 	ErrCreateEndpoint                  = &Error{Code: "CreateEndpoint", Message: "failed to create endpoint for service %s"}
 	ErrGetEndpoint                     = &Error{Code: "GetEndpoint", Message: "failed to get endpoint for service %s"}
 	ErrUpdateEndpoint                  = &Error{Code: "UpdateEndpoint", Message: "failed to update endpoint for service %s"}
+	ErrCheckingServiceReady            = &Error{Code: "CheckingServiceReady", Message: "failed to check if service %s is ready"}
 )

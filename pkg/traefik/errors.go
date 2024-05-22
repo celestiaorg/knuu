@@ -1,6 +1,7 @@
 package traefik
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -20,7 +21,7 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Wrap(err error) error {
-	e.Err = err
+	e.Err = errors.Join(e.Err, err)
 	return e
 }
 

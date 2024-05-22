@@ -12,6 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
+// It mainly tests the ability to reach to a service running in a sidecar like BitTwister.
+// It calls an endpoint of the service and checks if the response is as expected.
 func TestReverseProxy(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -50,6 +53,7 @@ func TestReverseProxy(t *testing.T) {
 
 	// Check if the BitTwister service is set
 	out, err := main.BitTwister.Client().AllServicesStatus()
-	require.NoError(t, err, "Error getting all services status")
-	assert.NotEmpty(t, out, "No services found")
+	assert.NoError(t, err, "Error getting all services status")
+	assert.GreaterOrEqual(t, len(out), 1, "No services found")
+	assert.NotEmpty(t, out[0].Name, "Service name is empty")
 }

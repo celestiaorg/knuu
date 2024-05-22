@@ -39,7 +39,7 @@ func (c *Client) CreateClusterRole(
 ) error {
 	_, err := c.clientset.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 	if err == nil || !errors.IsNotFound(err) {
-		return ErrClusterRoleAlreadyExists.WithParams(name)
+		return ErrClusterRoleAlreadyExists.WithParams(name).Wrap(err)
 	}
 
 	role := &rbacv1.ClusterRole{
