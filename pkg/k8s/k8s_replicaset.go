@@ -136,7 +136,7 @@ func (c *Client) GetFirstPodFromReplicaSet(ctx context.Context, name string) (*v
 func (c *Client) getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error) {
 	rs, err := c.clientset.AppsV1().ReplicaSets(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, ErrGettingReplicaSet.WithParams(name).Wrap(err)
+		return nil, err
 	}
 
 	return rs, nil

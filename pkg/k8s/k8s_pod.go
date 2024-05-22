@@ -449,7 +449,7 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 	// for each volume, copy the contents of the volume to the knuu volume
 	for i, volume := range volumes {
 		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
-		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then mkdir -p %s && cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, knuuVolumePath, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
 		if i < len(volumes)-1 {
 			cmd += " ;fi && "
 		} else {
