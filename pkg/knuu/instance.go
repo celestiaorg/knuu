@@ -1198,11 +1198,9 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 	return nil
 }
 
-// SetLatency sets the latency of the instance
-// latency in ms (e.g. 1000 for 1s)
-// jitter in ms (e.g. 1000 for 1s)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
+// SetLatencyAndJitter sets the latency and jitter of an instance in milliseconds (e.g., 1000 for 1 second).
+// Multiple traffic shaping rules like latency, jitter, or packet loss can now be set simultaneously with BitTwister integration.
+// This function can only be called when the instance is in the 'Started' state.
 func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 	if !i.IsInState(Started) {
 		return ErrSettingLatencyJitterNotAllowed.WithParams(i.state.String())
