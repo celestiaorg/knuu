@@ -13,7 +13,6 @@ import (
 func TestFileCached(t *testing.T) {
 	t.Parallel()
 	// Setup
-
 	executor, err := knuu.NewExecutor()
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
@@ -24,29 +23,7 @@ func TestFileCached(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instance, err := knuu.NewInstance(instanceName)
-		if err != nil {
-			t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-		}
-		err = instance.SetImage("docker.io/nginx:latest")
-		if err != nil {
-			t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-		}
-		instance.AddPortTCP(80)
-		_, err = instance.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-		if err != nil {
-			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
-		}
-		err = instance.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
-		if err != nil {
-			t.Fatalf("Error adding volume: %v", err)
-		}
-		err = instance.Commit()
-		if err != nil {
-			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-		}
-
-		instances[i] = instance
+		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
