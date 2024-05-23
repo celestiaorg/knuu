@@ -13,7 +13,6 @@ import (
 func TestFileCached(t *testing.T) {
 	t.Parallel()
 	// Setup
-
 	executor, err := knuu.NewExecutor()
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
@@ -24,29 +23,7 @@ func TestFileCached(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instance, err := knuu.NewInstance(instanceName)
-		if err != nil {
-			t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-		}
-		err = instance.SetImage("docker.io/nginx:latest")
-		if err != nil {
-			t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-		}
-		instance.AddPortTCP(80)
-		_, err = instance.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-		if err != nil {
-			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
-		}
-		err = instance.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
-		if err != nil {
-			t.Fatalf("Error adding volume: %v", err)
-		}
-		err = instance.Commit()
-		if err != nil {
-			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-		}
-
-		instances[i] = instance
+		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -55,7 +32,7 @@ func TestFileCached(t *testing.T) {
 		go func(i int, instance *knuu.Instance) {
 			defer wgFolders.Done()
 			instanceName := fmt.Sprintf("web%d", i+1)
-			// adding the folder after the Commit, it will help us to use a cached image.
+			// adding the folder after the Commit, it wGill help us to use a cached image.
 			err = instance.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 			if err != nil {
 				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
@@ -96,6 +73,6 @@ func TestFileCached(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Contains(t, "Hello World!", wget)
+		assert.Contains(t, wget, "Hello World!")
 	}
 }
