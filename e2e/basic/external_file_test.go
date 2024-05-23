@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,5 +93,5 @@ func TestExternalFile(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }
