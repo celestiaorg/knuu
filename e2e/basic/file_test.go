@@ -26,53 +26,53 @@ func TestFile(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	web, err := knuu.NewInstance("web")
+	serverFile, err := knuu.NewInstance("serverFile")
 	if err != nil {
 		t.Fatalf("Error creating instance '%v':", err)
 	}
-	err = web.SetImage("docker.io/nginx:latest")
+	err = serverFile.SetImage("docker.io/nginx:latest")
 	if err != nil {
 		t.Fatalf("Error setting image '%v':", err)
 	}
-	web.AddPortTCP(80)
-	_, err = web.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
+	serverFile.AddPortTCP(80)
+	_, err = serverFile.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
-	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	err = serverFile.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
 	}
-	err = web.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+	err = serverFile.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
 	if err != nil {
 		t.Fatalf("Error adding volume: %v", err)
 	}
-	err = web.Commit()
+	err = serverFile.Commit()
 	if err != nil {
 		t.Fatalf("Error committing instance: %v", err)
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, serverFile))
 	})
 
 	// Test logic
 
-	webIP, err := web.GetIP()
+	serverFileIP, err := serverFile.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)
 	}
 
-	err = web.Start()
+	err = serverFile.Start()
 	if err != nil {
 		t.Fatalf("Error starting instance: %v", err)
 	}
-	err = web.WaitInstanceIsRunning()
+	err = serverFile.WaitInstanceIsRunning()
 	if err != nil {
 		t.Fatalf("Error waiting for instance to be running: %v", err)
 	}
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
+	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverFileIP)
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
