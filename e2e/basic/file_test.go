@@ -26,53 +26,53 @@ func TestFile(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	serverFile, err := knuu.NewInstance("serverFile")
+	serverfile, err := knuu.NewInstance("serverfile")
 	if err != nil {
 		t.Fatalf("Error creating instance '%v':", err)
 	}
-	err = serverFile.SetImage("docker.io/nginx:latest")
+	err = serverfile.SetImage("docker.io/nginx:latest")
 	if err != nil {
 		t.Fatalf("Error setting image '%v':", err)
 	}
-	serverFile.AddPortTCP(80)
-	_, err = serverFile.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
+	serverfile.AddPortTCP(80)
+	_, err = serverfile.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
-	err = serverFile.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	err = serverfile.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
 	}
-	err = serverFile.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+	err = serverfile.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
 	if err != nil {
 		t.Fatalf("Error adding volume: %v", err)
 	}
-	err = serverFile.Commit()
+	err = serverfile.Commit()
 	if err != nil {
 		t.Fatalf("Error committing instance: %v", err)
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, serverFile))
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, serverfile))
 	})
 
 	// Test logic
 
-	serverFileIP, err := serverFile.GetIP()
+	serverfileIP, err := serverfile.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)
 	}
 
-	err = serverFile.Start()
+	err = serverfile.Start()
 	if err != nil {
 		t.Fatalf("Error starting instance: %v", err)
 	}
-	err = serverFile.WaitInstanceIsRunning()
+	err = serverfile.WaitInstanceIsRunning()
 	if err != nil {
 		t.Fatalf("Error waiting for instance to be running: %v", err)
 	}
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverFileIP)
+	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverfileIP)
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
