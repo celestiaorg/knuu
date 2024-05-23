@@ -1,4 +1,10 @@
-// Package knuu provides the core functionality of knuu.
+/*
+* This file is deprecated.
+* Please use the new package knuu instead.
+* This file keeps the old functionality of knuu for backward compatibility.
+* A global variable is defined, tmpKnuu, which is used to hold the knuu instance.
+ */
+
 package knuu
 
 import (
