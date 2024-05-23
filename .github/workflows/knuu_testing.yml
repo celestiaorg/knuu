@@ -31,7 +31,6 @@ jobs:
       - name: Run Tests
         run: make test-all
         env:
-          KNUU_NAMESPACE: "knuu-test"
           KNUU_SKIP_CLEANUP: "false"
           KNUU_TIMEOUT: "240m" # needed as we run all the tests
           GRAFANA_ENDPOINT: ${{ secrets.GRAFANA_ENDPOINT }}
