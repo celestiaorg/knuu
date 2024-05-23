@@ -52,7 +52,6 @@ func TestBuildFromGit(t *testing.T) {
 	})
 
 	// Test logic
-
 	require.NoError(t, instance.Start(), "Error starting instance")
 
 	data, err := instance.GetFileBytes("/home/hello.txt")
