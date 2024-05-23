@@ -75,6 +75,6 @@ func TestFolderCached(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Contains(t, "Hello World!", wget)
+		assert.Contains(t, wget, "Hello World!")
 	}
 }
