@@ -619,7 +619,7 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 	serviceName := i.k8sName // the main instance name
 	err = traefikClient.AddHost(ctx, serviceName, bt.k8sName, i.BitTwister.Port())
 	if err != nil {
-		return nil, ErrAddingToTraefikProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
+		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
 	}
 
 	btURL, err := traefikClient.URL(ctx, bt.k8sName)

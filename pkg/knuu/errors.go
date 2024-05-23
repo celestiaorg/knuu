@@ -227,6 +227,7 @@ var (
 	ErrParentInstanceIsNil                       = &Error{Code: "ParentInstanceIsNil", Message: "parent instance is nil for the sidecar '%s'"}
 	ErrFailedToGetIP                             = &Error{Code: "FailedToGetIP", Message: "failed to get IP for service %s"}
 	ErrNoParentInstance                          = &Error{Code: "NoParentInstance", Message: "no parent instance for the sidecar '%s'"}
-	ErrAddingToTraefikProxy                      = &Error{Code: "AddingToTraefikProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
+	ErrAddingToProxy                             = &Error{Code: "AddingToTraefikProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
 	ErrCannotGetTraefikEndpoint                  = &Error{Code: "CannotGetTraefikEndpoint", Message: "cannot get traefik endpoint"}
+	ErrGettingProxyURL                           = &Error{Code: "GettingProxyURL", Message: "error getting proxy URL for service '%s'"}
 )
