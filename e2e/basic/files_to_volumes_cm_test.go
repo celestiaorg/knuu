@@ -173,6 +173,10 @@ func TestNoVolumesOneFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
 		}
+		err = instance.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+		if err != nil {
+			t.Fatalf("Error adding volume: %v", err)
+		}
 		err = instance.Commit()
 		if err != nil {
 			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
