@@ -17,6 +17,7 @@ type Preloader struct {
 	preloader.Preloader
 }
 
+// Deprecated: Use the new package knuu instead.
 func NewPreloader() (*Preloader, error) {
 	p, err := tmpKnuu.NewPreloader()
 	if err != nil {
@@ -25,14 +26,17 @@ func NewPreloader() (*Preloader, error) {
 	return &Preloader{Preloader: *p}, nil
 }
 
+// Deprecated: Use the new package knuu instead.
 func (p *Preloader) AddImage(image string) error {
 	return p.Preloader.AddImage(context.Background(), image)
 }
 
+// Deprecated: Use the new package knuu instead.
 func (p *Preloader) RemoveImage(image string) error {
 	return p.Preloader.RemoveImage(context.Background(), image)
 }
 
+// Deprecated: Use the new package knuu instead.
 func (p *Preloader) EmptyImages() error {
 	return p.Preloader.EmptyImages(context.Background())
 }

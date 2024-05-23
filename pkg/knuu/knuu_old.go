@@ -24,6 +24,7 @@ import (
 // TODO: remove this temporary variable
 var tmpKnuu *Knuu
 
+// Deprecated: Use the new package knuu instead.
 // Initialize initializes knuu with a unique scope
 func Initialize() error {
 	t := time.Now()
@@ -31,6 +32,7 @@ func Initialize() error {
 	return InitializeWithScope(scope)
 }
 
+// Deprecated: Use the new package knuu instead.
 func Scope() string {
 	if tmpKnuu == nil {
 		return ""
@@ -38,6 +40,7 @@ func Scope() string {
 	return tmpKnuu.Scope()
 }
 
+// Deprecated: Use the new package knuu instead.
 // InitializeWithScope initializes knuu with a given scope
 func InitializeWithScope(testScope string) error {
 	// Override scope if KNUU_NAMESPACE is set
@@ -107,6 +110,7 @@ func InitializeWithIdentifier(uniqueIdentifier string) error {
 	return InitializeWithScope(uniqueIdentifier)
 }
 
+// Deprecated: Use the new package knuu instead.
 func ImageBuilder() builder.Builder {
 	if tmpKnuu == nil {
 		return nil
@@ -114,11 +118,13 @@ func ImageBuilder() builder.Builder {
 	return tmpKnuu.ImageBuilder
 }
 
+// Deprecated: Use the new package knuu instead.
 // IsInitialized returns true if knuu is initialized, and false otherwise
 func IsInitialized() bool {
 	return tmpKnuu != nil
 }
 
+// Deprecated: Use the new package knuu instead.
 func CleanUp() error {
 	if tmpKnuu == nil {
 		return errors.New("tmpKnuu is not initialized")
