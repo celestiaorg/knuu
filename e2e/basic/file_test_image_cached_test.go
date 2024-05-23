@@ -32,7 +32,7 @@ func TestFileCached(t *testing.T) {
 		go func(i int, instance *knuu.Instance) {
 			defer wgFolders.Done()
 			instanceName := fmt.Sprintf("web%d", i+1)
-			// adding the folder after the Commit, it wGill help us to use a cached image.
+			// adding the folder after the Commit, it will help us to use a cached image.
 			err = instance.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 			if err != nil {
 				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
