@@ -32,10 +32,10 @@ const (
 	replicas           = 1
 	waitRetry          = 5 * time.Second
 
-	defaultCPURequest    = "1000m"
-	defaultMemoryRequest = "512Mi"
-	maxCPULimit          = "2000m"
-	maxMemoryLimit       = "1024Mi"
+	defaultCPURequest    = "500m"
+	defaultMemoryRequest = "500Mi"
+	maxCPULimit          = "1000m"
+	maxMemoryLimit       = "750Mi"
 )
 
 type Traefik struct {
