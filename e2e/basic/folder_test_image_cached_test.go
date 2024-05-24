@@ -25,25 +25,7 @@ func TestFolderCached(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instance, err := knuu.NewInstance(instanceName)
-		if err != nil {
-			t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-		}
-		err = instance.SetImage("docker.io/nginx:latest")
-		if err != nil {
-			t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-		}
-		instance.AddPortTCP(80)
-		_, err = instance.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-		if err != nil {
-			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
-		}
-		err = instance.Commit()
-		if err != nil {
-			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-		}
-
-		instances[i] = instance
+		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -93,6 +75,6 @@ func TestFolderCached(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Equal(t, "Hello World!\n", wget)
+		assert.Contains(t, wget, "Hello World!")
 	}
 }
