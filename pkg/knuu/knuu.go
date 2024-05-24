@@ -30,6 +30,8 @@ const (
 	timeoutHandlerName = "timeout-handler"
 	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
 	timeoutHandlerImage = "docker.io/bitnami/kubectl:latest"
+
+	TimeFormat = "20060102T150405Z"
 )
 
 type Knuu struct {
@@ -89,7 +91,7 @@ func New(ctx context.Context, opts ...Option) (*Knuu, error) {
 		opt(k)
 	}
 
-	k.StartTime = time.Now().UTC().Format("20060102T150405Z")
+	k.StartTime = time.Now().UTC().Format(TimeFormat)
 
 	// handle default values
 	if k.Logger == nil {

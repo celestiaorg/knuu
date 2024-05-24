@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -130,4 +131,14 @@ func CleanUp() error {
 		return errors.New("tmpKnuu is not initialized")
 	}
 	return tmpKnuu.CleanUp(context.Background())
+}
+
+// Deprecated: Use the new package knuu instead.
+func PushFileToMinio(ctx context.Context, contentName string, reader io.Reader) error {
+	return tmpKnuu.PushFileToMinio(ctx, contentName, reader)
+}
+
+// Deprecated: Use the new package knuu instead.
+func GetMinioURL(ctx context.Context, contentName string) (string, error) {
+	return tmpKnuu.GetMinioURL(ctx, contentName)
 }
