@@ -82,6 +82,24 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	return createdPod, nil
 }
 
+func (c *Client) DeployPods(ctx context.Context, podConfigs []PodConfig, init bool) ([]*v1.Pod, error) {
+	var pods []*v1.Pod
+	for _, podConfig := range podConfigs {
+		pod, err := preparePod(podConfig, init)
+		if err != nil {
+			return nil, ErrPreparingPod.Wrap(err)
+		}
+		pods = append(pods, pod)
+	}
+
+	createdPods, err := c.clientset.ExtendedCoreV1().Pods(c.namespace).CreateBatch(ctx, pods, metav1.CreateOptions{})
+	if err != nil {
+		return nil, ErrCreatingPod.Wrap(err)
+	}
+
+	return createdPods, nil
+}
+
 func (c *Client) NewVolume(path, size string, owner int64) *Volume {
 	return &Volume{
 		Path:  path,

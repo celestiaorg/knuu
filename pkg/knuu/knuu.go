@@ -94,7 +94,7 @@ func InitializeWithScope(scope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	k8sClient, err = k8s.New(ctx, scope)
+	k8sClient, err = k8s.New(ctx, scope, k8s.WithK8sPlus())
 	if err != nil {
 		return ErrCannotInitializeK8s.Wrap(err)
 	}
