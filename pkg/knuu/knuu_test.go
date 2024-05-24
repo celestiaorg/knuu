@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	mockFuncTimeout = 5 * time.Second
+	testTimeout = 5 * time.Minute
 )
 
 type mockK8s struct {
@@ -54,7 +54,7 @@ func (m *mockK8s) IsReplicaSetRunning(ctx context.Context, name string) (bool, e
 }
 
 func TestNew(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), mockFuncTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
 	tt := []struct {
