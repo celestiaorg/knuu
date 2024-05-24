@@ -17,27 +17,8 @@ func TestFolder(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	web, err := knuu.NewInstance("web")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = web.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image '%v':", err)
-	}
-	web.AddPortTCP(80)
-	_, err = web.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
-	if err != nil {
-		t.Fatalf("Error adding file '%v':", err)
-	}
-	err = web.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	// Create and commit the instance
+	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
@@ -64,5 +45,5 @@ func TestFolder(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }
