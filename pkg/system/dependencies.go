@@ -9,7 +9,7 @@ import (
 
 type SystemDependencies struct {
 	ImageBuilder builder.Builder
-	K8sCli       *k8s.Client
+	K8sCli       k8s.KubeManager
 	MinioCli     *minio.Minio
 	Logger       *logrus.Logger
 	TestScope    string

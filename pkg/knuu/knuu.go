@@ -66,7 +66,7 @@ func WithMinio(minio *minio.Minio) Option {
 	}
 }
 
-func WithK8s(k8s *k8s.Client) Option {
+func WithK8s(k8s k8s.KubeManager) Option {
 	return func(k *Knuu) {
 		k.K8sCli = k8s
 	}
