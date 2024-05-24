@@ -49,8 +49,6 @@ func TestBuildFromGit(t *testing.T) {
 		require.NoError(t, instance.BatchDestroy(ctx, builderInstance))
 	})
 
-	// Test logic
-
 	require.NoError(t, builderInstance.Start(ctx), "Error starting instance")
 
 	data, err := builderInstance.GetFileBytes(ctx, "/home/hello.txt")
