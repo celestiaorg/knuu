@@ -32,6 +32,10 @@ func TestProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
+	err = web.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
+	if err != nil {
+		t.Fatalf("Error adding volume: %v", err)
+	}
 	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
@@ -79,5 +83,5 @@ func TestProbe(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }

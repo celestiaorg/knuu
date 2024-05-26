@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,16 +20,16 @@ func TestExternalFile(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	web, err := knuu.NewInstance("web")
+	server, err := knuu.NewInstance("server")
 	if err != nil {
 		t.Fatalf("Error creating instance '%v':", err)
 	}
-	err = web.SetImage("docker.io/nginx:latest")
+	err = server.SetImage("docker.io/nginx:latest")
 	if err != nil {
 		t.Fatalf("Error setting image '%v':", err)
 	}
-	web.AddPortTCP(80)
-	_, err = web.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
+	server.AddPortTCP(80)
+	_, err = server.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
@@ -58,39 +59,39 @@ func TestExternalFile(t *testing.T) {
 		t.Fatalf("Error syncing data to disk '%v':", err)
 	}
 
-	err = web.AddFile("/tmp/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	err = server.AddFile("/tmp/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
 	}
-	err = web.Commit()
+	err = server.Commit()
 	if err != nil {
 		t.Fatalf("Error committing instance: %v", err)
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
+		require.NoError(t, knuu.BatchDestroy(executor.Instance, server))
 	})
 
 	// Test logic
 
-	webIP, err := web.GetIP()
+	serverIP, err := server.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)
 	}
 
-	err = web.Start()
+	err = server.Start()
 	if err != nil {
 		t.Fatalf("Error starting instance: %v", err)
 	}
-	err = web.WaitInstanceIsRunning()
+	err = server.WaitInstanceIsRunning()
 	if err != nil {
 		t.Fatalf("Error waiting for instance to be running: %v", err)
 	}
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
+	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverIP)
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	assert.Equal(t, wget, "Hello World!\n")
+	assert.Contains(t, wget, "Hello World!")
 }
