@@ -208,35 +208,24 @@ You can find the relevant documentation in the `pkg/knuu` package at: https://pk
 
 ## Run
 
-```shell
-make test-all
-```
+You can use the Makefile commands to easily target whatever test by setting the pkg, run, or count flags.
 
-Or run only the basic examples:
+Targeting a directory
 
 ```shell
-make test-basic
+make test pkgs=./e2e/basic
 ```
 
-Or run BitTwister tests:
-
-```sh
-make test-bittwister-packetloss
-make test-bittwister-bandwidth
-make test-bittwister-latency
-make test-bittwister-jitter
-```
-
-Or the celestia-app examples:
+Targeting a Test in a directory
 
 ```shell
-make test-celestia-app
+make test pkgs=./e2e/basic run=TestJustThisTest
 ```
 
-Or the celestia-node examples:
+Run a test in a loop to debug
 
 ```shell
-make test-celestia-node
+make test pkgs=./e2e/basic run=TestJustThisTest10Times count=10
 ```
 
 ---

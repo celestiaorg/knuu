@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -606,17 +607,28 @@ func (i *Instance) createBitTwisterInstance() (*Instance, error) {
 		return nil, ErrSettingBitTwisterImage.Wrap(err)
 	}
 
-	// We need to add the port here so the instance will get an IP
-	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+	// This is needed to make BT reachable
+	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
-	ip, err := i.GetIP()
-	if err != nil {
-		return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
-	}
-	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
 
-	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+	// TODO: remove this when pkg refactor
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	serviceName := i.k8sName // the main instance name
+	err = traefikClient.AddHost(ctx, serviceName, bt.k8sName, i.BitTwister.Port())
+	if err != nil {
+		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
+	}
+
+	btURL, err := traefikClient.URL(ctx, bt.k8sName)
+	if err != nil {
+		return nil, ErrGettingBitTwisterPath.Wrap(err)
+	}
+	logrus.Debugf("BitTwister URL: %s", btURL)
+
+	i.BitTwister.SetNewClientByURL(btURL)
 
 	if err := bt.Commit(); err != nil {
 		return nil, ErrCommittingBitTwisterInstance.Wrap(err)

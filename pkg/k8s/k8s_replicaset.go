@@ -160,9 +160,10 @@ func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) (*appv1.ReplicaSet, e
 			Selector: &metav1.LabelSelector{MatchLabels: rsConf.Labels},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: rsConf.Namespace,
-					Name:      rsConf.Name,
-					Labels:    rsConf.Labels,
+					Namespace:   rsConf.Namespace,
+					Name:        rsConf.Name,
+					Labels:      rsConf.Labels,
+					Annotations: rsConf.PodConfig.Annotations,
 				},
 				Spec: podSpec,
 			},
