@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/discovery"
@@ -22,6 +23,9 @@ const (
 
 	// certPath path in the filesystem to the ca.crt
 	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+	// waitRetry is the time to wait between retries for a readiness checking
+	waitRetry = 2 * time.Second
 )
 
 type Client struct {
@@ -71,6 +75,10 @@ func New(ctx context.Context, namespace string) (*Client, error) {
 
 func (c *Client) Clientset() *kubernetes.Clientset {
 	return c.clientset
+}
+
+func (c *Client) DynamicClient() dynamic.Interface {
+	return c.dynamicClient
 }
 
 func (c *Client) Namespace() string {

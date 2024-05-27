@@ -2,6 +2,7 @@ package knuu
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -1400,4 +1401,19 @@ func (i *Instance) CreateCustomResource(gvr *schema.GroupVersionResource, obj *m
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(gvr *schema.GroupVersionResource) (bool, error) {
 	return k8sClient.CustomResourceDefinitionExists(context.TODO(), gvr), nil
+}
+
+func (i *Instance) AddHost(port int) (err error, host string) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	prefix := fmt.Sprintf("%s-%d", i.k8sName, port)
+	if err := traefikClient.AddHost(ctx, i.k8sName, prefix, port); err != nil {
+		return ErrAddingToProxy.WithParams(i.k8sName).Wrap(err), ""
+	}
+	host, err = traefikClient.URL(ctx, prefix)
+	if err != nil {
+		return ErrGettingProxyURL.WithParams(i.k8sName).Wrap(err), ""
+	}
+	return nil, host
 }
