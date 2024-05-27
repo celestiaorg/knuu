@@ -60,8 +60,6 @@ func TestBittwister_Bandwidth(t *testing.T) {
 	require.NoError(t, iperfServer.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, iperfServer.Start(), "Error starting iperf-server instance")
 
-	forwardBitTwisterPort(t, iperfServer)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, iperfServer.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
@@ -191,8 +189,6 @@ func TestBittwister_Packetloss(t *testing.T) {
 	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, target.Start(), "Error starting target instance")
 
-	forwardBitTwisterPort(t, target)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, target.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
@@ -320,8 +316,6 @@ func TestBittwister_Latency(t *testing.T) {
 
 	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, target.Start(), "Error starting target instance")
-
-	forwardBitTwisterPort(t, target)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -468,8 +462,6 @@ func TestBittwister_Jitter(t *testing.T) {
 	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, target.Start(), "Error starting target instance")
 
-	forwardBitTwisterPort(t, target)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, target.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
@@ -569,12 +561,4 @@ func formatBandwidth(bandwidth float64) string {
 
 	bandwidth = math.Round(bandwidth*100) / 100
 	return fmt.Sprintf("%.2f %s", bandwidth, units[unitIndex])
-}
-
-func forwardBitTwisterPort(t *testing.T, i *knuu.Instance) {
-	fwdBtPort, err := i.PortForwardTCP(i.BitTwister.Port())
-	require.NoError(t, err, "Error port forwarding")
-	i.BitTwister.SetPort(fwdBtPort)
-	i.BitTwister.SetNewClientByIPAddr("http://localhost")
-	t.Logf("BitTwister listening on http://localhost:%d", fwdBtPort)
 }

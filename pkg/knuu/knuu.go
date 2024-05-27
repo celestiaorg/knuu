@@ -22,6 +22,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/minio"
+	"github.com/celestiaorg/knuu/pkg/traefik"
 )
 
 var (
@@ -31,8 +32,9 @@ var (
 	timeout      time.Duration
 	imageBuilder builder.Builder
 
-	// TODO: this temporary until we refactor knuu pkg
-	k8sClient *k8s.Client
+	// TODO: these are temporary until we refactor knuu pkg
+	k8sClient     *k8s.Client
+	traefikClient *traefik.Traefik
 )
 
 // Initialize initializes knuu with a unique scope
@@ -99,13 +101,26 @@ func InitializeWithScope(scope string) error {
 		return ErrCannotInitializeK8s.Wrap(err)
 	}
 
-	if err := handleTimeout(); err != nil {
-		return ErrCannotHandleTimeout.Wrap(err)
+	traefikClient = &traefik.Traefik{
+		K8s: k8sClient,
 	}
+	if err := traefikClient.Deploy(ctx); err != nil {
+		return ErrCannotDeployTraefik.Wrap(err)
+	}
+
+	publicIP, err := traefikClient.Endpoint(ctx)
+	if err != nil {
+		return ErrCannotGetTraefikEndpoint.Wrap(err)
+	}
+	logrus.Debugf("Traefik publicIP: %v\n", publicIP)
 
 	minioClient = &minio.Minio{
 		Clientset: k8sClient.Clientset(),
 		Namespace: k8sClient.Namespace(),
+	}
+
+	if err := handleTimeout(); err != nil {
+		return ErrCannotHandleTimeout.Wrap(err)
 	}
 
 	builderType := os.Getenv("KNUU_BUILDER")
