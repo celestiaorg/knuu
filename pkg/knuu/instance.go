@@ -1199,11 +1199,17 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 	return nil
 }
 
-// SetLatency sets the latency of the instance
-// latency in ms (e.g. 1000 for 1s)
-// jitter in ms (e.g. 1000 for 1s)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
+// SetLatencyAndJitter simulates variable network conditions by applying both latency and jitter to packet transmission.
+// Latency establishes a base delay, while jitter adds variability that can lead to packet reordering, mimicking real-world network behavior.
+// Example:
+// To set a latency of 100ms and jitter of 75ms:
+// err := instance.SetLatencyAndJitter(100, 75)
+// if err != nil {
+//     log.Fatalf("Error: %v", err)
+// }
+// With this configuration, if one packet is assigned a 100ms delay and the following packet has a delay of only 50ms,
+// the second packet may be transmitted first. This is due to the jitter, which can cause variability in delay times,
+// allowing subsequent packets to potentially be sent earlier than those queued before them.
 func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 	if !i.IsInState(Started) {
 		return ErrSettingLatencyJitterNotAllowed.WithParams(i.state.String())
