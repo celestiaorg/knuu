@@ -55,6 +55,7 @@ type PodConfig struct {
 	FsGroup            int64             // FSGroup to apply to the Pod
 	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
 	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
+	Annotations        map[string]string // Annotations to apply to the Pod
 }
 
 type Volume struct {
@@ -639,9 +640,10 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	// Construct the Pod object using the above data
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    labels,
+			Namespace:   namespace,
+			Name:        name,
+			Labels:      labels,
+			Annotations: spec.Annotations,
 		},
 		Spec: podSpec,
 	}

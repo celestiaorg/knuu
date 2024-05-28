@@ -603,17 +603,18 @@ func (i *Instance) createBitTwisterInstance(ctx context.Context) (*Instance, err
 		return nil, ErrSettingBitTwisterImage.Wrap(err)
 	}
 
-	// We need to add the port here so the instance will get an IP
-	if err := i.AddPortTCP(i.BitTwister.Port()); err != nil {
+	// This is needed to make BT reachable
+	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
-	ip, err := i.GetIP(ctx)
+	serviceName := i.k8sName // the main instance name
+	btURL, err := i.AddHost(ctx, i.BitTwister.Port())
 	if err != nil {
-		return nil, ErrGettingInstanceIP.WithParams(i.name).Wrap(err)
+		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
 	}
-	logrus.Debugf("IP of instance '%s' is '%s'", i.name, ip)
+	logrus.Debugf("BitTwister URL: %s", btURL)
 
-	i.BitTwister.SetNewClientByIPAddr("http://" + ip)
+	i.BitTwister.SetNewClientByURL(btURL)
 
 	if err := bt.Commit(); err != nil {
 		return nil, ErrCommittingBitTwisterInstance.Wrap(err)

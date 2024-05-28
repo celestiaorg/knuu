@@ -2,7 +2,6 @@ package instance
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/celestiaorg/bittwister/sdk"
@@ -48,10 +47,9 @@ func (c *btConfig) SetClient(client *sdk.Client) {
 	c.client = client
 }
 
-func (c *btConfig) SetNewClientByIPAddr(ip string) {
-	btAddress := fmt.Sprintf("%s:%d", ip, c.port)
-	c.client = sdk.NewClient(btAddress)
-	logrus.Debugf("BitTwister address '%s'", btAddress)
+func (c *btConfig) SetNewClientByURL(url string) {
+	c.client = sdk.NewClient(url)
+	logrus.Debugf("BitTwister address '%s'", url)
 }
 
 func (c *btConfig) Port() int {
