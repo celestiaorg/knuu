@@ -25,6 +25,7 @@ type pods struct {
 // CreateBatchPods creates multiple pods in a single request
 // It's a wrapper around the Create method and adds the CreateBatchPods method
 func (c *pods) CreateBatchPods(ctx context.Context, pods []*v1.Pod, opts metav1.CreateOptions) ([]*v1.Pod, error) {
+	// TODO @jrmanes: This is not what we want, as it makes several API calls
 	createdPods := make([]*v1.Pod, len(pods))
 	errors := make(chan error, len(pods))
 	var wg sync.WaitGroup
