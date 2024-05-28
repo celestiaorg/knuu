@@ -23,6 +23,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/system"
+	"github.com/celestiaorg/knuu/pkg/traefik"
 )
 
 const (
@@ -36,7 +37,8 @@ const (
 
 type Knuu struct {
 	system.SystemDependencies
-	timeout time.Duration
+	timeout      time.Duration
+	proxyEnabled bool
 }
 
 type Option func(*Knuu)
@@ -75,6 +77,12 @@ func WithK8s(k8s k8s.KubeManager) Option {
 func WithLogger(logger *logrus.Logger) Option {
 	return func(k *Knuu) {
 		k.Logger = logger
+	}
+}
+
+func WithProxyEnabled() Option {
+	return func(k *Knuu) {
+		k.proxyEnabled = true
 	}
 }
 
@@ -130,6 +138,20 @@ func New(ctx context.Context, opts ...Option) (*Knuu, error) {
 			K8sNamespace: k.K8sCli.Namespace(),
 			Minio:        k.MinioCli,
 		}
+	}
+
+	if k.proxyEnabled {
+		k.Proxy = &traefik.Traefik{
+			K8s: k.K8sCli,
+		}
+		if err := k.Proxy.Deploy(ctx); err != nil {
+			return nil, ErrCannotDeployTraefik.Wrap(err)
+		}
+		endpoint, err := k.Proxy.Endpoint(ctx)
+		if err != nil {
+			return nil, ErrCannotGetTraefikEndpoint.Wrap(err)
+		}
+		k.Logger.Debugf("Proxy endpoint: %s", endpoint)
 	}
 
 	if err := k.handleTimeout(ctx); err != nil {

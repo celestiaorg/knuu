@@ -231,4 +231,5 @@ var (
 	ErrAddingToProxy                             = &Error{Code: "AddingToTraefikProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
 	ErrCannotGetTraefikEndpoint                  = &Error{Code: "CannotGetTraefikEndpoint", Message: "cannot get traefik endpoint"}
 	ErrGettingProxyURL                           = &Error{Code: "GettingProxyURL", Message: "error getting proxy URL for service '%s'"}
+	ErrTraefikAPINotAvailable                    = &Error{Code: "TraefikAPINotAvailable", Message: "traefik API is not available"}
 )

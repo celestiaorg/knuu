@@ -72,6 +72,7 @@ func InitializeWithScope(testScope string) error {
 	tmpKnuu, err = New(ctx,
 		WithTestScope(testScope),
 		WithTimeout(timeout),
+		WithProxyEnabled(),
 	)
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)

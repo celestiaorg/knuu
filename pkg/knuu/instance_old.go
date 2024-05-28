@@ -437,3 +437,8 @@ func (i *Instance) IsInState(states ...InstanceState) bool {
 	}
 	return i.Instance.IsInState(statesNew...)
 }
+
+func (i *Instance) AddHost(port int) (err error, host string) {
+	host, err = i.Instance.AddHost(context.Background(), port)
+	return err, host
+}

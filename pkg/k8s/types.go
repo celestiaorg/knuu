@@ -10,11 +10,14 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
 type KubeManager interface {
 	Clientset() *kubernetes.Clientset
+	CreateClusterRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
+	CreateClusterRoleBinding(ctx context.Context, name string, labels map[string]string, clusterRole, serviceAccount string) error
 	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*v1.ConfigMap, error)
 	CreateCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource, obj *map[string]interface{}) error
 	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error)
@@ -42,12 +45,14 @@ type KubeManager interface {
 	DeleteService(ctx context.Context, name string) error
 	DeleteServiceAccount(ctx context.Context, name string) error
 	DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*corev1.Pod, error)
+	DynamicClient() dynamic.Interface
 	GetConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error)
 	GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error)
 	GetFirstPodFromReplicaSet(ctx context.Context, name string) (*corev1.Pod, error)
 	GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error)
 	GetNetworkPolicy(ctx context.Context, name string) (*netv1.NetworkPolicy, error)
 	GetService(ctx context.Context, name string) (*corev1.Service, error)
+	GetServiceEndpoint(ctx context.Context, name string) (string, error)
 	GetServiceIP(ctx context.Context, name string) (string, error)
 	IsPodRunning(ctx context.Context, name string) (bool, error)
 	IsReplicaSetRunning(ctx context.Context, name string) (bool, error)
@@ -69,4 +74,6 @@ type KubeManager interface {
 	getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error)
 	ConfigMapExists(ctx context.Context, name string) (bool, error)
 	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error)
+	WaitForDeployment(ctx context.Context, name string) error
+	WaitForService(ctx context.Context, name string) error
 }

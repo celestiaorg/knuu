@@ -222,4 +222,7 @@ var (
 	ErrCustomResourceDefinitionDoesNotExist      = &Error{Code: "CustomResourceDefinitionDoesNotExist", Message: "custom resource definition %s does not exist"}
 	ErrFileIsNotSubFolderOfVolumes               = &Error{Code: "FileIsNotSubFolderOfVolumes", Message: "the file '%s' is not a sub folder of any added volume"}
 	ErrCannotInitializeKnuu                      = &Error{Code: "Cannot Initialize Knuu", Message: "cannot initialize knuu"}
+	ErrAddingToProxy                             = &Error{Code: "AddingToProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
+	ErrGettingProxyURL                           = &Error{Code: "GettingProxyURL", Message: "error getting proxy URL for service '%s'"}
+	ErrProxyNotInitialized                       = &Error{Code: "ProxyNotInitialized", Message: "proxy not initialized"}
 )
