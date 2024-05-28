@@ -22,6 +22,12 @@ const (
 
 	// certPath path in the filesystem to the ca.crt
 	certPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+	// CustomQPS is the QPS to use for the Kubernetes client, DefaultQPS: 5
+	CustomQPS = 100
+
+	// CustomBurst is the Burst to use for the Kubernetes client, DefaultBurst: 10.
+	CustomBurst = 200
 )
 
 type Client struct {
@@ -83,9 +89,21 @@ func isClusterEnvironment() bool {
 }
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.
+// If the program is running in a Kubernetes cluster, it returns the in-cluster configuration.
+// Otherwise, it returns the configuration from the kubeconfig file.
+//
+// The QPS and Burst settings are increased to allow for higher throughput and concurrency.
 func getClusterConfig() (*rest.Config, error) {
 	if isClusterEnvironment() {
-		return rest.InClusterConfig()
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			return nil, err
+		}
+
+		// Increase QPS and Burst settings
+		config.QPS = CustomQPS
+		config.Burst = CustomBurst
+		return config, nil
 	}
 
 	// build the configuration from the kubeconfig file
