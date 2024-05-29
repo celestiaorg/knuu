@@ -256,7 +256,7 @@ See [SECURITY.md](SECURITY.md) for security and disclosure information.
 
 ## Licensing
 
-Knuu is licensed under the [Apache License 2.0](LICENSE).
+Knuu is licensed under the [Apache License 2.0](./LICENSE).
 
 <!---
 ## Contact
