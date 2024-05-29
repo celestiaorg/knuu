@@ -10,7 +10,7 @@ If you are new to Knuu, please go through the [README](./README.md) to familiari
 
 - Have a suggestion you want to implement? Open an issue, then create a Pull Request with your implementation.
 
-- Want to resolve an issue in the repo, make a request to be assigned, and be sure to tag the issue in your PR!.
+- Want to resolve an issue in the repo, make a request to be assigned, and be sure to tag the issue in your PR!
 
 ## Contribution Workflow
 
