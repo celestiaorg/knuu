@@ -3,9 +3,10 @@ package basic
 import (
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestFolder(t *testing.T) {

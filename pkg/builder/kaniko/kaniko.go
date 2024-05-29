@@ -7,14 +7,15 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/minio"
-	"github.com/celestiaorg/knuu/pkg/names"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/minio"
+	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 const (

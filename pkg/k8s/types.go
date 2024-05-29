@@ -5,7 +5,6 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,16 +17,16 @@ type KubeManager interface {
 	Clientset() *kubernetes.Clientset
 	CreateClusterRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateClusterRoleBinding(ctx context.Context, name string, labels map[string]string, clusterRole, serviceAccount string) error
-	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*v1.ConfigMap, error)
+	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
 	CreateCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource, obj *map[string]interface{}) error
-	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error)
+	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	CreateNamespace(ctx context.Context, name string) error
 	CreateNetworkPolicy(ctx context.Context, name string, selectorMap, ingressSelectorMap, egressSelectorMap map[string]string) error
 	CreatePersistentVolumeClaim(ctx context.Context, name string, labels map[string]string, size resource.Quantity) error
 	CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error)
 	CreateRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateRoleBinding(ctx context.Context, name string, labels map[string]string, role, serviceAccount string) error
-	CreateService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*v1.Service, error)
+	CreateService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
 	CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error
 	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool
 	DaemonSetExists(ctx context.Context, name string) (bool, error)
@@ -61,7 +60,7 @@ type KubeManager interface {
 	NetworkPolicyExists(ctx context.Context, name string) bool
 	NewFile(source, dest string) *File
 	NewVolume(path, size string, owner int64) *Volume
-	PatchService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*v1.Service, error)
+	PatchService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
 	PortForwardPod(ctx context.Context, podName string, localPort, remotePort int) error
 	ReplicaSetExists(ctx context.Context, name string) (bool, error)
 	ReplacePod(ctx context.Context, podConfig PodConfig) (*corev1.Pod, error)
@@ -73,7 +72,7 @@ type KubeManager interface {
 	getPod(ctx context.Context, name string) (*corev1.Pod, error)
 	getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error)
 	ConfigMapExists(ctx context.Context, name string) (bool, error)
-	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []v1.Container, containers []v1.Container) (*appv1.DaemonSet, error)
+	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	WaitForDeployment(ctx context.Context, name string) error
 	WaitForService(ctx context.Context, name string) error
 }

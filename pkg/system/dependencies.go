@@ -1,11 +1,12 @@
 package system
 
 import (
+	"github.com/sirupsen/logrus"
+
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/traefik"
-	"github.com/sirupsen/logrus"
 )
 
 type SystemDependencies struct {
