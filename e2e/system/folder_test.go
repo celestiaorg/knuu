@@ -1,8 +1,9 @@
-package basic
+package system
 
 import (
 	"testing"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ func TestFolder(t *testing.T) {
 	}
 
 	// Create and commit the instance
-	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
+	web := e2e.AssertCreateInstanceNginxWithVolumeOwner(t, "web")
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))

@@ -1,4 +1,4 @@
-package basic
+package e2e
 
 import (
 	"testing"
@@ -19,8 +19,8 @@ const (
 	nginxPath = "/usr/share/nginx/html"
 )
 
-// assertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests.
-func assertCreateInstanceNginxWithVolumeOwner(t *testing.T, instanceName string) *knuu.Instance {
+// AssertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests.
+func AssertCreateInstanceNginxWithVolumeOwner(t *testing.T, instanceName string) *knuu.Instance {
 	instance, err := knuu.NewInstance(instanceName)
 	if err != nil {
 		t.Fatalf("Error creating instance '%v': %v", instanceName, err)

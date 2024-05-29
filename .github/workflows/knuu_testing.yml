@@ -2,14 +2,16 @@ name: Knuu Testing
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
+  merge_group:
 
 jobs:
   test:
-
+    strategy:
+      matrix:
+        pkg: ["./pkgs/...", "e2e/basic", "e2e/system", "e2e/bittwister"]
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +31,7 @@ jobs:
           echo "${KUBECONFIG_FILE}" > $HOME/.kube/config
 
       - name: Run Tests
-        run: make test
+        run: make test pkgs=${{ matrix.pkg }}
         env:
           KNUU_SKIP_CLEANUP: "false"
           KNUU_TIMEOUT: "240m" # needed as we run all the tests
