@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         pkg: ["./pkg/...", "./e2e/basic", "./e2e/system", "./e2e/bittwister"]
     runs-on: ubuntu-latest
