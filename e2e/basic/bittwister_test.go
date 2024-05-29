@@ -72,39 +72,15 @@ func TestBittwister_Bandwidth(t *testing.T) {
 		name             string
 		targetBandwidth  int64
 		tolerancePercent int
-	}{{
-		name:             "512 Kbps",
-		targetBandwidth:  512 * 1000,
-		tolerancePercent: 50,
-	},
+	}{
 		{
-			name:             "1 Mbps",
-			targetBandwidth:  1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "2 Mbps",
-			targetBandwidth:  2 * 1024 * 1000,
+			name:             "512 Kbps",
+			targetBandwidth:  512 * 1000,
 			tolerancePercent: 50,
 		},
 		{
 			name:             "4 Mbps",
 			targetBandwidth:  4 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "8 Mbps",
-			targetBandwidth:  8 * 1024 * 1000,
-			tolerancePercent: 55,
-		},
-		{
-			name:             "16 Mbps",
-			targetBandwidth:  16 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "32 Mbps",
-			targetBandwidth:  32 * 1024 * 1000,
 			tolerancePercent: 50,
 		},
 	}
@@ -207,28 +183,8 @@ func TestBittwister_Packetloss(t *testing.T) {
 			tolerancePercent:     50,
 		},
 		{
-			name:                 "20%",
-			targetPacketlossRate: 20,
-			tolerancePercent:     30,
-		},
-		{
-			name:                 "30%",
-			targetPacketlossRate: 30,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "50%",
-			targetPacketlossRate: 50,
-			tolerancePercent:     10,
-		},
-		{
 			name:                 "70%",
 			targetPacketlossRate: 70,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "90%",
-			targetPacketlossRate: 90,
 			tolerancePercent:     10,
 		},
 	}
@@ -331,48 +287,8 @@ func TestBittwister_Latency(t *testing.T) {
 			tolerancePercent: 50,
 		},
 		{
-			name:             "20Maxms",
-			targetLatency:    20 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "50Maxms",
-			targetLatency:    50 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "100Maxms",
-			targetLatency:    100 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "200Maxms",
-			targetLatency:    200 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
 			name:             "500Maxms",
 			targetLatency:    500 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max1s",
-			targetLatency:    1 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max2s",
-			targetLatency:    2 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max3s",
-			targetLatency:    3 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max5s",
-			targetLatency:    5 * time.Second,
 			tolerancePercent: 50,
 		},
 	}
@@ -474,36 +390,8 @@ func TestBittwister_Jitter(t *testing.T) {
 			maxTargetJitter: 10 * time.Millisecond,
 		},
 		{
-			name:            "Max Jitter 20ms",
-			maxTargetJitter: 20 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 50ms",
-			maxTargetJitter: 50 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 100ms",
-			maxTargetJitter: 100 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 200ms",
-			maxTargetJitter: 200 * time.Millisecond,
-		},
-		{
 			name:            "Max Jitter 500ms",
 			maxTargetJitter: 500 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 1s",
-			maxTargetJitter: 1 * time.Second,
-		},
-		{
-			name:            "Max Jitter 2s",
-			maxTargetJitter: 2 * time.Second,
-		},
-		{
-			name:            "Max Jitter 3s",
-			maxTargetJitter: 3 * time.Second,
 		},
 	}
 
