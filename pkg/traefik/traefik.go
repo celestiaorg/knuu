@@ -20,17 +20,18 @@ import (
 )
 
 const (
-	traefikServiceName = "traefik"
-	Port               = 80
-	PortSecure         = 443
-	deploymentName     = "traefik-deployment"
-	roleName           = "traefik-role"
-	containerName      = "traefik"
-	image              = "traefik:v3.0"
-	appLabel           = "app"
-	appLabelValue      = "traefik"
-	replicas           = 1
-	waitRetry          = 5 * time.Second
+	traefikServiceName     = "traefik"
+	traefikAPIGroupVersion = "traefik.io/v1alpha1"
+	Port                   = 80
+	PortSecure             = 443
+	deploymentName         = "traefik-deployment"
+	roleName               = "traefik-role"
+	containerName          = "traefik"
+	image                  = "traefik:v3.0"
+	appLabel               = "app"
+	appLabelValue          = "traefik"
+	replicas               = 1
+	waitRetry              = 5 * time.Second
 
 	defaultCPURequest    = "500m"
 	defaultMemoryRequest = "500Mi"
@@ -39,7 +40,7 @@ const (
 )
 
 type Traefik struct {
-	K8s      *k8s.Client
+	K8s      k8s.KubeManager
 	endpoint string
 }
 
@@ -340,4 +341,31 @@ func (t *Traefik) createIngressRoute(
 	}
 
 	return nil
+}
+
+// IsTraefikAPIAvailable checks if the Traefik API is available in the cluster.
+func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
+	apiResourceList, err := t.K8s.Clientset().Discovery().ServerResourcesForGroupVersion(traefikAPIGroupVersion)
+	if err != nil {
+		logrus.Errorf("Failed to discover Traefik API resources: %v", err)
+		return false
+	}
+
+	requiredResources := []string{"middlewares", "ingressroutes"}
+
+	for _, resource := range apiResourceList.APIResources {
+		for i, requiredResource := range requiredResources {
+			if resource.Name == requiredResource {
+				requiredResources = append(requiredResources[:i], requiredResources[i+1:]...)
+				break
+			}
+		}
+	}
+
+	if len(requiredResources) == 0 {
+		return true
+	}
+
+	logrus.Warnf("Missing Traefik API resources: %v", requiredResources)
+	return false
 }

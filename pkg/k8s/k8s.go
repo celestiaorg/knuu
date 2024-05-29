@@ -35,6 +35,8 @@ type Client struct {
 	namespace       string
 }
 
+var _ KubeManager = &Client{}
+
 func New(ctx context.Context, namespace string) (*Client, error) {
 	config, err := getClusterConfig()
 	if err != nil {
@@ -87,9 +89,12 @@ func (c *Client) Namespace() string {
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
 func isClusterEnvironment() bool {
-	_, errToken := os.Stat(tokenPath)
-	_, errCert := os.Stat(certPath)
-	return errToken == nil && errCert == nil
+	return fileExists(tokenPath) && fileExists(certPath)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.

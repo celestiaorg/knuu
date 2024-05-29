@@ -1,4 +1,4 @@
-package knuu
+package instance
 
 import (
 	"fmt"
@@ -222,14 +222,7 @@ var (
 	ErrCustomResourceDefinitionDoesNotExist      = &Error{Code: "CustomResourceDefinitionDoesNotExist", Message: "custom resource definition %s does not exist"}
 	ErrFileIsNotSubFolderOfVolumes               = &Error{Code: "FileIsNotSubFolderOfVolumes", Message: "the file '%s' is not a sub folder of any added volume"}
 	ErrCannotInitializeKnuu                      = &Error{Code: "Cannot Initialize Knuu", Message: "cannot initialize knuu"}
-	ErrCannotDeployTraefik                       = &Error{Code: "Cannot Deploy Traefik", Message: "cannot deploy Traefik"}
-	ErrGettingBitTwisterPath                     = &Error{Code: "GettingBitTwisterPath", Message: "error getting BitTwister path"}
-	ErrFailedToAddHostToTraefik                  = &Error{Code: "FailedToAddHostToTraefik", Message: "failed to add host to traefik"}
-	ErrParentInstanceIsNil                       = &Error{Code: "ParentInstanceIsNil", Message: "parent instance is nil for the sidecar '%s'"}
-	ErrFailedToGetIP                             = &Error{Code: "FailedToGetIP", Message: "failed to get IP for service %s"}
-	ErrNoParentInstance                          = &Error{Code: "NoParentInstance", Message: "no parent instance for the sidecar '%s'"}
-	ErrAddingToProxy                             = &Error{Code: "AddingToTraefikProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
-	ErrCannotGetTraefikEndpoint                  = &Error{Code: "CannotGetTraefikEndpoint", Message: "cannot get traefik endpoint"}
+	ErrAddingToProxy                             = &Error{Code: "AddingToProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
 	ErrGettingProxyURL                           = &Error{Code: "GettingProxyURL", Message: "error getting proxy URL for service '%s'"}
-	ErrTraefikAPINotAvailable                    = &Error{Code: "TraefikAPINotAvailable", Message: "traefik API is not available"}
+	ErrProxyNotInitialized                       = &Error{Code: "ProxyNotInitialized", Message: "proxy not initialized"}
 )

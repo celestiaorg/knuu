@@ -1,4 +1,4 @@
-package knuu
+package instance
 
 // InstanceState represents the state of the instance
 type InstanceState int

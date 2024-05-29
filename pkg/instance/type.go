@@ -1,4 +1,4 @@
-package knuu
+package instance
 
 // InstanceType represents the type of the instance
 type InstanceType int
