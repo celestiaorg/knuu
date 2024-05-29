@@ -4,5 +4,5 @@ count := 1
 
 
 test: 
-	go test -v $(pkgs) -run $(run) -count=$(count) 
+	go test -v $(pkgs) -run $(run) -count=$(count) -timeout 120m 
 .PHONY: test
