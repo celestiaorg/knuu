@@ -20,6 +20,7 @@ func New(code, message string) *Error {
 }
 
 func (e *Error) Error() string {
+	// We need to keep this condition to avoid infinite recursion
 	if e.err == e {
 		return e.message
 	}
