@@ -84,6 +84,15 @@ func TestError_Wrap(t *testing.T) {
 			wrapError: errors.New("wrapped error"),
 			expected:  "test message: initial error\nwrapped error",
 		},
+		{
+			name: "wrap a joined error",
+			errorObj: &Error{
+				Message: "test message",
+				Err:     errors.New("initial error"),
+			},
+			wrapError: errors.Join(errors.New("wrapped error 1"), errors.New("wrapped error 2")),
+			expected:  "test message: initial error\nwrapped error 1\nwrapped error 2",
+		},
 	}
 
 	for _, tt := range tests {
