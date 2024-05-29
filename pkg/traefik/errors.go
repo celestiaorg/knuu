@@ -7,21 +7,21 @@ import (
 type Error = errors.Error
 
 var (
-	ErrTraefikDeploymentCreationFailed   = &Error{Code: "TraefikDeploymentCreationFailed", Message: "error creating Traefik deployment"}
-	ErrTraefikServiceCreationFailed      = &Error{Code: "TraefikServiceCreationFailed", Message: "error creating Traefik service"}
-	ErrTraefikClientNotInitialized       = &Error{Code: "TraefikClientNotInitialized", Message: "Traefik client not initialized"}
-	ErrTraefikIPNotFound                 = &Error{Code: "TraefikIPNotFound", Message: "Traefik IP not found"}
-	ErrTraefikFailedToGetService         = &Error{Code: "TraefikFailedToGetService", Message: "error getting Traefik service"}
-	ErrTraefikLoadBalancerIPNotAvailable = &Error{Code: "TraefikLoadBalancerIPNotAvailable", Message: "Traefik LoadBalancer IP not available"}
-	ErrTraefikFailedToGetNodes           = &Error{Code: "TraefikFailedToGetNodes", Message: "error getting Traefik nodes"}
-	ErrTraefikNoNodesFound               = &Error{Code: "TraefikNoNodesFound", Message: "no Traefik nodes found"}
-	ErrTraefikTimeoutWaitingForReady     = &Error{Code: "TraefikTimeoutWaitingForReady", Message: "Traefik timeout waiting for ready"}
-	ErrTraefikFailedToCreateService      = &Error{Code: "TraefikFailedToCreateService", Message: "error creating Traefik service"}
-	ErrTraefikRoleCreationFailed         = &Error{Code: "TraefikRoleCreationFailed", Message: "error creating Traefik role"}
-	ErrTraefikRoleBindingCreationFailed  = &Error{Code: "TraefikRoleBindingCreationFailed", Message: "error creating Traefik role binding"}
-	ErrFailedToCreateServiceAccount      = &Error{Code: "FailedToCreateServiceAccount", Message: "error creating service account"}
-	ErrTraefikMiddlewareCreationFailed   = &Error{Code: "TraefikMiddlewareCreationFailed", Message: "error creating Traefik middleware"}
-	ErrTraefikIngressRouteCreationFailed = &Error{Code: "TraefikIngressRouteCreationFailed", Message: "error creating Traefik ingress route"}
-	ErrGeneratingRandomK8sName           = &Error{Code: "GeneratingRandomK8sName", Message: "error generating random K8s name"}
-	ErrTraefikFailedToParseQuantity      = &Error{Code: "TraefikFailedToParseQuantity", Message: "error parsing resource quantity"}
+	ErrTraefikDeploymentCreationFailed   = errors.New("TraefikDeploymentCreationFailed", "error creating Traefik deployment")
+	ErrTraefikServiceCreationFailed      = errors.New("TraefikServiceCreationFailed", "error creating Traefik service")
+	ErrTraefikClientNotInitialized       = errors.New("TraefikClientNotInitialized", "Traefik client not initialized")
+	ErrTraefikIPNotFound                 = errors.New("TraefikIPNotFound", "Traefik IP not found")
+	ErrTraefikFailedToGetService         = errors.New("TraefikFailedToGetService", "error getting Traefik service")
+	ErrTraefikLoadBalancerIPNotAvailable = errors.New("TraefikLoadBalancerIPNotAvailable", "Traefik LoadBalancer IP not available")
+	ErrTraefikFailedToGetNodes           = errors.New("TraefikFailedToGetNodes", "error getting Traefik nodes")
+	ErrTraefikNoNodesFound               = errors.New("TraefikNoNodesFound", "no Traefik nodes found")
+	ErrTraefikTimeoutWaitingForReady     = errors.New("TraefikTimeoutWaitingForReady", "Traefik timeout waiting for ready")
+	ErrTraefikFailedToCreateService      = errors.New("TraefikFailedToCreateService", "error creating Traefik service")
+	ErrTraefikRoleCreationFailed         = errors.New("TraefikRoleCreationFailed", "error creating Traefik role")
+	ErrTraefikRoleBindingCreationFailed  = errors.New("TraefikRoleBindingCreationFailed", "error creating Traefik role binding")
+	ErrFailedToCreateServiceAccount      = errors.New("FailedToCreateServiceAccount", "error creating service account")
+	ErrTraefikMiddlewareCreationFailed   = errors.New("TraefikMiddlewareCreationFailed", "error creating Traefik middleware")
+	ErrTraefikIngressRouteCreationFailed = errors.New("TraefikIngressRouteCreationFailed", "error creating Traefik ingress route")
+	ErrGeneratingRandomK8sName           = errors.New("GeneratingRandomK8sName", "error generating random K8s name")
+	ErrTraefikFailedToParseQuantity      = errors.New("TraefikFailedToParseQuantity", "error parsing resource quantity")
 )

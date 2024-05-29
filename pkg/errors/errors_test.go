@@ -15,38 +15,31 @@ func TestError_Error(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "simple error with message only",
-			errorObj: &Error{
-				Code:    "123",
-				Message: "simple message",
-			},
+			name:     "simple error with message only",
+			errorObj: New("123", "simple message"),
 			expected: "simple message",
 		},
 		{
-			name: "error with parameters",
-			errorObj: &Error{
-				Code:    "123",
-				Message: "message with %s and %d",
-				Params:  []interface{}{"string", 42},
-			},
+			name:     "error with parameters",
+			errorObj: New("123", "message with %s and %d").WithParams("string", 42),
 			expected: "message with string and 42",
 		},
 		{
 			name: "error with nested error",
 			errorObj: &Error{
-				Code:    "123",
-				Message: "parent message",
-				Err:     errors.New("child error"),
+				code:    "123",
+				message: "parent message",
+				err:     errors.New("child error"),
 			},
 			expected: "parent message: child error",
 		},
 		{
 			name: "error with nested error and parameters",
 			errorObj: &Error{
-				Code:    "123",
-				Message: "message with %s",
-				Params:  []interface{}{"parameter"},
-				Err:     errors.New("child error"),
+				code:    "123",
+				message: "message with %s",
+				params:  []interface{}{"parameter"},
+				err:     errors.New("child error"),
 			},
 			expected: "message with parameter: child error",
 		},
@@ -69,8 +62,8 @@ func TestError_Wrap(t *testing.T) {
 		{
 			name: "wrap no error",
 			errorObj: &Error{
-				Message: "test message",
-				Err:     errors.New("initial error"),
+				message: "test message",
+				err:     errors.New("initial error"),
 			},
 			wrapError: nil,
 			expected:  "test message: initial error",
@@ -78,8 +71,8 @@ func TestError_Wrap(t *testing.T) {
 		{
 			name: "wrap an error",
 			errorObj: &Error{
-				Message: "test message",
-				Err:     errors.New("initial error"),
+				message: "test message",
+				err:     errors.New("initial error"),
 			},
 			wrapError: errors.New("wrapped error"),
 			expected:  "test message: initial error\nwrapped error",
@@ -87,8 +80,8 @@ func TestError_Wrap(t *testing.T) {
 		{
 			name: "wrap a joined error",
 			errorObj: &Error{
-				Message: "test message",
-				Err:     errors.New("initial error"),
+				message: "test message",
+				err:     errors.New("initial error"),
 			},
 			wrapError: errors.Join(errors.New("wrapped error 1"), errors.New("wrapped error 2")),
 			expected:  "test message: initial error\nwrapped error 1\nwrapped error 2",
@@ -113,8 +106,8 @@ func TestError_WithParams(t *testing.T) {
 		{
 			name: "add parameters to message",
 			errorObj: &Error{
-				Code:    "123",
-				Message: "message with %s and %d",
+				code:    "123",
+				message: "message with %s and %d",
 			},
 			params:   []interface{}{"string", 42},
 			expected: "message with string and 42",
@@ -122,9 +115,9 @@ func TestError_WithParams(t *testing.T) {
 		{
 			name: "overwrite existing parameters",
 			errorObj: &Error{
-				Code:    "123",
-				Message: "message with %s and %d",
-				Params:  []interface{}{"old", 0},
+				code:    "123",
+				message: "message with %s and %d",
+				params:  []interface{}{"old", 0},
 			},
 			params:   []interface{}{"new", 100},
 			expected: "message with new and 100",
@@ -135,7 +128,7 @@ func TestError_WithParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			errWithParams := tt.errorObj.WithParams(tt.params...)
 			require.NotNil(t, errWithParams)
-			assert.Equal(t, tt.params, errWithParams.Params)
+			assert.Equal(t, tt.params, errWithParams.params)
 			assert.Equal(t, tt.expected, errWithParams.Error())
 		})
 	}

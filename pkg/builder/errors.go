@@ -7,5 +7,5 @@ import (
 type Error = errors.Error
 
 var (
-	ErrBuildContextEmpty = &Error{Code: "BuildContextEmpty", Message: "build context cannot be empty"}
+	ErrBuildContextEmpty = errors.New("BuildContextEmpty", "build context cannot be empty")
 )

@@ -7,5 +7,5 @@ import (
 type Error = errors.Error
 
 var (
-	ErrGeneratingK8sNameForPreloader = &Error{Code: "GeneratingK8sNameForPreloader", Message: "error generating k8s name for preloader"}
+	ErrGeneratingK8sNameForPreloader = errors.New("GeneratingK8sNameForPreloader", "error generating k8s name for preloader")
 )
