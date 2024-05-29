@@ -2,14 +2,13 @@ name: Knuu Testing
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
 
     steps:
