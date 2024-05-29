@@ -31,7 +31,7 @@ func (e *Error) Error() string {
 	return msg
 }
 
-func (e *Error) Wrap(err error) error {
+func (e *Error) Wrap(err error) *Error {
 	e.err = errors.Join(e.err, err)
 	return e
 }
