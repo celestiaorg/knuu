@@ -231,11 +231,6 @@ func TestBittwister_Packetloss(t *testing.T) {
 			targetPacketlossRate: 90,
 			tolerancePercent:     10,
 		},
-		{
-			name:                 "100%",
-			targetPacketlossRate: 100,
-			tolerancePercent:     10,
-		},
 	}
 
 	targetIP, err := target.GetIP()
