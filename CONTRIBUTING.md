@@ -17,41 +17,42 @@ If you are new to Knuu, please go through the [README](./README.md) to familiari
 To contribute to Knuu, follow these steps:
 
 1. Fork the repository: Click on the 'Fork' button at the top right of this page. This will create a copy of the repository in your GitHub account.
- 
-2. Clone the forked repository to your local machine. Open your terminal and run:
 
-```bash
-git clone <forked-repository-url>
-```
+1. Clone the forked repository to your local machine. Open your terminal and run:
 
-3. Create your working branch: In the project directory, create a new branch by running the following command in your terminal:
+	```bash
+	git clone <forked-repository-url>
+	```
 
-```bash
-git checkout -b working-branch
-```
-Be sure to name your branch according to the changes you are making.
-For example: `add-missing-tests`.
+1. Create your working branch: In the project directory, create a new branch by running the following command in your terminal:
 
-4. Make your changes: Do not address multiple issues per PR. 
-For example, if you are adding a feature, it should not have bug fixes too. This is to enable the maintainers review your PR efficiently.
+	```bash
+	git checkout -b working-branch
+	```
 
-5. Commit the changes to your branch: After making the desired changes to the repo, run the following commands to commit them:
+	Be sure to name your branch according to the changes you are making.
+	For example: `add-missing-tests`.
 
-```bash
-git add .
-```
+1. Make your changes: Do not address multiple issues per PR.
+	For example, if you are adding a feature, it should not have bug fixes too. This is to enable the maintainers review your PR efficiently.
 
-```bash
-git commit -m "add an appropriate commit message"
-```
+1. Commit the changes to your branch: After making the desired changes to the repo, run the following commands to commit them:
 
-```bash
-git push origin <working-branch>
-```
+	```bash
+	git add .
+	```
 
-To ensure that your contribution is working as expected, please run `knuu-example` with your fork and working branch.
+	```bash
+	git commit -m "add an appropriate commit message"
+	```
 
-5. Create a Pull Request: Go to your forked repository on GitHub, and be sure that you are in the branch you pushed the changes to. Click on the 'Compare & pull request' button. This will open a new page where you can create your PR. Fill in the description field and click on 'Create pull request'.
+	```bash
+	git push origin <working-branch>
+	```
+
+	To ensure that your contribution is working as expected, please run `knuu-example` with your fork and working branch.
+
+1. Create a Pull Request: Go to your forked repository on GitHub, and be sure that you are in the branch you pushed the changes to. Click on the 'Compare & pull request' button. This will open a new page where you can create your PR. Fill in the description field and click on 'Create pull request'.
 Be sure to name your PR with a semantic prefix. For example, if it is a fix, it should be specified with the `fix:` prefix.
 
 Congratulations! You have successfully made a Pull Request, and your changes will be reviewed by the maintainers.
