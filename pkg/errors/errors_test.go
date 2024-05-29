@@ -60,11 +60,6 @@ func TestError_Error(t *testing.T) {
 }
 
 func TestError_Wrap(t *testing.T) {
-	var (
-		initialError = errors.New("initial error")
-		wrappedError = errors.New("wrapped error")
-	)
-
 	tests := []struct {
 		name      string
 		errorObj  *Error
@@ -72,15 +67,21 @@ func TestError_Wrap(t *testing.T) {
 		expected  string
 	}{
 		{
-			name:      "wrap no error",
-			errorObj:  &Error{Message: "test message", Err: initialError},
+			name: "wrap no error",
+			errorObj: &Error{
+				Message: "test message",
+				Err:     errors.New("initial error"),
+			},
 			wrapError: nil,
 			expected:  "test message: initial error",
 		},
 		{
-			name:      "wrap an error",
-			errorObj:  &Error{Message: "test message", Err: initialError},
-			wrapError: wrappedError,
+			name: "wrap an error",
+			errorObj: &Error{
+				Message: "test message",
+				Err:     errors.New("initial error"),
+			},
+			wrapError: errors.New("wrapped error"),
 			expected:  "test message: initial error\nwrapped error",
 		},
 	}
