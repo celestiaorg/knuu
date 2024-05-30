@@ -74,8 +74,10 @@ func TestBittwister_Bandwidth(t *testing.T) {
 		tolerancePercent int
 	}{
 		{
-			name:             "512 Kbps",
-			targetBandwidth:  512 * 1000,
+			name:            "512 Kbps",
+			targetBandwidth: 512 * 1000,
+			// 50% tolerance is chosen as sometimes specially when we run a large test (like all e2e at the same time),
+			// the bandwidth might not be stable and the test might fail due to some transient issues.
 			tolerancePercent: 50,
 		},
 		{
@@ -180,7 +182,9 @@ func TestBittwister_Packetloss(t *testing.T) {
 		{
 			name:                 "10%",
 			targetPacketlossRate: 10,
-			tolerancePercent:     50,
+			// 50% is chosen because of the inherent measurement errors in small packetloss tests
+			// e.g. when set to 10% and we have a lot of instances running, we might measure it to 15% or 18%
+			tolerancePercent: 50,
 		},
 		{
 			name:                 "70%",
@@ -282,8 +286,10 @@ func TestBittwister_Latency(t *testing.T) {
 		tolerancePercent int
 	}{
 		{
-			name:             "10Maxms",
-			targetLatency:    10 * time.Millisecond,
+			name:          "10Maxms",
+			targetLatency: 10 * time.Millisecond,
+			// 50% tolerance is chosen as sometimes specially when we run a large test (like all e2e at the same time),
+			// the latency might not be stable and the test might fail due to some transient issues.
 			tolerancePercent: 50,
 		},
 		{
