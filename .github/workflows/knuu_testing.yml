@@ -12,7 +12,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: ["./pkg/...", "./e2e/basic", "./e2e/system", "./e2e/bittwister"]
+        include:
+          - pkg: "./pkg/..."
+            timeout: 10m
+          - pkg: "./e2e/basic"
+            timeout: 15m
+          - pkg: "./e2e/system"
+            timeout: 15m
+          - pkg: "./e2e/bittwister"
+            timeout: 60m
     runs-on: ubuntu-latest
 
     steps:
@@ -32,10 +40,10 @@ jobs:
           echo "${KUBECONFIG_FILE}" > $HOME/.kube/config
 
       - name: Run Tests
-        run: make test pkgs=${{ matrix.pkg }}
+        run: make test pkgs=${{ matrix.pkg }} timeout=${{ matrix.timeout }}
         env:
           KNUU_SKIP_CLEANUP: "false"
-          KNUU_TIMEOUT: "240m" # needed as we run all the tests
+          KNUU_TIMEOUT: "${{ matrix.timeout }}"
           GRAFANA_ENDPOINT: ${{ secrets.GRAFANA_ENDPOINT }}
           GRAFANA_USERNAME: ${{ secrets.GRAFANA_USERNAME }}
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_TOKEN }}
