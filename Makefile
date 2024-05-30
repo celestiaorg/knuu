@@ -37,6 +37,8 @@ lint: vet
 	@yamllint --no-warnings . -c .yamllint.yml
 	@echo "--> Running actionlint"
 	@actionlint
+	@echo "--> Running govulncheck"
+	@govulncheck ./...
 	@echo "--> Running golangci-lint"
 	@golangci-lint run
 .PHONY: lint

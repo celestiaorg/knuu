@@ -43,3 +43,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: celestiaorg/.github/.github/actions/markdown-lint@v0.4.1
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    name: Run govulncheck
+    steps:
+      - id: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: 1.22.1
+          go-package: ./...
