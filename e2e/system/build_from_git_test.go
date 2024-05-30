@@ -15,9 +15,9 @@ import (
 // This test is just an example to show how to
 // setup the test instance to be built from a git repo
 func TestBuildFromGit(t *testing.T) {
-	t.Parallel()
-	// Setup
+	t.Skip("Skipping this test as it is only an example per the comment")
 
+	// Setup
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 
