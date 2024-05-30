@@ -234,7 +234,7 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	}
 
 	// Set the expiration time for the URL (e.g., 24h from now)
-	expiration := time.Duration(24 * time.Hour)
+	expiration := 24 * time.Hour
 
 	// Generate a presigned URL for the object
 	presignedURL, err := minioClient.PresignedGetObject(ctx, bucketName, minioFilePath, expiration, nil)

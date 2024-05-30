@@ -43,21 +43,21 @@ Node Configuration:
 Playbook setup:
 
 - **After reaching height 10**:
-    - Adjust the bandwidth of **15%** of Validators to **10Mbps**.
-    - Introduce a 50ms latency to **30%** of Light DA Nodes.
-    - Add a 20ms jitter to **25%** of Full DA Nodes.
+  - Adjust the bandwidth of **15%** of Validators to **10Mbps**.
+  - Introduce a 50ms latency to **30%** of Light DA Nodes.
+  - Add a 20ms jitter to **25%** of Full DA Nodes.
 
 - **Test Duration**:
-    - Keep the test running until height **10,000**
-    - or **30 minutes**, ensuring comprehensive evaluation.
+  - Keep the test running until height **10,000**
+  - or **30 minutes**, ensuring comprehensive evaluation.
 
 - **Metrics collection**
-    - Configured traffic shape on each node
-    - Error logs of each node
-    - Time to complete the sync of DA nodes
-    - Number of missing blocks to sign
-    - Number of missing blocks to propose
-    - ...
+  - Configured traffic shape on each node
+  - Error logs of each node
+  - Time to complete the sync of DA nodes
+  - Number of missing blocks to sign
+  - Number of missing blocks to propose
+  - ...
 
 Each worker node receives this playbook and based on that decides what to do.
 The entire playbook could be written in a golang code just like what Testground does.

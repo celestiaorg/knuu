@@ -24,7 +24,7 @@ func TestNoVolumesNoFiles(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	instanceName := fmt.Sprintf("web-1")
+	instanceName := "web-1"
 	instance, err := knuu.NewInstance(instanceName)
 	if err != nil {
 		t.Fatalf("Error creating instance '%v': %v", instanceName, err)
@@ -86,7 +86,7 @@ func TestOneVolumeNoFiles(t *testing.T) {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
-	instanceName := fmt.Sprintf("web-1")
+	instanceName := "web-1"
 	instance, err := knuu.NewInstance(instanceName)
 	if err != nil {
 		t.Fatalf("Error creating instance '%v': %v", instanceName, err)

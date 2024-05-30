@@ -1,0 +1,46 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  disable:
+    # TODO: there are tons of errors for these, we need to handle in a separate PR
+    - errorlint
+    - errcheck
+    - gosec
+  enable:
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unused
+
+issues:
+  exclude-use-default: false
+  include:
+    - EXC0012 # EXC0012 revive: Annoying issue about not having a comment. The rare codebase has such comments
+    - EXC0014 # EXC0014 revive: Annoying issue about not having a comment. The rare codebase has such comments
+  exclude:
+    - SA1019 # TODO enable: SA 1019 staticcheck: this is being triggered by the refactor and all the deprecated code. We need to enable this once we make the breaking change official
+
+linters-settings:
+  revive:
+    rules:
+      - name: package-comments
+        disabled: true
+      - name: duplicated-imports
+        severity: warning
+      - name: exported
+        disabled: true
+        # Leaving for reference if we can enable in the future.
+        # arguments:
+        #   - disableStutteringCheck
+
+  goimports:
+    local-prefixes: github.com/celestiaorg
