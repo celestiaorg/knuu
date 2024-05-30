@@ -3,11 +3,12 @@ package basic
 import (
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestProbe(t *testing.T) {

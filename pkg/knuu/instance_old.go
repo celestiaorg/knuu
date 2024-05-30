@@ -12,11 +12,12 @@ import (
 	"errors"
 	"io"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/instance"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 type Instance struct {

@@ -4,8 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestMain(m *testing.M) {

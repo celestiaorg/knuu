@@ -204,7 +204,7 @@ In the folder `e2e`, you will find some examples of how to use the [knuu](https:
 
 ## Write Tests
 
-You can find the relevant documentation in the `pkg/knuu` package at: https://pkg.go.dev/github.com/celestiaorg/knuu
+You can find the relevant documentation in the `pkg/knuu` package at: <https://pkg.go.dev/github.com/celestiaorg/knuu>
 
 ## Run
 
@@ -256,7 +256,7 @@ See [SECURITY.md](SECURITY.md) for security and disclosure information.
 
 ## Licensing
 
-Knuu is licensed under the [Apache License 2.0](LICENSE).
+Knuu is licensed under the [Apache License 2.0](./LICENSE).
 
 <!---
 ## Contact
