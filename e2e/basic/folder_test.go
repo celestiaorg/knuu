@@ -19,13 +19,16 @@ func TestFolder(t *testing.T) {
 
 	// Create and commit the instance
 	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
+	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	if err != nil {
+		t.Fatalf("Error adding file to '%v': %v", "web", err)
+	}
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic
-
 	webIP, err := web.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)
