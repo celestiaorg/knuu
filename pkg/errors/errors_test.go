@@ -133,3 +133,67 @@ func TestError_WithParams(t *testing.T) {
 		})
 	}
 }
+
+func TestIs(t *testing.T) {
+	tests := []struct {
+		name     string
+		err1     error
+		err2     error
+		expected bool
+	}{
+		{
+			name:     "both nil errors",
+			err1:     nil,
+			err2:     nil,
+			expected: false,
+		},
+		{
+			name:     "first error nil",
+			err1:     nil,
+			err2:     New("123", "error 123"),
+			expected: false,
+		},
+		{
+			name:     "second error nil",
+			err1:     New("123", "error 123"),
+			err2:     nil,
+			expected: false,
+		},
+		{
+			name:     "different types of errors",
+			err1:     errors.New("standard error"),
+			err2:     New("123", "error 123"),
+			expected: false,
+		},
+		{
+			name:     "same custom error codes",
+			err1:     New("123", "error 123"),
+			err2:     New("123", "another error 123"),
+			expected: true,
+		},
+		{
+			name:     "different custom error codes",
+			err1:     New("123", "error 123"),
+			err2:     New("456", "error 456"),
+			expected: false,
+		},
+		{
+			name:     "one standard error, one custom error",
+			err1:     errors.New("standard error"),
+			err2:     New("123", "error 123"),
+			expected: false,
+		},
+		{
+			name:     "nil comparison with non-nil error",
+			err1:     nil,
+			err2:     errors.New("standard error"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, Is(tt.err1, tt.err2))
+		})
+	}
+}
