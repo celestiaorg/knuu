@@ -246,13 +246,13 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 	return err
 }
 
-func runCommand(cmd *exec.Cmd) error {
+func runCommand(cmd *exec.Cmd) error { // nolint: unused
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("command failed: %s\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+		return fmt.Errorf("command failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 	}
 	return nil
 }

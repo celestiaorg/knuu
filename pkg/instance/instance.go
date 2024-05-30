@@ -1089,13 +1089,13 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 		return ErrWaitingForInstanceNotAllowed.WithParams(i.state.String())
 	}
 	timeout := time.After(1 * time.Minute)
-	tick := time.Tick(1 * time.Second)
+	tick := time.NewTicker(1 * time.Second)
 
 	for {
 		select {
 		case <-timeout:
 			return ErrWaitingForInstanceTimeout.WithParams(i.k8sName)
-		case <-tick:
+		case <-tick.C:
 			running, err := i.IsRunning(ctx)
 			if err != nil {
 				return ErrCheckingIfInstanceRunning.WithParams(i.k8sName).Wrap(err)

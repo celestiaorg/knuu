@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/celestiaorg/knuu/pkg/builder"
 )
 
 const (
@@ -46,8 +47,8 @@ func TestKanikoBuilder(t *testing.T) {
 			logs string
 			wg   = &sync.WaitGroup{}
 		)
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			logs, err = kb.Build(context.Background(), buildOptions)
 		}()
