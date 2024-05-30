@@ -69,6 +69,24 @@ type ObsyConfig struct {
 	prometheusRemoteWriteExporterEndpoint string
 }
 
+// TsharkCollectorConfig represents the configuration for the tshark collector
+type TsharkCollectorConfig struct {
+	// enabled is a flag to enable the tshark collector
+	enabled bool
+	// volumeSize is the size of the volume to use for the tshark collector
+	volumeSize string
+	// s3AccessKey is the access key to use for the s3 server
+	s3AccessKey string
+	// s3SecretKey is the secret key to use for the s3 server
+	s3SecretKey string
+	// s3Region is the region of the s3 server
+	s3Region string
+	// s3Bucket is the bucket to use for the s3 server
+	s3Bucket string
+	// s3KeyPrefix is the key prefix to use for the s3 server
+	s3KeyPrefix string
+}
+
 // SecurityContext represents the security settings for a container
 type SecurityContext struct {
 	// Privileged indicates whether the container should be run in privileged mode
@@ -81,35 +99,36 @@ type SecurityContext struct {
 // Instance represents a instance
 type Instance struct {
 	system.SystemDependencies
-	name                 string
-	imageName            string
-	k8sName              string
-	state                InstanceState
-	instanceType         InstanceType
-	kubernetesService    *v1.Service
-	builderFactory       *container.BuilderFactory
-	kubernetesReplicaSet *appv1.ReplicaSet
-	portsTCP             []int
-	portsUDP             []int
-	command              []string
-	args                 []string
-	env                  map[string]string
-	volumes              []*k8s.Volume
-	memoryRequest        string
-	memoryLimit          string
-	cpuRequest           string
-	policyRules          []rbacv1.PolicyRule
-	livenessProbe        *v1.Probe
-	readinessProbe       *v1.Probe
-	startupProbe         *v1.Probe
-	files                []*k8s.File
-	isSidecar            bool
-	parentInstance       *Instance
-	sidecars             []*Instance
-	fsGroup              int64
-	obsyConfig           *ObsyConfig
-	securityContext      *SecurityContext
-	BitTwister           *btConfig
+	name                  string
+	imageName             string
+	k8sName               string
+	state                 InstanceState
+	instanceType          InstanceType
+	kubernetesService     *v1.Service
+	builderFactory        *container.BuilderFactory
+	kubernetesReplicaSet  *appv1.ReplicaSet
+	portsTCP              []int
+	portsUDP              []int
+	command               []string
+	args                  []string
+	env                   map[string]string
+	volumes               []*k8s.Volume
+	memoryRequest         string
+	memoryLimit           string
+	cpuRequest            string
+	policyRules           []rbacv1.PolicyRule
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
+	files                 []*k8s.File
+	isSidecar             bool
+	parentInstance        *Instance
+	sidecars              []*Instance
+	fsGroup               int64
+	obsyConfig            *ObsyConfig
+	tsharkCollectorConfig *TsharkCollectorConfig
+	securityContext       *SecurityContext
+	BitTwister            *btConfig
 }
 
 func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
@@ -134,6 +153,14 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		prometheusExporterEndpoint:            "",
 		prometheusRemoteWriteExporterEndpoint: "",
 	}
+	tsharkCollectorConfig := &TsharkCollectorConfig{
+		enabled:     false,
+		s3AccessKey: "",
+		s3SecretKey: "",
+		s3Region:    "",
+		s3Bucket:    "",
+		s3KeyPrefix: "",
+	}
 	securityContext := &SecurityContext{
 		privileged:      false,
 		capabilitiesAdd: make([]string, 0),
@@ -141,32 +168,33 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 
 	// Create the instance
 	return &Instance{
-		name:               name,
-		k8sName:            k8sName,
-		imageName:          "",
-		state:              None,
-		instanceType:       BasicInstance,
-		portsTCP:           make([]int, 0),
-		portsUDP:           make([]int, 0),
-		command:            make([]string, 0),
-		args:               make([]string, 0),
-		env:                make(map[string]string),
-		volumes:            make([]*k8s.Volume, 0),
-		memoryRequest:      "",
-		memoryLimit:        "",
-		cpuRequest:         "",
-		policyRules:        make([]rbacv1.PolicyRule, 0),
-		livenessProbe:      nil,
-		readinessProbe:     nil,
-		startupProbe:       nil,
-		files:              make([]*k8s.File, 0),
-		isSidecar:          false,
-		parentInstance:     nil,
-		sidecars:           make([]*Instance, 0),
-		obsyConfig:         obsyConfig,
-		securityContext:    securityContext,
-		BitTwister:         getBitTwisterDefaultConfig(),
-		SystemDependencies: sysDeps,
+		name:                  name,
+		k8sName:               k8sName,
+		imageName:             "",
+		state:                 None,
+		instanceType:          BasicInstance,
+		portsTCP:              make([]int, 0),
+		portsUDP:              make([]int, 0),
+		command:               make([]string, 0),
+		args:                  make([]string, 0),
+		env:                   make(map[string]string),
+		volumes:               make([]*k8s.Volume, 0),
+		memoryRequest:         "",
+		memoryLimit:           "",
+		cpuRequest:            "",
+		policyRules:           make([]rbacv1.PolicyRule, 0),
+		livenessProbe:         nil,
+		readinessProbe:        nil,
+		startupProbe:          nil,
+		files:                 make([]*k8s.File, 0),
+		isSidecar:             false,
+		parentInstance:        nil,
+		sidecars:              make([]*Instance, 0),
+		obsyConfig:            obsyConfig,
+		tsharkCollectorConfig: tsharkCollectorConfig,
+		securityContext:       securityContext,
+		BitTwister:            getBitTwisterDefaultConfig(),
+		SystemDependencies:    sysDeps,
 	}, nil
 }
 
@@ -959,6 +987,24 @@ func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
 	return nil
 }
 
+func (i *Instance) EnableTsharkCollector(volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string) error {
+	// volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string
+	if err := i.validateStateForObsy("Tshark collector"); err != nil {
+		return err
+	}
+	i.tsharkCollectorConfig = &TsharkCollectorConfig{
+		enabled:     true,
+		volumeSize:  volumeSize,
+		s3AccessKey: s3AccessKey,
+		s3SecretKey: s3SecretKey,
+		s3Region:    s3Region,
+		s3Bucket:    s3BucketName,
+		s3KeyPrefix: s3KeyPrefix,
+	}
+	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
+	return nil
+}
+
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrivileged(privileged bool) error {
@@ -1027,6 +1073,13 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 		if i.isObservabilityEnabled() {
 			if err := i.addOtelCollectorSidecar(ctx); err != nil {
 				return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+			}
+		}
+
+		// deploy tshark collector if enabled
+		if i.tsharkCollectorConfig.enabled {
+			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
+				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
 			}
 		}
 

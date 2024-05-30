@@ -225,4 +225,6 @@ var (
 	ErrAddingToProxy                             = &Error{Code: "AddingToProxy", Message: "error adding '%s' to traefik proxy for service '%s'"}
 	ErrGettingProxyURL                           = &Error{Code: "GettingProxyURL", Message: "error getting proxy URL for service '%s'"}
 	ErrProxyNotInitialized                       = &Error{Code: "ProxyNotInitialized", Message: "proxy not initialized"}
+	ErrAddingTsharkCollectorSidecar              = &Error{Code: "AddingTsharkCollectorSidecar", Message: "error adding tshark collector sidecar for instance '%s'"}
+	ErrCreatingTsharkCollectorInstance           = &Error{Code: "CreatingTsharkCollectorInstance", Message: "error creating tshark collector instance for instance '%s'"}
 )
