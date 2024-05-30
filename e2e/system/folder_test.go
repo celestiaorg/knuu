@@ -35,7 +35,6 @@ func TestFolder(t *testing.T) {
 	})
 
 	// Test logic
-
 	webIP, err := web.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)
