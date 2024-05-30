@@ -19,7 +19,16 @@ func TestFolder(t *testing.T) {
 	}
 
 	// Create and commit the instance
-	web := e2e.AssertCreateInstanceNginxWithVolumeOwner(t, "web")
+	instanceName := "web"
+	web := e2e.AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t, instanceName)
+	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
+	if err != nil {
+		t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+	}
+	err = web.Commit()
+	if err != nil {
+		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
+	}
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))

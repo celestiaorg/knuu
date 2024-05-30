@@ -30,17 +30,16 @@ func TestFolderCached(t *testing.T) {
 	}
 
 	var wgFolders sync.WaitGroup
-	for i, instance := range instances {
+	for _, instance := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(instance *knuu.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
 			err := instance.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
 			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+				t.Errorf("Error adding file to '%v': %v", instance.Name(), err)
 			}
-		}(i, instance)
+		}(instance)
 	}
 	wgFolders.Wait()
 

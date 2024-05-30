@@ -19,8 +19,8 @@ const (
 	nginxPath = "/usr/share/nginx/html"
 )
 
-// AssertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests.
-func AssertCreateInstanceNginxWithVolumeOwner(t *testing.T, instanceName string) *knuu.Instance {
+// AssertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests but doesn't call commit.
+func AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t *testing.T, instanceName string) *knuu.Instance {
 	instance, err := knuu.NewInstance(instanceName)
 	if err != nil {
 		t.Fatalf("Error creating instance '%v': %v", instanceName, err)
@@ -41,7 +41,13 @@ func AssertCreateInstanceNginxWithVolumeOwner(t *testing.T, instanceName string)
 	if err != nil {
 		t.Fatalf("Error adding volume: %v", err)
 	}
-	err = instance.Commit()
+	return instance
+}
+
+// AssertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests.
+func AssertCreateInstanceNginxWithVolumeOwner(t *testing.T, instanceName string) *knuu.Instance {
+	instance := AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t, instanceName)
+	err := instance.Commit()
 	if err != nil {
 		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
 	}
