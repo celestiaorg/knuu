@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testFilePerms = 0600
+
 func TestCreateTarGz(t *testing.T) {
 	testDir := t.TempDir()
 	expectedFiles := map[string]*struct{}{
@@ -22,10 +24,10 @@ func TestCreateTarGz(t *testing.T) {
 	}
 	for file := range expectedFiles {
 		filePath := filepath.Join(testDir, file)
-		err := os.MkdirAll(filepath.Dir(filePath), 0600)
+		err := os.MkdirAll(filepath.Dir(filePath), testFilePerms)
 		require.NoError(t, err, "Failed to create directory: %s", filepath.Dir(filePath))
 
-		err = os.WriteFile(filePath, []byte(file), 0600)
+		err = os.WriteFile(filePath, []byte(file), testFilePerms)
 		require.NoError(t, err, "Failed to create file: %s", filePath)
 	}
 
