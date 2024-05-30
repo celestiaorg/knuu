@@ -22,7 +22,7 @@ func New(code, message string) *Error {
 // It returns true if the error is the same as the given error
 // it checks the error codes for comparison
 func Is(err1, err2 error) bool {
-	if err1 == nil {
+	if err1 == nil || err2 == nil {
 		return false
 	}
 	e1, ok1 := err1.(*Error)
