@@ -9,7 +9,7 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 	if err != nil {
 		return nil, err
 	}
-	if tsharkCollector.SetImage(ctx, "ttl.sh/68d00fc2-c488-4e3a-a787-5c0e8c8135d9:24h") != nil {
+	if tsharkCollector.SetImage(ctx, "ghcr.io/celestiaorg/tshark-s3:pr-5") != nil {
 		return nil, err
 	}
 	if tsharkCollector.Commit() != nil {
