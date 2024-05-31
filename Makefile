@@ -1,6 +1,7 @@
 pkgs := $(shell go list ./...)
 run := .
 count := 1
+timeout := 120m
 
 ## help: Show this help message
 help: Makefile
@@ -59,5 +60,5 @@ vet:
 
 ## test: Run the testsuite
 test: vet 
-	KNUU_TIMEOUT=120m go test -v $(pkgs) -run $(run) -count=$(count) -timeout 120m
+	KNUU_TIMEOUT=120m go test -v $(pkgs) -run $(run) -count=$(count) -timeout $(timeout)
 .PHONY: test

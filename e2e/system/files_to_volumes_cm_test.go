@@ -1,4 +1,4 @@
-package basic
+package system
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -44,7 +45,7 @@ func TestNoVolumesNoFiles(t *testing.T) {
 
 	// Cleanup
 	t.Cleanup(func() {
-		err := assertCleanupInstance(t, instance)
+		err := e2e.AssertCleanupInstance(t, instance)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}
@@ -110,7 +111,7 @@ func TestOneVolumeNoFiles(t *testing.T) {
 
 	// Cleanup
 	t.Cleanup(func() {
-		err := assertCleanupInstance(t, instance)
+		err := e2e.AssertCleanupInstance(t, instance)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}
@@ -156,7 +157,7 @@ func TestNoVolumesOneFile(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -187,7 +188,7 @@ func TestNoVolumesOneFile(t *testing.T) {
 
 	// Cleanup
 	t.Cleanup(func() {
-		err := assertCleanupInstances(t, executor, instances)
+		err := e2e.AssertCleanupInstances(t, executor, instances)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}
@@ -239,7 +240,7 @@ func TestOneVolumeOneFile(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -268,7 +269,7 @@ func TestOneVolumeOneFile(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Cleanup
-		err := assertCleanupInstances(t, executor, instances)
+		err := e2e.AssertCleanupInstances(t, executor, instances)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}
@@ -320,7 +321,7 @@ func TestOneVolumeTwoFiles(t *testing.T) {
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -352,7 +353,7 @@ func TestOneVolumeTwoFiles(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Cleanup
-		err := assertCleanupInstances(t, executor, instances)
+		err := e2e.AssertCleanupInstances(t, executor, instances)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}

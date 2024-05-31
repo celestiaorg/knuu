@@ -1,9 +1,8 @@
-package basic
+package system
 
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -12,14 +11,11 @@ import (
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-// This test is just an example to show how to
-// setup the test instance to be built from a git repo
 func TestBuildFromGit(t *testing.T) {
 	t.Parallel()
-	// Setup
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
-	defer cancel()
+	// Setup
+	ctx := context.Background()
 
 	// The default image builder is kaniko here
 	kn, err := knuu.New(ctx)
@@ -30,9 +26,8 @@ func TestBuildFromGit(t *testing.T) {
 
 	// This is a blocking call which builds the image from git repo
 	err = sampleInstance.SetGitRepo(ctx, builder.GitContext{
-		Repo:   "https://github.com/celestiaorg/celestia-app.git",
-		Branch: "main",
-		// Commit:   "5ce94f4f010e366df301d25cd5d797c3147ff884",
+		Repo:     "https://github.com/celestiaorg/knuu.git",
+		Branch:   "test/build-from-git", // This branch has a Dockerfile and is protected as to not be deleted
 		Username: "",
 		Password: "",
 	})
