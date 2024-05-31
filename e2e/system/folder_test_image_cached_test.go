@@ -1,4 +1,4 @@
-package basic
+package system
 
 import (
 	"fmt"
@@ -7,43 +7,45 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestFileCached(t *testing.T) {
+func TestFolderCached(t *testing.T) {
 	t.Parallel()
+
 	// Setup
 	executor, err := knuu.NewExecutor()
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
 
+	// Test logic
 	const numberOfInstances = 10
 	instances := make([]*knuu.Instance, numberOfInstances)
 
 	for i := 0; i < numberOfInstances; i++ {
 		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = assertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
 	}
 
 	var wgFolders sync.WaitGroup
-	for i, instance := range instances {
+	for _, instance := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(instance *knuu.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+			err := instance.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
 			if err != nil {
-				t.Errorf("Error adding file to '%v': %v", instanceName, err)
+				t.Errorf("Error adding file to '%v': %v", instance.Name(), err)
 			}
-		}(i, instance)
+		}(instance)
 	}
 	wgFolders.Wait()
 
+	// Cleanup
 	t.Cleanup(func() {
-		// Cleanup
-		err := assertCleanupInstances(t, executor, instances)
+		err := e2e.AssertCleanupInstances(t, executor, instances)
 		if err != nil {
 			t.Fatalf("Error cleaning up: %v", err)
 		}

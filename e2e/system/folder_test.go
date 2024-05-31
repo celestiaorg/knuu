@@ -1,4 +1,4 @@
-package basic
+package system
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -19,10 +20,15 @@ func TestFolder(t *testing.T) {
 	}
 
 	// Create and commit the instance
-	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
-	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	instanceName := "web"
+	web := e2e.AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t, instanceName)
+	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
 	if err != nil {
-		t.Fatalf("Error adding file to '%v': %v", "web", err)
+		t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+	}
+	err = web.Commit()
+	if err != nil {
+		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
 	}
 
 	t.Cleanup(func() {
