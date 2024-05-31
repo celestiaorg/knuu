@@ -32,7 +32,7 @@ func Is(err1, err2 error) bool {
 
 func (e *Error) Error() string {
 	// We need to keep this condition to avoid infinite recursion
-	if e.err == e {
+	if errors.Is(e.err, e) {
 		return e.message
 	}
 
