@@ -108,22 +108,14 @@ func fileExists(path string) bool {
 // Otherwise, it returns the configuration from the kubeconfig file.
 //
 // The QPS and Burst settings are increased to allow for higher throughput and concurrency.
-func getClusterConfig() (*rest.Config, error) {
+func getClusterConfig() (config *rest.Config, err error) {
 	if isClusterEnvironment() {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-
-		// Increase QPS and Burst settings
-		config.QPS = CustomQPS
-		config.Burst = CustomBurst
-		return config, nil
+		config, err = rest.InClusterConfig()
+	} else {
+		// build the configuration from the kubeconfig file
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
-
-	// build the configuration from the kubeconfig file
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, err
 	}
