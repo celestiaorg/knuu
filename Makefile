@@ -60,5 +60,5 @@ vet:
 
 ## test: Run the testsuite
 test: vet 
-	KNUU_TIMEOUT=120m go test -v $(pkgs) -run $(run) -count=$(count) -timeout $(timeout)
+	go test -v $(pkgs) -run $(run) -count=$(count) -timeout $(timeout)
 .PHONY: test
