@@ -5,15 +5,24 @@ type InstanceType int
 
 // Possible types of the instance
 const (
-	BasicInstance InstanceType = iota
+	UnknownInstance InstanceType = iota
+	BasicInstance
 	ExecutorInstance
 	TimeoutHandlerInstance
 )
 
 // String returns the string representation of the type
 func (s InstanceType) String() string {
-	if s < 0 || s > 2 {
-		return "Unknown"
+	switch s {
+	case BasicInstance:
+		return "BasicInstance"
+	case ExecutorInstance:
+		return "ExecutorInstance"
+	case TimeoutHandlerInstance:
+		return "TimeoutHandlerInstance"
+	case UnknownInstance:
+	default:
 	}
-	return [...]string{"BasicInstance", "ExecutorInstance", "TimeoutHandlerInstance"}[s]
+	return "Unknown"
+
 }
