@@ -1,53 +1,33 @@
 package kaniko
 
 import (
-	"fmt"
+	"github.com/celestiaorg/knuu/pkg/errors"
 )
 
-type Error struct {
-	Code    string
-	Message string
-	Err     error
-}
-
-func (e *Error) Error() string {
-	if e.Err == e {
-		return e.Message
-	}
-
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-	return e.Message
-}
-
-func (e *Error) Wrap(err error) error {
-	e.Err = err
-	return e
-}
+type Error = errors.Error
 
 var (
-	ErrBuildFailed                      = &Error{Code: "BuildFailed", Message: "build failed"}
-	ErrBuildContextEmpty                = &Error{Code: "BuildContextEmpty", Message: "build context cannot be empty"}
-	ErrCleaningUp                       = &Error{Code: "CleaningUp", Message: "error cleaning up"}
-	ErrCreatingJob                      = &Error{Code: "CreatingJob", Message: "error creating Job"}
-	ErrDeletingJob                      = &Error{Code: "DeletingJob", Message: "error deleting Job"}
-	ErrDeletingPods                     = &Error{Code: "DeletingPods", Message: "error deleting Pods"}
-	ErrGeneratingUUID                   = &Error{Code: "GeneratingUUID", Message: "error generating UUID"}
-	ErrGettingContainerLogs             = &Error{Code: "GettingContainerLogs", Message: "error getting container logs"}
-	ErrGettingPodFromJob                = &Error{Code: "GettingPodFromJob", Message: "error getting Pod from Job"}
-	ErrListingJobs                      = &Error{Code: "ListingJobs", Message: "error listing Jobs"}
-	ErrListingPods                      = &Error{Code: "ListingPods", Message: "error listing Pods"}
-	ErrNoContainersFound                = &Error{Code: "NoContainersFound", Message: "no containers found"}
-	ErrNoPodsFound                      = &Error{Code: "NoPodsFound", Message: "no Pods found"}
-	ErrPreparingJob                     = &Error{Code: "PreparingJob", Message: "error preparing Job"}
-	ErrWaitingJobCompletion             = &Error{Code: "WaitingJobCompletion", Message: "error waiting for Job completion"}
-	ErrWatchingChannelCloseUnexpectedly = &Error{Code: "WatchingChannelCloseUnexpectedly", Message: "watch channel closed unexpectedly"}
-	ErrWatchingJob                      = &Error{Code: "WatchingJob", Message: "error watching Job"}
-	ErrContextCancelled                 = &Error{Code: "ContextCancelled", Message: "context cancelled"}
-	ErrMountingDir                      = &Error{Code: "MountingDir", Message: "error mounting directory"}
-	ErrMinioNotConfigured               = &Error{Code: "MinioNotConfigured", Message: "Minio service is not configured"}
-	ErrMinioDeploymentFailed            = &Error{Code: "MinioDeploymentFailed", Message: "Minio deployment failed"}
-	ErrDeletingMinioContent             = &Error{Code: "DeletingMinioContent", Message: "error deleting Minio content"}
-	ErrParsingQuantity                  = &Error{Code: "ParsingQuantity", Message: "error parsing quantity"}
+	ErrBuildFailed                      = errors.New("BuildFailed", "build failed")
+	ErrBuildContextEmpty                = errors.New("BuildContextEmpty", "build context cannot be empty")
+	ErrCleaningUp                       = errors.New("CleaningUp", "error cleaning up")
+	ErrCreatingJob                      = errors.New("CreatingJob", "error creating Job")
+	ErrDeletingJob                      = errors.New("DeletingJob", "error deleting Job")
+	ErrDeletingPods                     = errors.New("DeletingPods", "error deleting Pods")
+	ErrGeneratingUUID                   = errors.New("GeneratingUUID", "error generating UUID")
+	ErrGettingContainerLogs             = errors.New("GettingContainerLogs", "error getting container logs")
+	ErrGettingPodFromJob                = errors.New("GettingPodFromJob", "error getting Pod from Job")
+	ErrListingJobs                      = errors.New("ListingJobs", "error listing Jobs")
+	ErrListingPods                      = errors.New("ListingPods", "error listing Pods")
+	ErrNoContainersFound                = errors.New("NoContainersFound", "no containers found")
+	ErrNoPodsFound                      = errors.New("NoPodsFound", "no Pods found")
+	ErrPreparingJob                     = errors.New("PreparingJob", "error preparing Job")
+	ErrWaitingJobCompletion             = errors.New("WaitingJobCompletion", "error waiting for Job completion")
+	ErrWatchingChannelCloseUnexpectedly = errors.New("WatchingChannelCloseUnexpectedly", "watch channel closed unexpectedly")
+	ErrWatchingJob                      = errors.New("WatchingJob", "error watching Job")
+	ErrContextCancelled                 = errors.New("ContextCancelled", "context cancelled")
+	ErrMountingDir                      = errors.New("MountingDir", "error mounting directory")
+	ErrMinioNotConfigured               = errors.New("MinioNotConfigured", "Minio service is not configured")
+	ErrMinioDeploymentFailed            = errors.New("MinioDeploymentFailed", "Minio deployment failed")
+	ErrDeletingMinioContent             = errors.New("DeletingMinioContent", "error deleting Minio content")
+	ErrParsingQuantity                  = errors.New("ParsingQuantity", "error parsing quantity")
 )
