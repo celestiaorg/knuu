@@ -35,7 +35,7 @@ func TestFileCached(t *testing.T) {
 			// adding the folder after the Commit, it will help us to use a cached image.
 			err = instance.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 			if err != nil {
-				t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+				t.Errorf("Error adding file to '%v': %v", instanceName, err)
 			}
 		}(i, instance)
 	}

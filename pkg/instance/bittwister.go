@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/bittwister/sdk"
 )
 
 const (

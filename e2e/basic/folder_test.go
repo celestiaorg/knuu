@@ -3,9 +3,10 @@ package basic
 import (
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestFolder(t *testing.T) {
@@ -19,13 +20,16 @@ func TestFolder(t *testing.T) {
 
 	// Create and commit the instance
 	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
+	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	if err != nil {
+		t.Fatalf("Error adding file to '%v': %v", "web", err)
+	}
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic
-
 	webIP, err := web.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)

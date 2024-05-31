@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
-	v1 "k8s.io/api/core/v1"
 )
 
 const (
