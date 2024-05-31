@@ -19,17 +19,16 @@ func New(code, message string) *Error {
 	}
 }
 
-// It returns true if the error is the same as the given error
-// it checks the error codes for comparison
-func Is(err1, err2 error) bool {
-	if err1 == nil || err2 == nil {
+// Is method to implement the interface for errors.Is
+func (e *Error) Is(target error) bool {
+	if target == nil {
 		return false
 	}
-	e1, ok1 := err1.(*Error)
-	e2, ok2 := err2.(*Error)
-	return ok1 && ok2 && e1.code == e2.code
+	t, ok := target.(*Error)
+	return ok && t.Code() == e.Code()
 }
 
+// Error method to implement the interface for errors.Error
 func (e *Error) Error() string {
 	// We need to keep this condition to avoid infinite recursion
 	if errors.Is(e.err, e) {

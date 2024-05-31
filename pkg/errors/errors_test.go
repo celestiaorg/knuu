@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,6 +50,32 @@ func TestError_Error(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.errorObj.Error())
 		})
+	}
+}
+
+func TestError_RecursiveError(t *testing.T) {
+	done := make(chan bool)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Test panicked: %v", r)
+				done <- false
+			}
+		}()
+
+		err := New("123", "recursive error")
+		err.err = err // Simulate recursion by setting err to itself
+
+		expected := "recursive error"
+		assert.Equal(t, expected, err.Error())
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Test completed
+	case <-time.After(1 * time.Second):
+		t.Error("Test timed out, possible infinite recursion")
 	}
 }
 
@@ -145,7 +172,7 @@ func TestIs(t *testing.T) {
 			name:     "both nil errors",
 			err1:     nil,
 			err2:     nil,
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "first error nil",
@@ -193,7 +220,7 @@ func TestIs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, Is(tt.err1, tt.err2))
+			assert.Equal(t, tt.expected, errors.Is(tt.err1, tt.err2))
 		})
 	}
 }
