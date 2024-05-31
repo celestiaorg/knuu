@@ -117,6 +117,7 @@ func getClusterConfig() (config *rest.Config, err error) {
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 	if err != nil {
+		logrus.Errorf("Error getting kubernetes config: %v", err)
 		return nil, err
 	}
 
