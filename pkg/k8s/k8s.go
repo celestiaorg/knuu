@@ -26,6 +26,12 @@ const (
 
 	// waitRetry is the time to wait between retries for a readiness checking
 	waitRetry = 2 * time.Second
+
+	// CustomQPS is the QPS to use for the Kubernetes client, DefaultQPS: 5
+	CustomQPS = 100
+
+	// CustomBurst is the Burst to use for the Kubernetes client, DefaultBurst: 10.
+	CustomBurst = 200
 )
 
 type Client struct {
@@ -98,14 +104,27 @@ func fileExists(path string) bool {
 }
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.
-func getClusterConfig() (*rest.Config, error) {
+// If the program is running in a Kubernetes cluster, it returns the in-cluster configuration.
+// Otherwise, it returns the configuration from the kubeconfig file.
+//
+// The QPS and Burst settings are increased to allow for higher throughput and concurrency.
+func getClusterConfig() (config *rest.Config, err error) {
 	if isClusterEnvironment() {
-		return rest.InClusterConfig()
+		config, err = rest.InClusterConfig()
+	} else {
+		// build the configuration from the kubeconfig file
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	if err != nil {
+		logrus.Errorf("Error getting kubernetes config: %v", err)
+		return nil, err
 	}
 
-	// build the configuration from the kubeconfig file
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	// Increase QPS and Burst settings
+	config.QPS = CustomQPS
+	config.Burst = CustomBurst
+	return config, nil
 }
 
 // precompile the regular expression to avoid recompiling it on every function call
