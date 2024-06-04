@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
@@ -13,6 +12,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 func (suite *TestSuite) TestCreateReplicaSet() {

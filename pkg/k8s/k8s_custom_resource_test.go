@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,6 +12,8 @@ import (
 	discfake "k8s.io/client-go/discovery/fake"
 	dynfake "k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 func (suite *TestSuite) TestCreateCustomResource() {

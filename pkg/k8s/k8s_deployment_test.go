@@ -5,13 +5,14 @@ import (
 	"errors"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 func (suite *TestSuite) TestWaitForDeployment() {
