@@ -1,4 +1,4 @@
-package basic
+package e2e
 
 import (
 	"os"
@@ -7,8 +7,8 @@ import (
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-// assertCleanupInstance is a helper function that cleans up a single instance.
-func assertCleanupInstance(t *testing.T, instance *knuu.Instance) error {
+// AssertCleanupInstance is a helper function that cleans up a single instance.
+func AssertCleanupInstance(t *testing.T, instance *knuu.Instance) error {
 	if instance == nil {
 		t.Fatal("Instance is nil")
 	}
@@ -19,8 +19,8 @@ func assertCleanupInstance(t *testing.T, instance *knuu.Instance) error {
 	return nil
 }
 
-// assertCleanupInstances is a helper function that cleans up a list of instances.
-func assertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*knuu.Instance) error {
+// AssertCleanupInstances is a helper function that cleans up a list of instances.
+func AssertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*knuu.Instance) error {
 	if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
 		t.Log("Skipping cleanup")
 		return nil

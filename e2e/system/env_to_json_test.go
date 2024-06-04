@@ -1,4 +1,4 @@
-package basic
+package system
 
 import (
 	"encoding/json"
@@ -15,8 +15,8 @@ import (
 
 func TestEnvToJSON(t *testing.T) {
 	t.Parallel()
-	// Setup
 
+	// Setup
 	executor, err := knuu.NewExecutor()
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
@@ -25,15 +25,37 @@ func TestEnvToJSON(t *testing.T) {
 	const numberOfInstances = 2
 	instances := make([]*knuu.Instance, numberOfInstances)
 
-	// get the values from the .env
+	// Define the env vars
+	testEnvVarKey1 := "TESTKEY1"
+	testEnvVarKey2 := "TESTKEY2"
+	testEnvVarKey3 := "TESTKEY3"
+	testEnvVarValue1 := "testvalue1"
+	testEnvVarValue2 := "testvalue2"
+	testEnvVarValue3 := "testvalue3"
 
-	test := os.Getenv("TEST")
-	test2 := os.Getenv("TEST_2")
-	test3 := os.Getenv("TEST_3")
+	// Set the OS env vars
+	setEnv := func(key, value string) {
+		err = os.Setenv(key, value)
+		if err != nil {
+			t.Fatalf("Error setting env var '%v': %v", key, err)
+		}
+	}
+	setEnv(testEnvVarKey1, testEnvVarValue1)
+	setEnv(testEnvVarKey2, testEnvVarValue2)
+	setEnv(testEnvVarKey3, testEnvVarValue3)
+
+	// Define helper function to get env vars
+	getEnv := func(key string) string {
+		value := os.Getenv(key)
+		if value == "" {
+			t.Fatalf("Error getting env var '%v'", key)
+		}
+		return value
+	}
 	jsonBytes, err := json.Marshal(map[string]string{
-		"TEST":   test,
-		"TEST_2": test2,
-		"TEST_3": test3,
+		testEnvVarKey1: getEnv(testEnvVarKey1),
+		testEnvVarKey2: getEnv(testEnvVarKey2),
+		testEnvVarKey3: getEnv(testEnvVarKey3),
 	})
 	if err != nil {
 		t.Fatalf("Error converting env vars to JSON: %v", err)
@@ -110,6 +132,7 @@ func TestEnvToJSON(t *testing.T) {
 			t.Fatalf("Error executing command: %v", err)
 		}
 
-		assert.Equal(t, "{\"TEST\":\"test\",\"TEST_2\":\"test2\",\"TEST_3\":\"test3\"}\n", wget)
+		expected := fmt.Sprintf("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":\"%s\"}\n", testEnvVarKey1, testEnvVarValue1, testEnvVarKey2, testEnvVarValue2, testEnvVarKey3, testEnvVarValue3)
+		assert.Equal(t, expected, wget)
 	}
 }

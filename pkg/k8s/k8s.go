@@ -20,6 +20,12 @@ const (
 
 	// waitRetry is the time to wait between retries for a readiness checking
 	waitRetry = 2 * time.Second
+
+	// CustomQPS is the QPS to use for the Kubernetes client, DefaultQPS: 5
+	CustomQPS = 100
+
+	// CustomBurst is the Burst to use for the Kubernetes client, DefaultBurst: 10.
+	CustomBurst = 200
 )
 
 type Client struct {
