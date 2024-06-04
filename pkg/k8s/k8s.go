@@ -3,18 +3,12 @@ package k8s
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -29,8 +23,8 @@ const (
 )
 
 type Client struct {
-	clientset       *kubernetes.Clientset
-	discoveryClient *discovery.DiscoveryClient
+	clientset       kubernetes.Interface
+	discoveryClient discovery.DiscoveryInterface
 	dynamicClient   dynamic.Interface
 	namespace       string
 }
@@ -75,7 +69,21 @@ func New(ctx context.Context, namespace string) (*Client, error) {
 	return kc, nil
 }
 
-func (c *Client) Clientset() *kubernetes.Clientset {
+func NewCustom(
+	cs kubernetes.Interface,
+	dc discovery.DiscoveryInterface,
+	dC dynamic.Interface,
+	namespace string,
+) *Client {
+	return &Client{
+		clientset:       cs,
+		discoveryClient: dc,
+		dynamicClient:   dC,
+		namespace:       namespace,
+	}
+}
+
+func (c *Client) Clientset() kubernetes.Interface {
 	return c.clientset
 }
 
@@ -87,48 +95,6 @@ func (c *Client) Namespace() string {
 	return c.namespace
 }
 
-// isClusterEnvironment checks if the program is running in a Kubernetes cluster.
-func isClusterEnvironment() bool {
-	return fileExists(tokenPath) && fileExists(certPath)
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// getClusterConfig returns the appropriate Kubernetes cluster configuration.
-func getClusterConfig() (*rest.Config, error) {
-	if isClusterEnvironment() {
-		return rest.InClusterConfig()
-	}
-
-	// build the configuration from the kubeconfig file
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	return clientcmd.BuildConfigFromFlags("", kubeconfig)
-}
-
-// precompile the regular expression to avoid recompiling it on every function call
-var invalidCharsRegexp = regexp.MustCompile(`[^a-z0-9-]+`)
-
-// SanitizeName ensures compliance with Kubernetes DNS-1123 subdomain names. It:
-//  1. Converts the input string to lowercase.
-//  2. Replaces underscores and any non-DNS-1123 compliant characters with hyphens.
-//  3. Trims leading and trailing hyphens.
-//  4. Ensures the name does not exceed 63 characters, trimming excess characters if necessary
-//     and ensuring it does not end with a hyphen after trimming.
-//
-// Use this function to sanitize strings to be used as Kubernetes names for resources.
-func SanitizeName(name string) string {
-	sanitized := strings.ToLower(name)
-	// Replace underscores and any other disallowed characters with hyphens
-	sanitized = invalidCharsRegexp.ReplaceAllString(sanitized, "-")
-	// Trim leading and trailing hyphens
-	sanitized = strings.Trim(sanitized, "-")
-	if len(sanitized) > 63 {
-		sanitized = sanitized[:63]
-		// Ensure it does not end with a hyphen after cutting it to the max length
-		sanitized = strings.TrimRight(sanitized, "-")
-	}
-	return sanitized
+func (c *Client) DiscoveryClient() discovery.DiscoveryInterface {
+	return c.discoveryClient
 }

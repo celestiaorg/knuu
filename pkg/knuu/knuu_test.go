@@ -26,7 +26,7 @@ type mockK8s struct {
 	mock.Mock
 }
 
-func (m *mockK8s) Clientset() *kubernetes.Clientset {
+func (m *mockK8s) Clientset() kubernetes.Interface {
 	return &kubernetes.Clientset{}
 }
 
