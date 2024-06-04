@@ -205,6 +205,7 @@ func (suite *TestSuite) TestIsPodRunning() {
 }
 
 func (suite *TestSuite) TestRunCommandInPod() {
+	suite.T().Skip("not implemented")
 	// TestRunCommandInPod is not implemented.
 	//
 	// The RunCommandInPod function involves complex interactions with the Kubernetes API,
@@ -331,6 +332,7 @@ func (suite *TestSuite) TestDeletePod() {
 }
 
 func (suite *TestSuite) TestPortForwardPod() {
+	suite.T().Skip("not implemented")
 	// TestPortForwardPod is not implemented.
 	//
 	// The PortForwardPod function involves complex interactions with the Kubernetes API
