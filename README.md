@@ -163,7 +163,7 @@ Simple example:
 
 You can find more examples in the following repositories:
 
-- [celestiaorg/knuu](https://github.com/celestiaorg/knuu/e2e)
+- [celestiaorg/knuu](https://github.com/celestiaorg/knuu/tree/main/e2e)
 - [celestiaorg/celestia-app](https://github.com/celestiaorg/celestia-app/tree/main/test/e2e)
 
 ---
