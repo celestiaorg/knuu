@@ -22,7 +22,7 @@ func (suite *TestSuite) TestCreatePersistentVolumeClaim() {
 		pvcName     string
 		labels      map[string]string
 		size        resource.Quantity
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
@@ -30,7 +30,7 @@ func (suite *TestSuite) TestCreatePersistentVolumeClaim() {
 			pvcName:     "test-pvc",
 			labels:      map[string]string{"app": "test"},
 			size:        resource.MustParse("1Gi"),
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
@@ -38,10 +38,12 @@ func (suite *TestSuite) TestCreatePersistentVolumeClaim() {
 			pvcName: "error-pvc",
 			labels:  map[string]string{"app": "error"},
 			size:    resource.MustParse("1Gi"),
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrCreatingPersistentVolumeClaim.Wrap(errors.New("internal server error")),
 		},
@@ -49,7 +51,7 @@ func (suite *TestSuite) TestCreatePersistentVolumeClaim() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.CreatePersistentVolumeClaim(context.Background(), tt.pvcName, tt.labels, tt.size)
 			if tt.expectedErr != nil {
@@ -67,52 +69,62 @@ func (suite *TestSuite) TestDeletePersistentVolumeClaim() {
 	tests := []struct {
 		name        string
 		pvcName     string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:    "successful deletion",
 			pvcName: "test-pvc",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.Fake.PrependReactor("get", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &v1.PersistentVolumeClaim{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "test",
-							Name:      "test-pvc",
-						},
-					}, nil
-				})
-				clientset.Fake.PrependReactor("delete", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, &v1.PersistentVolumeClaim{
+								ObjectMeta: metav1.ObjectMeta{
+									Namespace: "test",
+									Name:      "test-pvc",
+								},
+							}, nil
+						})
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:    "pvc not found",
 			pvcName: "missing-pvc",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.Fake.PrependReactor("get", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("not found")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("not found")
+						})
 			},
 			expectedErr: nil, // it should skip deletion if pvc not found
 		},
 		{
 			name:    "client error on delete",
 			pvcName: "error-pvc",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.Fake.PrependReactor("get", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &v1.PersistentVolumeClaim{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "test",
-							Name:      "error-pvc",
-						},
-					}, nil
-				})
-				clientset.Fake.PrependReactor("delete", "persistentvolumeclaims", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, &v1.PersistentVolumeClaim{
+								ObjectMeta: metav1.ObjectMeta{
+									Namespace: "test",
+									Name:      "error-pvc",
+								},
+							}, nil
+						})
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrDeletingPersistentVolumeClaim.Wrap(errors.New("internal server error")),
 		},
@@ -120,7 +132,7 @@ func (suite *TestSuite) TestDeletePersistentVolumeClaim() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeletePersistentVolumeClaim(context.Background(), tt.pvcName)
 			if tt.expectedErr != nil {

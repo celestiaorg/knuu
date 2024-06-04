@@ -19,15 +19,15 @@ func (suite *TestSuite) TestGetConfigMap() {
 	tests := []struct {
 		name          string
 		configMapName string
-		setupMock     func(*fake.Clientset)
+		setupMock     func()
 		expectedErr   error
 		expectedCM    *v1.ConfigMap
 	}{
 		{
 			name:          "successful retrieval",
 			configMapName: "test-configmap",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createConfigMap(clientset, "test-configmap", suite.namespace)
+			setupMock: func() {
+				err := suite.createConfigMap("test-configmap")
 				require.NoError(suite.T(), err)
 			},
 			expectedErr: nil,
@@ -41,7 +41,7 @@ func (suite *TestSuite) TestGetConfigMap() {
 		{
 			name:          "configmap not found",
 			configMapName: "non-existent-configmap",
-			setupMock: func(clientset *fake.Clientset) {
+			setupMock: func() {
 				// No setup needed for this case
 			},
 			expectedErr: k8s.ErrGettingConfigmap.WithParams("non-existent-configmap").
@@ -51,10 +51,12 @@ func (suite *TestSuite) TestGetConfigMap() {
 		{
 			name:          "client error",
 			configMapName: "error-configmap",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "configmaps",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrGettingConfigmap.WithParams("error-configmap").
 				Wrap(errors.New("internal server error")),
@@ -64,7 +66,7 @@ func (suite *TestSuite) TestGetConfigMap() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			cm, err := suite.client.GetConfigMap(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
@@ -83,15 +85,15 @@ func (suite *TestSuite) TestConfigMapExists() {
 	tests := []struct {
 		name          string
 		configMapName string
-		setupMock     func(*fake.Clientset)
+		setupMock     func()
 		expectedExist bool
 		expectedErr   error
 	}{
 		{
 			name:          "configmap exists",
 			configMapName: "existing-configmap",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createConfigMap(clientset, "existing-configmap", suite.namespace)
+			setupMock: func() {
+				err := suite.createConfigMap("existing-configmap")
 				require.NoError(suite.T(), err)
 			},
 			expectedExist: true,
@@ -100,17 +102,19 @@ func (suite *TestSuite) TestConfigMapExists() {
 		{
 			name:          "configmap does not exist",
 			configMapName: "non-existent-configmap",
-			setupMock:     func(clientset *fake.Clientset) {},
+			setupMock:     func() {},
 			expectedExist: false,
 			expectedErr:   nil,
 		},
 		{
 			name:          "client error",
 			configMapName: "error-configmap",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "configmaps",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedExist: false,
 			expectedErr: k8s.ErrGettingConfigmap.WithParams("error-configmap").
@@ -120,7 +124,7 @@ func (suite *TestSuite) TestConfigMapExists() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			exists, err := suite.client.ConfigMapExists(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
@@ -139,7 +143,7 @@ func (suite *TestSuite) TestCreateConfigMap() {
 	tests := []struct {
 		name        string
 		configMap   *v1.ConfigMap
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
@@ -151,7 +155,7 @@ func (suite *TestSuite) TestCreateConfigMap() {
 				},
 				Data: map[string]string{"key": "value"},
 			},
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
@@ -162,8 +166,8 @@ func (suite *TestSuite) TestCreateConfigMap() {
 					Namespace: suite.namespace,
 				},
 			},
-			setupMock: func(clientset *fake.Clientset) {
-				err := createConfigMap(clientset, "existing-configmap", suite.namespace)
+			setupMock: func() {
+				err := suite.createConfigMap("existing-configmap")
 				require.NoError(suite.T(), err)
 			},
 			expectedErr: k8s.ErrConfigmapAlreadyExists.WithParams("existing-configmap").
@@ -177,10 +181,12 @@ func (suite *TestSuite) TestCreateConfigMap() {
 					Namespace: suite.namespace,
 				},
 			},
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "configmaps", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "configmaps",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrCreatingConfigmap.WithParams("error-configmap").
 				Wrap(errors.New("internal server error")),
@@ -189,7 +195,7 @@ func (suite *TestSuite) TestCreateConfigMap() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			cm, err := suite.client.CreateConfigMap(context.Background(), tt.configMap.Name, tt.configMap.Labels, tt.configMap.Data)
 			if tt.expectedErr != nil {
@@ -208,14 +214,14 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 	tests := []struct {
 		name          string
 		configMapName string
-		setupMock     func(*fake.Clientset)
+		setupMock     func()
 		expectedErr   error
 	}{
 		{
 			name:          "successful deletion",
 			configMapName: "existing-configmap",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createConfigMap(clientset, "existing-configmap", suite.namespace)
+			setupMock: func() {
+				err := suite.createConfigMap("existing-configmap")
 				require.NoError(suite.T(), err)
 			},
 			expectedErr: nil,
@@ -223,22 +229,24 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 		{
 			name:          "configmap does not exist",
 			configMapName: "non-existent-configmap",
-			setupMock:     func(clientset *fake.Clientset) {},
+			setupMock:     func() {},
 			expectedErr: k8s.ErrConfigmapDoesNotExist.WithParams("non-existent-configmap").
 				Wrap(errors.New("configmap does not exist")),
 		},
 		{
 			name:          "client error",
 			configMapName: "error-configmap",
-			setupMock: func(clientset *fake.Clientset) {
+			setupMock: func() {
 				// if it does not exist, it return nil as error
 				// so we need to add it to the fake client to be able to pass the existence check
-				err := createConfigMap(clientset, "error-configmap", suite.namespace)
+				err := suite.createConfigMap("error-configmap")
 				require.NoError(suite.T(), err)
 
-				clientset.PrependReactor("delete", "configmaps", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "configmaps",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrDeletingConfigmap.WithParams("error-configmap").
 				Wrap(errors.New("internal server error")),
@@ -247,7 +255,7 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeleteConfigMap(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
@@ -261,11 +269,11 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 	}
 }
 
-func createConfigMap(clientset *fake.Clientset, name, namespace string) error {
-	_, err := clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), &v1.ConfigMap{
+func (suite *TestSuite) createConfigMap(name string) error {
+	_, err := suite.client.Clientset().CoreV1().ConfigMaps(suite.namespace).Create(context.Background(), &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: suite.namespace,
 		},
 	}, metav1.CreateOptions{})
 	return err

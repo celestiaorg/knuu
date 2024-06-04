@@ -19,33 +19,37 @@ func (suite *TestSuite) TestCreateNamespace() {
 	tests := []struct {
 		name        string
 		namespace   string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:        "successful creation",
 			namespace:   "new-namespace",
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
 			name:      "namespace already exists",
 			namespace: "existing-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:      "client error",
 			namespace: "error-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, k8s.ErrCreatingNamespace.WithParams("error-namespace").
-						Wrap(errors.New("internal server error"))
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, k8s.ErrCreatingNamespace.WithParams("error-namespace").
+								Wrap(errors.New("internal server error"))
+						})
 			},
 			expectedErr: k8s.ErrCreatingNamespace.WithParams("error-namespace").
 				Wrap(errors.New("internal server error")),
@@ -54,7 +58,7 @@ func (suite *TestSuite) TestCreateNamespace() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.CreateNamespace(context.Background(), tt.namespace)
 			if tt.expectedErr != nil {
@@ -72,14 +76,14 @@ func (suite *TestSuite) TestDeleteNamespace() {
 	tests := []struct {
 		name        string
 		namespace   string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:      "successful deletion",
 			namespace: "existing-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createNamespace(clientset, "existing-namespace")
+			setupMock: func() {
+				err := suite.createNamespace("existing-namespace")
 				require.NoError(suite.T(), err)
 			},
 			expectedErr: nil,
@@ -87,17 +91,19 @@ func (suite *TestSuite) TestDeleteNamespace() {
 		{
 			name:      "namespace not found",
 			namespace: "non-existent-namespace",
-			setupMock: func(clientset *fake.Clientset) {},
+			setupMock: func() {},
 			expectedErr: k8s.ErrDeletingNamespace.WithParams("non-existent-namespace").
 				Wrap(errors.New("namespaces \"non-existent-namespace\" not found")),
 		},
 		{
 			name:      "client error",
 			namespace: "error-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrDeletingNamespace.WithParams("error-namespace").
 				Wrap(errors.New("internal server error")),
@@ -106,7 +112,7 @@ func (suite *TestSuite) TestDeleteNamespace() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeleteNamespace(context.Background(), tt.namespace)
 			if tt.expectedErr != nil {
@@ -124,15 +130,15 @@ func (suite *TestSuite) TestGetNamespace() {
 	tests := []struct {
 		name        string
 		namespace   string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 		expectedNS  *corev1.Namespace
 	}{
 		{
 			name:      "successful retrieval",
 			namespace: "existing-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createNamespace(clientset, "existing-namespace")
+			setupMock: func() {
+				err := suite.createNamespace("existing-namespace")
 				require.NoError(suite.T(), err)
 			},
 			expectedErr: nil,
@@ -145,10 +151,12 @@ func (suite *TestSuite) TestGetNamespace() {
 		{
 			name:      "namespace not found",
 			namespace: "non-existent-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("namespaces \"non-existent-namespace\" not found")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("namespaces \"non-existent-namespace\" not found")
+						})
 			},
 			expectedErr: k8s.ErrGettingNamespace.WithParams("non-existent-namespace").
 				Wrap(errors.New("namespaces \"non-existent-namespace\" not found")),
@@ -157,10 +165,12 @@ func (suite *TestSuite) TestGetNamespace() {
 		{
 			name:      "client error",
 			namespace: "error-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrGettingNamespace.WithParams("error-namespace").
 				Wrap(errors.New("internal server error")),
@@ -170,7 +180,7 @@ func (suite *TestSuite) TestGetNamespace() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			ns, err := suite.client.GetNamespace(context.Background(), tt.namespace)
 			if tt.expectedErr != nil {
@@ -189,14 +199,14 @@ func (suite *TestSuite) TestNamespaceExists() {
 	tests := []struct {
 		name          string
 		namespace     string
-		setupMock     func(*fake.Clientset)
+		setupMock     func()
 		expectedExist bool
 	}{
 		{
 			name:      "namespace exists",
 			namespace: "existing-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				err := createNamespace(clientset, "existing-namespace")
+			setupMock: func() {
+				err := suite.createNamespace("existing-namespace")
 				require.NoError(suite.T(), err)
 			},
 			expectedExist: true,
@@ -204,16 +214,18 @@ func (suite *TestSuite) TestNamespaceExists() {
 		{
 			name:          "namespace does not exist",
 			namespace:     "non-existent-namespace",
-			setupMock:     func(clientset *fake.Clientset) {},
+			setupMock:     func() {},
 			expectedExist: false,
 		},
 		{
 			name:      "client error",
 			namespace: "error-namespace",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "namespaces", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "namespaces",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedExist: false,
 		},
@@ -221,7 +233,7 @@ func (suite *TestSuite) TestNamespaceExists() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			exists := suite.client.NamespaceExists(context.Background(), tt.namespace)
 			assert.Equal(suite.T(), tt.expectedExist, exists)
@@ -229,8 +241,8 @@ func (suite *TestSuite) TestNamespaceExists() {
 	}
 }
 
-func createNamespace(clientset *fake.Clientset, name string) error {
-	_, err := clientset.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
+func (suite *TestSuite) createNamespace(name string) error {
+	_, err := suite.client.Clientset().CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},

@@ -19,30 +19,34 @@ func (suite *TestSuite) TestWaitForDeployment() {
 	tests := []struct {
 		name           string
 		deploymentName string
-		setupMock      func(*fake.Clientset)
+		setupMock      func()
 		expectedErr    error
 	}{
 		{
 			name:           "deployment becomes ready",
 			deploymentName: "ready-deployment",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "deployments", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &appsv1.Deployment{
-						Status: appsv1.DeploymentStatus{
-							ReadyReplicas: 1,
-						},
-					}, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "deployments",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, &appsv1.Deployment{
+								Status: appsv1.DeploymentStatus{
+									ReadyReplicas: 1,
+								},
+							}, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:           "deployment not found",
 			deploymentName: "non-existent-deployment",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "deployments", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("deployments \"non-existent-deployment\" not found")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "deployments",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("deployments \"non-existent-deployment\" not found")
+						})
 			},
 			expectedErr: k8s.ErrWaitingForDeployment.WithParams("non-existent-deployment").
 				Wrap(errors.New("deployments \"non-existent-deployment\" not found")),
@@ -50,10 +54,12 @@ func (suite *TestSuite) TestWaitForDeployment() {
 		{
 			name:           "client error",
 			deploymentName: "error-deployment",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "deployments", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "deployments",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrWaitingForDeployment.WithParams("error-deployment").
 				Wrap(errors.New("internal server error")),
@@ -61,14 +67,16 @@ func (suite *TestSuite) TestWaitForDeployment() {
 		{
 			name:           "context timeout",
 			deploymentName: "timeout-deployment",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "deployments", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &appsv1.Deployment{
-						Status: appsv1.DeploymentStatus{
-							ReadyReplicas: 0,
-						},
-					}, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "deployments",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, &appsv1.Deployment{
+								Status: appsv1.DeploymentStatus{
+									ReadyReplicas: 0,
+								},
+							}, nil
+						})
 			},
 			expectedErr: k8s.ErrWaitingForDeployment.WithParams("timeout-deployment").Wrap(context.DeadlineExceeded),
 		},
@@ -77,7 +85,7 @@ func (suite *TestSuite) TestWaitForDeployment() {
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
 			suite.T().Parallel()
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()

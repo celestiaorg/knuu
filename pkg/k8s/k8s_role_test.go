@@ -20,7 +20,7 @@ func (suite *TestSuite) TestCreateRole() {
 		roleName    string
 		labels      map[string]string
 		policyRules []rbacv1.PolicyRule
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
@@ -34,7 +34,7 @@ func (suite *TestSuite) TestCreateRole() {
 					Resources: []string{"pods"},
 				},
 			},
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
@@ -48,10 +48,12 @@ func (suite *TestSuite) TestCreateRole() {
 					Resources: []string{"pods"},
 				},
 			},
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "roles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "roles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: errors.New("internal server error"),
 		},
@@ -59,7 +61,7 @@ func (suite *TestSuite) TestCreateRole() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.CreateRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
 			if tt.expectedErr != nil {
@@ -77,26 +79,30 @@ func (suite *TestSuite) TestDeleteRole() {
 	tests := []struct {
 		name        string
 		roleName    string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:     "successful deletion",
 			roleName: "test-role",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "roles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "roles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:     "client error",
 			roleName: "error-role",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "roles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "roles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: errors.New("internal server error"),
 		},
@@ -104,7 +110,7 @@ func (suite *TestSuite) TestDeleteRole() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeleteRole(context.Background(), tt.roleName)
 			if tt.expectedErr != nil {
@@ -124,7 +130,7 @@ func (suite *TestSuite) TestCreateClusterRole() {
 		roleName    string
 		labels      map[string]string
 		policyRules []rbacv1.PolicyRule
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
@@ -138,7 +144,7 @@ func (suite *TestSuite) TestCreateClusterRole() {
 					Resources: []string{"pods"},
 				},
 			},
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
@@ -152,13 +158,17 @@ func (suite *TestSuite) TestCreateClusterRole() {
 					Resources: []string{"pods"},
 				},
 			},
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("get", "clusterroles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
-				clientset.PrependReactor("create", "clusterroles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("get", "clusterroles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "clusterroles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: k8s.ErrClusterRoleAlreadyExists.WithParams("error-cluster-role").Wrap(errors.New("internal server error")),
 		},
@@ -166,7 +176,7 @@ func (suite *TestSuite) TestCreateClusterRole() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.CreateClusterRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
 			if tt.expectedErr != nil {
@@ -184,26 +194,30 @@ func (suite *TestSuite) TestDeleteClusterRole() {
 	tests := []struct {
 		name        string
 		roleName    string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:     "successful deletion",
 			roleName: "test-cluster-role",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "clusterroles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "clusterroles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:     "client error",
 			roleName: "error-cluster-role",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "clusterroles", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "clusterroles",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: errors.New("internal server error"),
 		},
@@ -211,7 +225,7 @@ func (suite *TestSuite) TestDeleteClusterRole() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeleteClusterRole(context.Background(), tt.roleName)
 			if tt.expectedErr != nil {

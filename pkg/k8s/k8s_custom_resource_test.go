@@ -52,9 +52,10 @@ func (suite *TestSuite) TestCreateCustomResource() {
 				},
 			},
 			setupMock: func(dynamicClient *dynfake.FakeDynamicClient) {
-				dynamicClient.PrependReactor("create", "examples", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+				dynamicClient.PrependReactor("create", "examples",
+					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("internal server error")
+					})
 			},
 			expectedErr: k8s.ErrCreatingCustomResource.WithParams("examples").
 				Wrap(errors.New("internal server error")),
@@ -132,9 +133,10 @@ func (suite *TestSuite) TestCustomResourceDefinitionExists() {
 				Resource: "examples",
 			},
 			setupMock: func(discoveryClient *discfake.FakeDiscovery) {
-				discoveryClient.PrependReactor("get", "serverresourcesforgroupversion", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+				discoveryClient.PrependReactor("get", "serverresourcesforgroupversion",
+					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("internal server error")
+					})
 			},
 			expectedExists: false,
 		},

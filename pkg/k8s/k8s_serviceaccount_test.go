@@ -16,24 +16,26 @@ func (suite *TestSuite) TestCreateServiceAccount() {
 		name        string
 		saName      string
 		labels      map[string]string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:        "successful creation",
 			saName:      "test-sa",
 			labels:      map[string]string{"app": "test"},
-			setupMock:   func(clientset *fake.Clientset) {},
+			setupMock:   func() {},
 			expectedErr: nil,
 		},
 		{
 			name:   "client error",
 			saName: "error-sa",
 			labels: map[string]string{"app": "error"},
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("create", "serviceaccounts", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("create", "serviceaccounts",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: errors.New("internal server error"),
 		},
@@ -41,7 +43,7 @@ func (suite *TestSuite) TestCreateServiceAccount() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.CreateServiceAccount(context.Background(), tt.saName, tt.labels)
 			if tt.expectedErr != nil {
@@ -59,26 +61,30 @@ func (suite *TestSuite) TestDeleteServiceAccount() {
 	tests := []struct {
 		name        string
 		saName      string
-		setupMock   func(*fake.Clientset)
+		setupMock   func()
 		expectedErr error
 	}{
 		{
 			name:   "successful deletion",
 			saName: "test-sa",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "serviceaccounts", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, nil
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "serviceaccounts",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
 			},
 			expectedErr: nil,
 		},
 		{
 			name:   "client error",
 			saName: "error-sa",
-			setupMock: func(clientset *fake.Clientset) {
-				clientset.PrependReactor("delete", "serviceaccounts", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New("internal server error")
-				})
+			setupMock: func() {
+				suite.client.Clientset().(*fake.Clientset).
+					PrependReactor("delete", "serviceaccounts",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, errors.New("internal server error")
+						})
 			},
 			expectedErr: errors.New("internal server error"),
 		},
@@ -86,7 +92,7 @@ func (suite *TestSuite) TestDeleteServiceAccount() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.Clientset().(*fake.Clientset))
+			tt.setupMock()
 
 			err := suite.client.DeleteServiceAccount(context.Background(), tt.saName)
 			if tt.expectedErr != nil {
