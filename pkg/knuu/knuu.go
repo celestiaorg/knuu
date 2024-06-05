@@ -124,19 +124,15 @@ func New(ctx context.Context, opts ...Option) (*Knuu, error) {
 	}
 
 	if k.MinioCli == nil {
-		// TODO: minio also needs a little refactor to accept k8s obj instead
 		k.MinioCli = &minio.Minio{
-			Clientset: k.K8sCli.Clientset(),
-			Namespace: k.K8sCli.Namespace(),
+			K8s: k.K8sCli,
 		}
 	}
 
 	if k.ImageBuilder == nil {
-		// TODO: Also here for kaniko
 		k.ImageBuilder = &kaniko.Kaniko{
-			K8sClientset: k.K8sCli.Clientset(),
-			K8sNamespace: k.K8sCli.Namespace(),
-			Minio:        k.MinioCli,
+			K8s:   k.K8sCli,
+			Minio: k.MinioCli,
 		}
 	}
 

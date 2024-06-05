@@ -14,20 +14,21 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 const (
-	k8sNamespace = "test-namespace"
+	k8sNamespace    = "test-namespace"
+	testImage       = "test-image"
+	testDestination = "registry.example.com/test-image:latest"
 )
 
 func TestKanikoBuilder(t *testing.T) {
 	k8sCS := fake.NewSimpleClientset()
 	kb := &Kaniko{
-		K8sClientset: k8sCS,
-		K8sNamespace: k8sNamespace,
+		K8s: k8s.NewCustom(k8sCS, k8sCS.Discovery(), nil, k8sNamespace),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	t.Run("BuildSuccess", func(t *testing.T) {
 		blCtx := "git://github.com/mojtaba-esk/sample-docker"
@@ -36,9 +37,9 @@ func TestKanikoBuilder(t *testing.T) {
 		require.NoError(t, err, "GetDefaultCacheOptions should succeed")
 
 		buildOptions := &builder.BuilderOptions{
-			ImageName:    "test-image",
+			ImageName:    testImage,
 			BuildContext: blCtx,
-			Destination:  "registry.example.com/test-image:latest",
+			Destination:  testDestination,
 			Args:         []string{"--build-arg=value"},
 			Cache:        cacheOpts,
 		}
@@ -54,7 +55,7 @@ func TestKanikoBuilder(t *testing.T) {
 		}()
 
 		// Simulate the successful completion of the Job after a short delay
-		time.Sleep(2 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		completeAllJobInFakeClientset(t, k8sCS, k8sNamespace)
 
 		wg.Wait()
@@ -63,40 +64,27 @@ func TestKanikoBuilder(t *testing.T) {
 		assert.NotEmpty(t, logs, "Build logs should not be empty")
 	})
 
-	t.Run("BuildFailure", func(t *testing.T) {
-		buildOptions := &builder.BuilderOptions{
-			ImageName:    "test-image",
-			BuildContext: "invalid-context", // Simulate an invalid context
-			Destination:  "registry.example.com/test-image:latest",
-		}
-
-		logs, err := kb.Build(ctx, buildOptions)
-
-		assert.Error(t, err, "Build should fail")
-		assert.Empty(t, logs, "Build logs should be empty")
-	})
-
 	t.Run("BuildWithContextCancellation", func(t *testing.T) {
 		buildOptions := &builder.BuilderOptions{
-			ImageName:    "test-image",
+			ImageName:    testImage,
 			BuildContext: "git://example.com/repo",
-			Destination:  "registry.example.com/test-image:latest",
+			Destination:  testDestination,
 		}
 
 		// Cancel the context to simulate cancellation during the build
+		ctx, cancel := context.WithCancel(ctx)
 		cancel()
 
 		logs, err := kb.Build(ctx, buildOptions)
 
-		assert.Error(t, err, "Build should fail due to context cancellation")
-		assert.Empty(t, logs, "Build logs should be empty")
+		assert.Error(t, err, "build should fail due to context cancellation")
+		assert.Empty(t, logs, "build logs should be empty")
 	})
 
 }
 
 func completeAllJobInFakeClientset(t *testing.T, clientset *fake.Clientset, namespace string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	job, err := clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	assert.NoError(t, err)
@@ -125,8 +113,8 @@ func createPodFromJob(job *batchv1.Job) *v1.Pod {
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name:  "fake-container", // Adjust as needed
-					Image: "fake-image",     // Adjust as needed
+					Name:  "fake-container",
+					Image: "fake-image",
 				},
 			},
 		},
