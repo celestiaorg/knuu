@@ -20,25 +20,20 @@ func TestTshark(t *testing.T) {
 	defer cancel()
 
 	knuu, err := knuu.New(ctx)
-	if err != nil {
-		t.Fatalf("Error creating knuu: %v", err)
-	}
+	require.NoError(t, err, "Error creating knuu")
 
 	scope := knuu.Scope()
 	t.Log(scope)
 
 	instance, err := knuu.NewInstance("alpine")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
+	require.NoError(t, err, "Error creating instance")
+
 	err = instance.SetImage(ctx, "docker.io/alpine:latest")
-	if err != nil {
-		t.Fatalf("Error setting image: %v", err)
-	}
+	require.NoError(t, err, "Error setting image")
+
 	err = instance.SetCommand("sleep", "infinity")
-	if err != nil {
-		t.Fatalf("Error setting command: %v", err)
-	}
+	require.NoError(t, err, "Error setting command")
+
 	err = instance.EnableTsharkCollector(
 		"10Gi", // Example volume size
 		os.Getenv("S3_ACCESS_KEY"),
@@ -47,13 +42,10 @@ func TestTshark(t *testing.T) {
 		os.Getenv("S3_BUCKET_NAME"),
 		"tshark/"+scope,
 	)
-	if err != nil {
-		t.Fatalf("Error enabling tshark collector: %v", err)
-	}
+	require.NoError(t, err, "Error enabling tshark collector")
+
 	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	require.NoError(t, err, "Error committing instance")
 
 	t.Cleanup(func() {
 		require.NoError(t, instance.Destroy(ctx))
@@ -62,17 +54,13 @@ func TestTshark(t *testing.T) {
 	// Test logic
 
 	err = instance.Start(ctx)
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
+	require.NoError(t, err, "Error starting instance")
+
 	err = instance.WaitInstanceIsRunning(ctx)
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	require.NoError(t, err, "Error waiting for instance to be running")
+
 	wget, err := instance.ExecuteCommand(ctx, "echo", "Hello World!")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
+	require.NoError(t, err, "Error executing command")
 
 	// wait for 2 minutes to upload network traces to s3
 	time.Sleep(2 * time.Minute)
