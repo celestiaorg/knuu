@@ -1,11 +1,13 @@
-package basic
+package system
 
 import (
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/celestiaorg/knuu/e2e"
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestFolder(t *testing.T) {
@@ -18,14 +20,22 @@ func TestFolder(t *testing.T) {
 	}
 
 	// Create and commit the instance
-	web := assertCreateInstanceNginxWithVolumeOwner(t, "web")
+	instanceName := "web"
+	web := e2e.AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t, instanceName)
+	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
+	if err != nil {
+		t.Fatalf("Error adding file to '%v': %v", instanceName, err)
+	}
+	err = web.Commit()
+	if err != nil {
+		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
+	}
 
 	t.Cleanup(func() {
 		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
 	})
 
 	// Test logic
-
 	webIP, err := web.GetIP()
 	if err != nil {
 		t.Fatalf("Error getting IP '%v':", err)

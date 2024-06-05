@@ -5,15 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	appv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (

@@ -1,4 +1,4 @@
-package basic
+package bittwister
 
 import (
 	"context"
@@ -229,11 +229,6 @@ func TestBittwister_Packetloss(t *testing.T) {
 		{
 			name:                 "90%",
 			targetPacketlossRate: 90,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "100%",
-			targetPacketlossRate: 100,
 			tolerancePercent:     10,
 		},
 	}

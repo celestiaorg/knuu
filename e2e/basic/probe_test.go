@@ -3,11 +3,12 @@ package basic
 import (
 	"testing"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 func TestProbe(t *testing.T) {
@@ -36,7 +37,7 @@ func TestProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error adding volume: %v", err)
 	}
-	err = web.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
+	err = web.AddFile("../system/resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
 	if err != nil {
 		t.Fatalf("Error adding file '%v':", err)
 	}
