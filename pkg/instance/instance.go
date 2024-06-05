@@ -1088,21 +1088,22 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 	if !i.IsInState(Started) {
 		return ErrWaitingForInstanceNotAllowed.WithParams(i.state.String())
 	}
-	timeout := time.After(1 * time.Minute)
 	tick := time.NewTicker(1 * time.Second)
 
 	for {
+		running, err := i.IsRunning(ctx)
+		if err != nil {
+			return ErrCheckingIfInstanceRunning.WithParams(i.k8sName).Wrap(err)
+		}
+		if running {
+			return nil
+		}
+
 		select {
-		case <-timeout:
-			return ErrWaitingForInstanceTimeout.WithParams(i.k8sName)
+		case <-ctx.Done():
+			return ErrWaitingForInstanceTimeout.WithParams(i.k8sName).Wrap(ctx.Err())
 		case <-tick.C:
-			running, err := i.IsRunning(ctx)
-			if err != nil {
-				return ErrCheckingIfInstanceRunning.WithParams(i.k8sName).Wrap(err)
-			}
-			if running {
-				return nil
-			}
+			continue
 		}
 	}
 }
