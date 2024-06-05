@@ -48,7 +48,7 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "Error committing instance")
 
 	t.Cleanup(func() {
-		require.NoError(t, instance.Destroy(ctx))
+		require.NoError(t, instance.Destroy(context.Background()))
 	})
 
 	// Test logic
@@ -62,8 +62,8 @@ func TestTshark(t *testing.T) {
 	wget, err := instance.ExecuteCommand(ctx, "echo", "Hello World!")
 	require.NoError(t, err, "Error executing command")
 
-	// wait for 2 minutes to upload network traces to s3
-	time.Sleep(2 * time.Minute)
+	// wait for 1 minute to upload network traces to s3
+	time.Sleep(1 * time.Minute)
 
 	assert.Contains(t, wget, "Hello World!")
 }

@@ -992,6 +992,10 @@ func (i *Instance) EnableTsharkCollector(volumeSize, s3AccessKey, s3SecretKey, s
 	if i.TsharkCollectorEnabled() {
 		return ErrTsharkCollectorAlreadyEnabled
 	}
+	// prefix can be empty, so it's not needed to check it
+	if volumeSize == "" || s3AccessKey == "" || s3SecretKey == "" || s3Region == "" || s3BucketName == "" {
+		return ErrTsharkCollectorConfigNotSet.WithParams(volumeSize, "REDACTED", "REDACTED", s3Region, s3BucketName)
+	}
 	i.tsharkCollectorConfig = &TsharkCollectorConfig{
 		volumeSize:  volumeSize,
 		s3AccessKey: s3AccessKey,

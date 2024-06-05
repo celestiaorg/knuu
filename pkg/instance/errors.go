@@ -201,4 +201,5 @@ var (
 	ErrTsharkCollectorAlreadyEnabled             = errors.New("TsharkCollectorAlreadyEnabled", "tshark collector already enabled for instance '%s'")
 	ErrCreatingTsharkCollectorInstance           = errors.New("CreatingTsharkCollectorInstance", "error creating tshark collector instance")
 	ErrAddingTsharkCollectorSidecar              = errors.New("AddingTsharkCollectorSidecar", "error adding tshark collector sidecar for instance '%s'")
+	ErrTsharkCollectorConfigNotSet               = errors.New("TsharkCollectorConfigNotSet", "tshark collector config not set for instance '%s'. volumeSize: %s, s3AccessKey: %s, s3SecretKey: %s, s3Region: %s, s3BucketName: %s, s3KeyPrefix: %s")
 )
