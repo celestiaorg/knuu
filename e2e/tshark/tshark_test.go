@@ -2,7 +2,6 @@ package basic
 
 import (
 	"context"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -26,7 +25,7 @@ func TestTshark(t *testing.T) {
 	}
 
 	scope := knuu.Scope()
-	log.Println(scope)
+	t.Log(scope)
 
 	instance, err := knuu.NewInstance("alpine")
 	if err != nil {
@@ -75,8 +74,8 @@ func TestTshark(t *testing.T) {
 		t.Fatalf("Error executing command '%v':", err)
 	}
 
-	// wait for 10 minutes
-	time.Sleep(10 * time.Minute)
+	// wait for 2 minutes to upload network traces to s3
+	time.Sleep(2 * time.Minute)
 
 	assert.Contains(t, wget, "Hello World!")
 }

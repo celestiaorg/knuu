@@ -71,8 +71,6 @@ type ObsyConfig struct {
 
 // TsharkCollectorConfig represents the configuration for the tshark collector
 type TsharkCollectorConfig struct {
-	// enabled is a flag to enable the tshark collector
-	enabled bool
 	// volumeSize is the size of the volume to use for the tshark collector
 	volumeSize string
 	// s3AccessKey is the access key to use for the s3 server
@@ -153,14 +151,6 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		prometheusExporterEndpoint:            "",
 		prometheusRemoteWriteExporterEndpoint: "",
 	}
-	tsharkCollectorConfig := &TsharkCollectorConfig{
-		enabled:     false,
-		s3AccessKey: "",
-		s3SecretKey: "",
-		s3Region:    "",
-		s3Bucket:    "",
-		s3KeyPrefix: "",
-	}
 	securityContext := &SecurityContext{
 		privileged:      false,
 		capabilitiesAdd: make([]string, 0),
@@ -191,7 +181,7 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		parentInstance:        nil,
 		sidecars:              make([]*Instance, 0),
 		obsyConfig:            obsyConfig,
-		tsharkCollectorConfig: tsharkCollectorConfig,
+		tsharkCollectorConfig: nil,
 		securityContext:       securityContext,
 		BitTwister:            getBitTwisterDefaultConfig(),
 		SystemDependencies:    sysDeps,
@@ -987,13 +977,22 @@ func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
 	return nil
 }
 
+// TsharkCollectorEnabled returns true if the tshark collector is enabled
+func (i *Instance) TsharkCollectorEnabled() bool {
+	return i.tsharkCollectorConfig != nil
+}
+
+// EnableTsharkCollector enables the tshark collector for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) EnableTsharkCollector(volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string) error {
 	// volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string
 	if err := i.validateStateForObsy("Tshark collector"); err != nil {
 		return err
 	}
+	if i.TsharkCollectorEnabled() {
+		return ErrTsharkCollectorAlreadyEnabled
+	}
 	i.tsharkCollectorConfig = &TsharkCollectorConfig{
-		enabled:     true,
 		volumeSize:  volumeSize,
 		s3AccessKey: s3AccessKey,
 		s3SecretKey: s3SecretKey,
@@ -1077,7 +1076,7 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 		}
 
 		// deploy tshark collector if enabled
-		if i.tsharkCollectorConfig.enabled {
+		if i.TsharkCollectorEnabled() {
 			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
 				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
 			}

@@ -227,4 +227,5 @@ var (
 	ErrProxyNotInitialized                       = &Error{Code: "ProxyNotInitialized", Message: "proxy not initialized"}
 	ErrAddingTsharkCollectorSidecar              = &Error{Code: "AddingTsharkCollectorSidecar", Message: "error adding tshark collector sidecar for instance '%s'"}
 	ErrCreatingTsharkCollectorInstance           = &Error{Code: "CreatingTsharkCollectorInstance", Message: "error creating tshark collector instance for instance '%s'"}
+	ErrTsharkCollectorAlreadyEnabled             = &Error{Code: "TsharkCollectorAlreadyEnabled", Message: "tshark collector already enabled for instance '%s'"}
 )
