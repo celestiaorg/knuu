@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -17,6 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 const (

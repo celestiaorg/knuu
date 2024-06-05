@@ -22,10 +22,10 @@ func TestCreateTarGz(t *testing.T) {
 	}
 	for file := range expectedFiles {
 		filePath := filepath.Join(testDir, file)
-		err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm) //nolint:gosec
 		require.NoError(t, err, "Failed to create directory: %s", filepath.Dir(filePath))
 
-		err = os.WriteFile(filePath, []byte(file), os.ModePerm)
+		err = os.WriteFile(filePath, []byte(file), os.ModePerm) //nolint:gosec
 		require.NoError(t, err, "Failed to create file: %s", filePath)
 	}
 

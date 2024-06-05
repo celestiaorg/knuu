@@ -106,6 +106,7 @@ func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodCon
 	}
 
 	// Wait for the pod to be fully deleted
+PodCheckLoop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -118,7 +119,7 @@ func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodCon
 					logrus.Debugf("Pod %s successfully deleted", podConfig.Name)
 					goto DeployPod
 				}
-				break
+				break PodCheckLoop
 			}
 		}
 	}

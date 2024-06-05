@@ -8,12 +8,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-)
 
-const ()
+	"github.com/celestiaorg/knuu/pkg/builder"
+)
 
 type Docker struct {
 	K8sClientset kubernetes.Interface

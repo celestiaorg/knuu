@@ -46,7 +46,7 @@ func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema
 
 	resourceExists := false
 	for _, resource := range resourceList.APIResources {
-		if strings.ToLower(resource.Kind) == strings.ToLower(gvr.Resource) {
+		if strings.EqualFold(resource.Kind, gvr.Resource) {
 			resourceExists = true
 			break
 		}
