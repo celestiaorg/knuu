@@ -2,8 +2,6 @@ package instance
 
 import (
 	"context"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 const (
@@ -40,7 +38,7 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		"STORAGE_SECRET_ACCESS_KEY": i.tsharkCollectorConfig.s3SecretKey,
 		"STORAGE_REGION":            i.tsharkCollectorConfig.s3Region,
 		"STORAGE_BUCKET_NAME":       i.tsharkCollectorConfig.s3Bucket,
-		"STORAGE_KEY_PREFIX":        i.tsharkCollectorConfig.s3KeyPrefix + "/" + knuu.Scope(),
+		"STORAGE_KEY_PREFIX":        i.tsharkCollectorConfig.s3KeyPrefix,
 		"CAPTURE_FILE_NAME":         i.k8sName + ".pcapng",
 	}
 
