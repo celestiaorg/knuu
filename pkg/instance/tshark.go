@@ -6,7 +6,7 @@ import (
 
 const (
 	tsharkCollectorName       = "tshark-collector"
-	tsharkCollectorImage      = "ghcr.io/celestiaorg/tshark-s3:pr-5"
+	tsharkCollectorImage      = "ghcr.io/celestiaorg/tshark-s3:pr-7"
 	tsharkCollectorCPU        = "100m"
 	tsharkCollectorMemory     = "250Mi"
 	tsharkCollectorVolumePath = "/tshark"
