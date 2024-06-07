@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -16,7 +14,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestCreateCustomResource() {
+func (s *TestSuite) TestCreateCustomResource() {
 	tests := []struct {
 		name        string
 		resource    *schema.GroupVersionResource
@@ -63,22 +61,22 @@ func (suite *TestSuite) TestCreateCustomResource() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.DynamicClient().(*dynfake.FakeDynamicClient))
+		s.Run(tt.name, func() {
+			tt.setupMock(s.client.DynamicClient().(*dynfake.FakeDynamicClient))
 
-			err := suite.client.CreateCustomResource(context.Background(), "test-resource", tt.resource, tt.obj)
+			err := s.client.CreateCustomResource(context.Background(), "test-resource", tt.resource, tt.obj)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestCustomResourceDefinitionExists() {
+func (s *TestSuite) TestCustomResourceDefinitionExists() {
 	tests := []struct {
 		name           string
 		resource       *schema.GroupVersionResource
@@ -143,11 +141,11 @@ func (suite *TestSuite) TestCustomResourceDefinitionExists() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			tt.setupMock(suite.client.DiscoveryClient().(*discfake.FakeDiscovery))
+		s.Run(tt.name, func() {
+			tt.setupMock(s.client.DiscoveryClient().(*discfake.FakeDiscovery))
 
-			exists := suite.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
-			assert.Equal(suite.T(), tt.expectedExists, exists)
+			exists := s.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
+			s.Assert().Equal(tt.expectedExists, exists)
 		})
 	}
 }

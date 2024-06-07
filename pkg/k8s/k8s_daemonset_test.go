@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +14,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestDaemonSetExists() {
+func (s *TestSuite) TestDaemonSetExists() {
 	tests := []struct {
 		name           string
 		daemonSetName  string
@@ -28,7 +26,7 @@ func (suite *TestSuite) TestDaemonSetExists() {
 			name:          "daemonset exists",
 			daemonSetName: "existing-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("existing-daemonset"))
+				s.Require().NoError(s.createDaemonSet("existing-daemonset"))
 			},
 			expectedExists: true,
 			expectedErr:    nil,
@@ -44,8 +42,8 @@ func (suite *TestSuite) TestDaemonSetExists() {
 			name:          "client error",
 			daemonSetName: "error-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("error-daemonset"))
-				suite.client.Clientset().(*fake.Clientset).
+				s.Require().NoError(s.createDaemonSet("error-daemonset"))
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -57,23 +55,23 @@ func (suite *TestSuite) TestDaemonSetExists() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			exists, err := suite.client.DaemonSetExists(context.Background(), tt.daemonSetName)
+			exists, err := s.client.DaemonSetExists(context.Background(), tt.daemonSetName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), tt.expectedExists, exists)
+			s.Require().NoError(err)
+			s.Assert().Equal(tt.expectedExists, exists)
 		})
 	}
 }
 
-func (suite *TestSuite) TestGetDaemonSet() {
+func (s *TestSuite) TestGetDaemonSet() {
 	tests := []struct {
 		name          string
 		daemonSetName string
@@ -85,13 +83,13 @@ func (suite *TestSuite) TestGetDaemonSet() {
 			name:          "successful retrieval",
 			daemonSetName: "test-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("test-daemonset"))
+				s.Require().NoError(s.createDaemonSet("test-daemonset"))
 			},
 			expectedErr: nil,
 			expectedDS: &appv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-daemonset",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 			},
 		},
@@ -106,9 +104,8 @@ func (suite *TestSuite) TestGetDaemonSet() {
 			name:          "client error",
 			daemonSetName: "error-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("error-daemonset"))
-				suite.client.Clientset().(*fake.Clientset).PrependReactor("get", "daemonsets",
-
+				s.Require().NoError(s.createDaemonSet("error-daemonset"))
+				s.client.Clientset().(*fake.Clientset).PrependReactor("get", "daemonsets",
 					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 						return true, nil, errors.New("internal server error")
 					})
@@ -119,23 +116,23 @@ func (suite *TestSuite) TestGetDaemonSet() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ds, err := suite.client.GetDaemonSet(context.Background(), tt.daemonSetName)
+			ds, err := s.client.GetDaemonSet(context.Background(), tt.daemonSetName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.expectedDS, ds)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.expectedDS, ds)
 		})
 	}
 }
 
-func (suite *TestSuite) TestCreateDaemonSet() {
+func (s *TestSuite) TestCreateDaemonSet() {
 	tests := []struct {
 		name           string
 		daemonSetName  string
@@ -162,7 +159,7 @@ func (suite *TestSuite) TestCreateDaemonSet() {
 			expectedDS: &appv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-daemonset",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 					Labels:    map[string]string{"app": "test"},
 				},
 				Spec: appv1.DaemonSetSpec{
@@ -198,8 +195,8 @@ func (suite *TestSuite) TestCreateDaemonSet() {
 				},
 			},
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("error-daemonset"))
-				suite.client.Clientset().(*fake.Clientset).
+				s.Require().NoError(s.createDaemonSet("error-daemonset"))
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -211,23 +208,23 @@ func (suite *TestSuite) TestCreateDaemonSet() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ds, err := suite.client.CreateDaemonSet(context.Background(), tt.daemonSetName, tt.labels, tt.initContainers, tt.containers)
+			ds, err := s.client.CreateDaemonSet(context.Background(), tt.daemonSetName, tt.labels, tt.initContainers, tt.containers)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.expectedDS, ds)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.expectedDS, ds)
 		})
 	}
 }
 
-func (suite *TestSuite) TestUpdateDaemonSet() {
+func (s *TestSuite) TestUpdateDaemonSet() {
 	tests := []struct {
 		name           string
 		daemonSetName  string
@@ -250,12 +247,12 @@ func (suite *TestSuite) TestUpdateDaemonSet() {
 				},
 			},
 			setupMock: func() {
-				_, err := suite.client.Clientset().AppsV1().
-					DaemonSets(suite.namespace).
+				_, err := s.client.Clientset().AppsV1().
+					DaemonSets(s.namespace).
 					Create(context.Background(), &appv1.DaemonSet{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "existing-daemonset",
-							Namespace: suite.namespace,
+							Namespace: s.namespace,
 							Labels:    map[string]string{"app": "test"},
 						},
 						Spec: appv1.DaemonSetSpec{
@@ -278,13 +275,13 @@ func (suite *TestSuite) TestUpdateDaemonSet() {
 							},
 						},
 					}, metav1.CreateOptions{})
-				require.NoError(suite.T(), err)
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 			expectedDS: &appv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-daemonset",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 					Labels:    map[string]string{"app": "test"},
 				},
 				Spec: appv1.DaemonSetSpec{
@@ -320,8 +317,8 @@ func (suite *TestSuite) TestUpdateDaemonSet() {
 				},
 			},
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("error-daemonset"))
-				suite.client.Clientset().(*fake.Clientset).
+				s.Require().NoError(s.createDaemonSet("error-daemonset"))
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("update", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -333,23 +330,23 @@ func (suite *TestSuite) TestUpdateDaemonSet() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ds, err := suite.client.UpdateDaemonSet(context.Background(), tt.daemonSetName, tt.labels, tt.initContainers, tt.containers)
+			ds, err := s.client.UpdateDaemonSet(context.Background(), tt.daemonSetName, tt.labels, tt.initContainers, tt.containers)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.expectedDS, ds)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.expectedDS, ds)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteDaemonSet() {
+func (s *TestSuite) TestDeleteDaemonSet() {
 	tests := []struct {
 		name          string
 		daemonSetName string
@@ -360,7 +357,7 @@ func (suite *TestSuite) TestDeleteDaemonSet() {
 			name:          "successful deletion",
 			daemonSetName: "existing-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("existing-daemonset"))
+				s.Require().NoError(s.createDaemonSet("existing-daemonset"))
 			},
 			expectedErr: nil,
 		},
@@ -374,8 +371,8 @@ func (suite *TestSuite) TestDeleteDaemonSet() {
 			name:          "client error",
 			daemonSetName: "error-daemonset",
 			setupMock: func() {
-				require.NoError(suite.T(), suite.createDaemonSet("error-daemonset"))
-				suite.client.Clientset().(*fake.Clientset).
+				s.Require().NoError(s.createDaemonSet("error-daemonset"))
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -386,17 +383,17 @@ func (suite *TestSuite) TestDeleteDaemonSet() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteDaemonSet(context.Background(), tt.daemonSetName)
+			err := s.client.DeleteDaemonSet(context.Background(), tt.daemonSetName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

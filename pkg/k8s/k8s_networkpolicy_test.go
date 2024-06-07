@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,7 +13,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestCreateNetworkPolicy() {
+func (s *TestSuite) TestCreateNetworkPolicy() {
 	tests := []struct {
 		name               string
 		npName             string
@@ -37,7 +35,7 @@ func (suite *TestSuite) TestCreateNetworkPolicy() {
 			npName:      "error-np",
 			selectorMap: map[string]string{"app": "error"},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, k8s.ErrCreatingNetworkPolicy.WithParams("error-np").
@@ -49,22 +47,22 @@ func (suite *TestSuite) TestCreateNetworkPolicy() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateNetworkPolicy(context.Background(), tt.npName, tt.selectorMap, tt.ingressSelectorMap, tt.egressSelectorMap)
+			err := s.client.CreateNetworkPolicy(context.Background(), tt.npName, tt.selectorMap, tt.ingressSelectorMap, tt.egressSelectorMap)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteNetworkPolicy() {
+func (s *TestSuite) TestDeleteNetworkPolicy() {
 	tests := []struct {
 		name        string
 		npName      string
@@ -75,8 +73,8 @@ func (suite *TestSuite) TestDeleteNetworkPolicy() {
 			name:   "successful deletion",
 			npName: "existing-np",
 			setupMock: func() {
-				err := suite.createNetworkPolicy("existing-np")
-				require.NoError(suite.T(), err)
+				err := s.createNetworkPolicy("existing-np")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 		},
@@ -91,7 +89,7 @@ func (suite *TestSuite) TestDeleteNetworkPolicy() {
 			name:   "client error",
 			npName: "error-np",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -103,22 +101,22 @@ func (suite *TestSuite) TestDeleteNetworkPolicy() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteNetworkPolicy(context.Background(), tt.npName)
+			err := s.client.DeleteNetworkPolicy(context.Background(), tt.npName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestGetNetworkPolicy() {
+func (s *TestSuite) TestGetNetworkPolicy() {
 	tests := []struct {
 		name        string
 		npName      string
@@ -130,14 +128,14 @@ func (suite *TestSuite) TestGetNetworkPolicy() {
 			name:   "successful retrieval",
 			npName: "existing-np",
 			setupMock: func() {
-				err := suite.createNetworkPolicy("existing-np")
-				require.NoError(suite.T(), err)
+				err := s.createNetworkPolicy("existing-np")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 			expectedNP: &v1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-np",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 			},
 		},
@@ -145,7 +143,7 @@ func (suite *TestSuite) TestGetNetworkPolicy() {
 			name:   "network policy not found",
 			npName: "non-existent-np",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("networkpolicies \"non-existent-np\" not found")
@@ -159,7 +157,7 @@ func (suite *TestSuite) TestGetNetworkPolicy() {
 			name:   "client error",
 			npName: "error-np",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -172,23 +170,23 @@ func (suite *TestSuite) TestGetNetworkPolicy() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			np, err := suite.client.GetNetworkPolicy(context.Background(), tt.npName)
+			np, err := s.client.GetNetworkPolicy(context.Background(), tt.npName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.expectedNP, np)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.expectedNP, np)
 		})
 	}
 }
 
-func (suite *TestSuite) TestNetworkPolicyExists() {
+func (s *TestSuite) TestNetworkPolicyExists() {
 	tests := []struct {
 		name          string
 		npName        string
@@ -199,8 +197,8 @@ func (suite *TestSuite) TestNetworkPolicyExists() {
 			name:   "network policy exists",
 			npName: "existing-np",
 			setupMock: func() {
-				err := suite.createNetworkPolicy("existing-np")
-				require.NoError(suite.T(), err)
+				err := s.createNetworkPolicy("existing-np")
+				s.Require().NoError(err)
 			},
 			expectedExist: true,
 		},
@@ -214,7 +212,7 @@ func (suite *TestSuite) TestNetworkPolicyExists() {
 			name:   "client error",
 			npName: "error-np",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -225,20 +223,20 @@ func (suite *TestSuite) TestNetworkPolicyExists() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			exists := suite.client.NetworkPolicyExists(context.Background(), tt.npName)
-			assert.Equal(suite.T(), tt.expectedExist, exists)
+			exists := s.client.NetworkPolicyExists(context.Background(), tt.npName)
+			s.Assert().Equal(tt.expectedExist, exists)
 		})
 	}
 }
 
-func (suite *TestSuite) createNetworkPolicy(name string) error {
-	_, err := suite.client.Clientset().NetworkingV1().NetworkPolicies(suite.namespace).Create(context.Background(), &v1.NetworkPolicy{
+func (s *TestSuite) createNetworkPolicy(name string) error {
+	_, err := s.client.Clientset().NetworkingV1().NetworkPolicies(s.namespace).Create(context.Background(), &v1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: suite.namespace,
+			Namespace: s.namespace,
 		},
 	}, metav1.CreateOptions{})
 	return err

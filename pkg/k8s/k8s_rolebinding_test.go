@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -14,7 +12,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestCreateRoleBinding() {
+func (s *TestSuite) TestCreateRoleBinding() {
 	tests := []struct {
 		name            string
 		roleBindingName string
@@ -40,7 +38,7 @@ func (suite *TestSuite) TestCreateRoleBinding() {
 			role:            "error-role",
 			serviceAccount:  "error-sa",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "rolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -51,22 +49,22 @@ func (suite *TestSuite) TestCreateRoleBinding() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateRoleBinding(context.Background(), tt.roleBindingName, tt.labels, tt.role, tt.serviceAccount)
+			err := s.client.CreateRoleBinding(context.Background(), tt.roleBindingName, tt.labels, tt.role, tt.serviceAccount)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteRoleBinding() {
+func (s *TestSuite) TestDeleteRoleBinding() {
 	tests := []struct {
 		name        string
 		bindingName string
@@ -77,7 +75,7 @@ func (suite *TestSuite) TestDeleteRoleBinding() {
 			name:        "successful deletion",
 			bindingName: "test-rolebinding",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "rolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -89,7 +87,7 @@ func (suite *TestSuite) TestDeleteRoleBinding() {
 			name:        "client error",
 			bindingName: "error-rolebinding",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "rolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -100,22 +98,22 @@ func (suite *TestSuite) TestDeleteRoleBinding() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteRoleBinding(context.Background(), tt.bindingName)
+			err := s.client.DeleteRoleBinding(context.Background(), tt.bindingName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestCreateClusterRoleBinding() {
+func (s *TestSuite) TestCreateClusterRoleBinding() {
 	tests := []struct {
 		name           string
 		bindingName    string
@@ -141,7 +139,7 @@ func (suite *TestSuite) TestCreateClusterRoleBinding() {
 			clusterRole:    "existing-clusterrole",
 			serviceAccount: "existing-sa",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "clusterrolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &rbacv1.ClusterRoleBinding{}, nil
@@ -156,7 +154,7 @@ func (suite *TestSuite) TestCreateClusterRoleBinding() {
 			clusterRole:    "error-clusterrole",
 			serviceAccount: "error-sa",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "clusterrolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -167,22 +165,22 @@ func (suite *TestSuite) TestCreateClusterRoleBinding() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateClusterRoleBinding(context.Background(), tt.bindingName, tt.labels, tt.clusterRole, tt.serviceAccount)
+			err := s.client.CreateClusterRoleBinding(context.Background(), tt.bindingName, tt.labels, tt.clusterRole, tt.serviceAccount)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteClusterRoleBinding() {
+func (s *TestSuite) TestDeleteClusterRoleBinding() {
 	tests := []struct {
 		name        string
 		bindingName string
@@ -193,7 +191,7 @@ func (suite *TestSuite) TestDeleteClusterRoleBinding() {
 			name:        "successful deletion",
 			bindingName: "test-clusterrolebinding",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "clusterrolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -205,7 +203,7 @@ func (suite *TestSuite) TestDeleteClusterRoleBinding() {
 			name:        "client error",
 			bindingName: "error-clusterrolebinding",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "clusterrolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -216,17 +214,17 @@ func (suite *TestSuite) TestDeleteClusterRoleBinding() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteClusterRoleBinding(context.Background(), tt.bindingName)
+			err := s.client.DeleteClusterRoleBinding(context.Background(), tt.bindingName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

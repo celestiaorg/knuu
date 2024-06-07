@@ -5,8 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -15,7 +13,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestWaitForDeployment() {
+func (s *TestSuite) TestWaitForDeployment() {
 	tests := []struct {
 		name           string
 		deploymentName string
@@ -26,7 +24,7 @@ func (suite *TestSuite) TestWaitForDeployment() {
 			name:           "deployment becomes ready",
 			deploymentName: "ready-deployment",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "deployments",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &appsv1.Deployment{
@@ -42,7 +40,7 @@ func (suite *TestSuite) TestWaitForDeployment() {
 			name:           "deployment not found",
 			deploymentName: "non-existent-deployment",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "deployments",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("deployments \"non-existent-deployment\" not found")
@@ -55,7 +53,7 @@ func (suite *TestSuite) TestWaitForDeployment() {
 			name:           "client error",
 			deploymentName: "error-deployment",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "deployments",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -68,7 +66,7 @@ func (suite *TestSuite) TestWaitForDeployment() {
 			name:           "context timeout",
 			deploymentName: "timeout-deployment",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "deployments",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &appsv1.Deployment{
@@ -83,21 +81,21 @@ func (suite *TestSuite) TestWaitForDeployment() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			suite.T().Parallel()
+		s.Run(tt.name, func() {
+			s.T().Parallel()
 			tt.setupMock()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 
-			err := suite.client.WaitForDeployment(ctx, tt.deploymentName)
+			err := s.client.WaitForDeployment(ctx, tt.deploymentName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

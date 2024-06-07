@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,7 +13,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestGetConfigMap() {
+func (s *TestSuite) TestGetConfigMap() {
 	tests := []struct {
 		name          string
 		configMapName string
@@ -27,14 +25,14 @@ func (suite *TestSuite) TestGetConfigMap() {
 			name:          "successful retrieval",
 			configMapName: "test-configmap",
 			setupMock: func() {
-				err := suite.createConfigMap("test-configmap")
-				require.NoError(suite.T(), err)
+				err := s.createConfigMap("test-configmap")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 			expectedCM: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-configmap",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 			},
 		},
@@ -52,7 +50,7 @@ func (suite *TestSuite) TestGetConfigMap() {
 			name:          "client error",
 			configMapName: "error-configmap",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -65,23 +63,23 @@ func (suite *TestSuite) TestGetConfigMap() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			cm, err := suite.client.GetConfigMap(context.Background(), tt.configMapName)
+			cm, err := s.client.GetConfigMap(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.expectedCM, cm)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.expectedCM, cm)
 		})
 	}
 }
 
-func (suite *TestSuite) TestConfigMapExists() {
+func (s *TestSuite) TestConfigMapExists() {
 	tests := []struct {
 		name          string
 		configMapName string
@@ -93,8 +91,8 @@ func (suite *TestSuite) TestConfigMapExists() {
 			name:          "configmap exists",
 			configMapName: "existing-configmap",
 			setupMock: func() {
-				err := suite.createConfigMap("existing-configmap")
-				require.NoError(suite.T(), err)
+				err := s.createConfigMap("existing-configmap")
+				s.Require().NoError(err)
 			},
 			expectedExist: true,
 			expectedErr:   nil,
@@ -110,7 +108,7 @@ func (suite *TestSuite) TestConfigMapExists() {
 			name:          "client error",
 			configMapName: "error-configmap",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -123,23 +121,23 @@ func (suite *TestSuite) TestConfigMapExists() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			exists, err := suite.client.ConfigMapExists(context.Background(), tt.configMapName)
+			exists, err := s.client.ConfigMapExists(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), tt.expectedExist, exists)
+			s.Require().NoError(err)
+			s.Assert().Equal(tt.expectedExist, exists)
 		})
 	}
 }
 
-func (suite *TestSuite) TestCreateConfigMap() {
+func (s *TestSuite) TestCreateConfigMap() {
 	tests := []struct {
 		name        string
 		configMap   *v1.ConfigMap
@@ -151,7 +149,7 @@ func (suite *TestSuite) TestCreateConfigMap() {
 			configMap: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new-configmap",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 				Data: map[string]string{"key": "value"},
 			},
@@ -163,12 +161,12 @@ func (suite *TestSuite) TestCreateConfigMap() {
 			configMap: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-configmap",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 			},
 			setupMock: func() {
-				err := suite.createConfigMap("existing-configmap")
-				require.NoError(suite.T(), err)
+				err := s.createConfigMap("existing-configmap")
+				s.Require().NoError(err)
 			},
 			expectedErr: k8s.ErrConfigmapAlreadyExists.WithParams("existing-configmap").
 				Wrap(errors.New("configmap already exists")),
@@ -178,11 +176,11 @@ func (suite *TestSuite) TestCreateConfigMap() {
 			configMap: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "error-configmap",
-					Namespace: suite.namespace,
+					Namespace: s.namespace,
 				},
 			},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -194,23 +192,23 @@ func (suite *TestSuite) TestCreateConfigMap() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			cm, err := suite.client.CreateConfigMap(context.Background(), tt.configMap.Name, tt.configMap.Labels, tt.configMap.Data)
+			cm, err := s.client.CreateConfigMap(context.Background(), tt.configMap.Name, tt.configMap.Labels, tt.configMap.Data)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.EqualValues(suite.T(), tt.configMap, cm)
+			s.Require().NoError(err)
+			s.Assert().EqualValues(tt.configMap, cm)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteConfigMap() {
+func (s *TestSuite) TestDeleteConfigMap() {
 	tests := []struct {
 		name          string
 		configMapName string
@@ -221,8 +219,8 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 			name:          "successful deletion",
 			configMapName: "existing-configmap",
 			setupMock: func() {
-				err := suite.createConfigMap("existing-configmap")
-				require.NoError(suite.T(), err)
+				err := s.createConfigMap("existing-configmap")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 		},
@@ -239,10 +237,10 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 			setupMock: func() {
 				// if it does not exist, it return nil as error
 				// so we need to add it to the fake client to be able to pass the existence check
-				err := suite.createConfigMap("error-configmap")
-				require.NoError(suite.T(), err)
+				err := s.createConfigMap("error-configmap")
+				s.Require().NoError(err)
 
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -254,17 +252,17 @@ func (suite *TestSuite) TestDeleteConfigMap() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteConfigMap(context.Background(), tt.configMapName)
+			err := s.client.DeleteConfigMap(context.Background(), tt.configMapName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

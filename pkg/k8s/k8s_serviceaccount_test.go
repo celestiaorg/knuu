@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func (suite *TestSuite) TestCreateServiceAccount() {
+func (s *TestSuite) TestCreateServiceAccount() {
 	tests := []struct {
 		name        string
 		saName      string
@@ -31,7 +29,7 @@ func (suite *TestSuite) TestCreateServiceAccount() {
 			saName: "error-sa",
 			labels: map[string]string{"app": "error"},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "serviceaccounts",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -42,22 +40,22 @@ func (suite *TestSuite) TestCreateServiceAccount() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateServiceAccount(context.Background(), tt.saName, tt.labels)
+			err := s.client.CreateServiceAccount(context.Background(), tt.saName, tt.labels)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteServiceAccount() {
+func (s *TestSuite) TestDeleteServiceAccount() {
 	tests := []struct {
 		name        string
 		saName      string
@@ -68,7 +66,7 @@ func (suite *TestSuite) TestDeleteServiceAccount() {
 			name:   "successful deletion",
 			saName: "test-sa",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "serviceaccounts",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -80,7 +78,7 @@ func (suite *TestSuite) TestDeleteServiceAccount() {
 			name:   "client error",
 			saName: "error-sa",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "serviceaccounts",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -91,17 +89,17 @@ func (suite *TestSuite) TestDeleteServiceAccount() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteServiceAccount(context.Background(), tt.saName)
+			err := s.client.DeleteServiceAccount(context.Background(), tt.saName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -14,7 +12,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestCreateRole() {
+func (s *TestSuite) TestCreateRole() {
 	tests := []struct {
 		name        string
 		roleName    string
@@ -49,7 +47,7 @@ func (suite *TestSuite) TestCreateRole() {
 				},
 			},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "roles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -60,22 +58,22 @@ func (suite *TestSuite) TestCreateRole() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
+			err := s.client.CreateRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteRole() {
+func (s *TestSuite) TestDeleteRole() {
 	tests := []struct {
 		name        string
 		roleName    string
@@ -86,7 +84,7 @@ func (suite *TestSuite) TestDeleteRole() {
 			name:     "successful deletion",
 			roleName: "test-role",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "roles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -98,7 +96,7 @@ func (suite *TestSuite) TestDeleteRole() {
 			name:     "client error",
 			roleName: "error-role",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "roles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -109,22 +107,22 @@ func (suite *TestSuite) TestDeleteRole() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteRole(context.Background(), tt.roleName)
+			err := s.client.DeleteRole(context.Background(), tt.roleName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestCreateClusterRole() {
+func (s *TestSuite) TestCreateClusterRole() {
 	tests := []struct {
 		name        string
 		roleName    string
@@ -159,12 +157,12 @@ func (suite *TestSuite) TestCreateClusterRole() {
 				},
 			},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
 						})
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -175,22 +173,22 @@ func (suite *TestSuite) TestCreateClusterRole() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.CreateClusterRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
+			err := s.client.CreateClusterRole(context.Background(), tt.roleName, tt.labels, tt.policyRules)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeleteClusterRole() {
+func (s *TestSuite) TestDeleteClusterRole() {
 	tests := []struct {
 		name        string
 		roleName    string
@@ -201,7 +199,7 @@ func (suite *TestSuite) TestDeleteClusterRole() {
 			name:     "successful deletion",
 			roleName: "test-cluster-role",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -213,7 +211,7 @@ func (suite *TestSuite) TestDeleteClusterRole() {
 			name:     "client error",
 			roleName: "error-cluster-role",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -224,17 +222,17 @@ func (suite *TestSuite) TestDeleteClusterRole() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeleteClusterRole(context.Background(), tt.roleName)
+			err := s.client.DeleteClusterRole(context.Background(), tt.roleName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.Equal(suite.T(), tt.expectedErr.Error(), err.Error())
+				s.Require().Error(err)
+				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }

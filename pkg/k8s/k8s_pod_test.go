@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,7 +13,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
-func (suite *TestSuite) TestDeployPod() {
+func (s *TestSuite) TestDeployPod() {
 	tests := []struct {
 		name        string
 		podConfig   k8s.PodConfig
@@ -26,7 +24,7 @@ func (suite *TestSuite) TestDeployPod() {
 		{
 			name: "successful creation",
 			podConfig: k8s.PodConfig{
-				Namespace: suite.namespace,
+				Namespace: s.namespace,
 				Name:      "test-pod",
 				Labels:    map[string]string{"app": "test"},
 			},
@@ -37,13 +35,13 @@ func (suite *TestSuite) TestDeployPod() {
 		{
 			name: "client error",
 			podConfig: k8s.PodConfig{
-				Namespace: suite.namespace,
+				Namespace: s.namespace,
 				Name:      "error-pod",
 				Labels:    map[string]string{"app": "error"},
 			},
 			init: false,
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -54,23 +52,23 @@ func (suite *TestSuite) TestDeployPod() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			pod, err := suite.client.DeployPod(context.Background(), tt.podConfig, tt.init)
+			pod, err := s.client.DeployPod(context.Background(), tt.podConfig, tt.init)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), tt.podConfig.Name, pod.Name)
+			s.Require().NoError(err)
+			s.Assert().Equal(tt.podConfig.Name, pod.Name)
 		})
 	}
 }
 
-func (suite *TestSuite) TestReplacePod() {
+func (s *TestSuite) TestReplacePod() {
 	tests := []struct {
 		name        string
 		podConfig   k8s.PodConfig
@@ -80,12 +78,12 @@ func (suite *TestSuite) TestReplacePod() {
 		{
 			name: "successful replacement",
 			podConfig: k8s.PodConfig{
-				Namespace: suite.namespace,
+				Namespace: s.namespace,
 				Name:      "test-pod",
 				Labels:    map[string]string{"app": "test"},
 			},
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, nil
@@ -96,16 +94,16 @@ func (suite *TestSuite) TestReplacePod() {
 		{
 			name: "client error on deletion",
 			podConfig: k8s.PodConfig{
-				Namespace: suite.namespace,
+				Namespace: s.namespace,
 				Name:      "error-pod",
 				Labels:    map[string]string{"app": "error"},
 			},
 			setupMock: func() {
-				err := suite.createPod("error-pod")
-				require.NoError(suite.T(), err)
+				err := s.createPod("error-pod")
+				s.Require().NoError(err)
 				// The pod exist and there is some error deleting it.
 
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -116,23 +114,23 @@ func (suite *TestSuite) TestReplacePod() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			pod, err := suite.client.ReplacePod(context.Background(), tt.podConfig)
+			pod, err := s.client.ReplacePod(context.Background(), tt.podConfig)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), tt.podConfig.Name, pod.Name)
+			s.Require().NoError(err)
+			s.Assert().Equal(tt.podConfig.Name, pod.Name)
 		})
 	}
 }
 
-func (suite *TestSuite) TestIsPodRunning() {
+func (s *TestSuite) TestIsPodRunning() {
 	tests := []struct {
 		name        string
 		podName     string
@@ -144,8 +142,8 @@ func (suite *TestSuite) TestIsPodRunning() {
 			name:    "pod is running",
 			podName: "running-pod",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
-					CoreV1().Pods(suite.namespace).
+				s.client.Clientset().(*fake.Clientset).
+					CoreV1().Pods(s.namespace).
 					Create(context.Background(), &v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "running-pod",
@@ -166,8 +164,8 @@ func (suite *TestSuite) TestIsPodRunning() {
 			name:    "pod is not running",
 			podName: "not-running-pod",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
-					CoreV1().Pods(suite.namespace).
+				s.client.Clientset().(*fake.Clientset).
+					CoreV1().Pods(s.namespace).
 					Create(context.Background(), &v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "not-running-pod",
@@ -188,7 +186,7 @@ func (suite *TestSuite) TestIsPodRunning() {
 			name:    "client error",
 			podName: "error-pod",
 			setupMock: func() {
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -200,24 +198,24 @@ func (suite *TestSuite) TestIsPodRunning() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			running, err := suite.client.IsPodRunning(context.Background(), tt.podName)
+			running, err := s.client.IsPodRunning(context.Background(), tt.podName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), tt.expectedRun, running)
+			s.Require().NoError(err)
+			s.Assert().Equal(tt.expectedRun, running)
 		})
 	}
 }
 
-func (suite *TestSuite) TestRunCommandInPod() {
-	suite.T().Skip("not implemented")
+func (s *TestSuite) TestRunCommandInPod() {
+	s.T().Skip("not implemented")
 	// TestRunCommandInPod is not implemented.
 	//
 	// The RunCommandInPod function involves complex interactions with the Kubernetes API,
@@ -235,7 +233,7 @@ func (suite *TestSuite) TestRunCommandInPod() {
 	// conditions can be used to validate its behavior.
 }
 
-func (suite *TestSuite) TestDeletePodWithGracePeriod() {
+func (s *TestSuite) TestDeletePodWithGracePeriod() {
 	tests := []struct {
 		name        string
 		podName     string
@@ -247,8 +245,8 @@ func (suite *TestSuite) TestDeletePodWithGracePeriod() {
 			name:    "successful deletion",
 			podName: "existing-pod",
 			setupMock: func() {
-				err := suite.createPod("existing-pod")
-				require.NoError(suite.T(), err)
+				err := s.createPod("existing-pod")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 		},
@@ -262,11 +260,11 @@ func (suite *TestSuite) TestDeletePodWithGracePeriod() {
 			name:    "client error",
 			podName: "error-pod",
 			setupMock: func() {
-				err := suite.createPod("error-pod")
-				require.NoError(suite.T(), err)
+				err := s.createPod("error-pod")
+				s.Require().NoError(err)
 				// The pod exist and there is some error deleting it.
 
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -277,22 +275,22 @@ func (suite *TestSuite) TestDeletePodWithGracePeriod() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeletePodWithGracePeriod(context.Background(), tt.podName, tt.gracePeriod)
+			err := s.client.DeletePodWithGracePeriod(context.Background(), tt.podName, tt.gracePeriod)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestDeletePod() {
+func (s *TestSuite) TestDeletePod() {
 	tests := []struct {
 		name        string
 		podName     string
@@ -303,8 +301,8 @@ func (suite *TestSuite) TestDeletePod() {
 			name:    "successful deletion",
 			podName: "existing-pod",
 			setupMock: func() {
-				err := suite.createPod("existing-pod")
-				require.NoError(suite.T(), err)
+				err := s.createPod("existing-pod")
+				s.Require().NoError(err)
 			},
 			expectedErr: nil,
 		},
@@ -318,10 +316,10 @@ func (suite *TestSuite) TestDeletePod() {
 			name:    "client error",
 			podName: "error-pod",
 			setupMock: func() {
-				err := suite.createPod("error-pod")
-				require.NoError(suite.T(), err)
+				err := s.createPod("error-pod")
+				s.Require().NoError(err)
 
-				suite.client.Clientset().(*fake.Clientset).
+				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("internal server error")
@@ -332,23 +330,23 @@ func (suite *TestSuite) TestDeletePod() {
 	}
 
 	for _, tt := range tests {
-		suite.Run(tt.name, func() {
+		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			err := suite.client.DeletePod(context.Background(), tt.podName)
+			err := s.client.DeletePod(context.Background(), tt.podName)
 			if tt.expectedErr != nil {
-				require.Error(suite.T(), err)
-				assert.ErrorIs(suite.T(), err, tt.expectedErr)
+				s.Require().Error(err)
+				s.Assert().ErrorIs(err, tt.expectedErr)
 				return
 			}
 
-			require.NoError(suite.T(), err)
+			s.Require().NoError(err)
 		})
 	}
 }
 
-func (suite *TestSuite) TestPortForwardPod() {
-	suite.T().Skip("not implemented")
+func (s *TestSuite) TestPortForwardPod() {
+	s.T().Skip("not implemented")
 	// TestPortForwardPod is not implemented.
 	//
 	// The PortForwardPod function involves complex interactions with the Kubernetes API
@@ -368,11 +366,11 @@ func (suite *TestSuite) TestPortForwardPod() {
 	// and network conditions can be used to validate its behavior.
 }
 
-func (suite *TestSuite) createPod(name string) error {
-	_, err := suite.client.Clientset().CoreV1().Pods(suite.namespace).Create(context.Background(), &v1.Pod{
+func (s *TestSuite) createPod(name string) error {
+	_, err := s.client.Clientset().CoreV1().Pods(s.namespace).Create(context.Background(), &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: suite.namespace,
+			Namespace: s.namespace,
 		},
 	}, metav1.CreateOptions{})
 	return err
