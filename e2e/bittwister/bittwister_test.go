@@ -5,128 +5,100 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"strconv"
-	"testing"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 const (
-	iperfImage  = "docker.io/clearlinux/iperf:latest"
-	gopingImage = "ghcr.io/celestiaorg/goping:4803195"
+	maxRandomTestCases = 2
+	iperfImage         = "networkstatic/iperf3:latest"
+	gopingImage        = "ghcr.io/celestiaorg/goping:4803195"
 )
 
-func TestBittwister_Bandwidth(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBittwisterBandwidth() {
+	s.T().Parallel()
 	// Setup
 
 	const (
 		iperfTestDuration    = 45 * time.Second
 		iperfParallelClients = 4
-		commandTimeout       = 60 * time.Minute
+		iperfPort            = 5201
 	)
+	ctx := context.Background()
 
-	iperfMother, err := knuu.NewInstance("iperf")
-	require.NoError(t, err, "Error creating instance")
+	iperfMother, err := s.Knuu.NewInstance("iperf")
+	s.Require().NoError(err)
 
-	err = iperfMother.SetImage(iperfImage)
-	require.NoError(t, err, "Error setting image")
-
-	err = iperfMother.SetCommand("iperf3", "-s")
-	require.NoError(t, err, "Error executing command")
-
-	require.NoError(t, iperfMother.AddPortTCP(5201), "Error adding port")
-	require.NoError(t, iperfMother.Commit(), "Error committing instance")
+	s.Require().NoError(iperfMother.SetImage(ctx, iperfImage))
+	s.Require().NoError(iperfMother.SetCommand("iperf3", "-s"))
+	s.Require().NoError(iperfMother.AddPortTCP(iperfPort))
+	s.Require().NoError(iperfMother.Commit())
 
 	iperfServer, err := iperfMother.CloneWithName("iperf-server")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
 	iperfClient, err := iperfMother.CloneWithName("iperf-client")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(iperfServer, iperfClient))
+	s.T().Cleanup(func() {
+		s.T().Log("Tearing down TestBittwisterBandwidth test...")
+		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
 	// Prepare iperf client & server
 
-	iperfServerIP, err := iperfServer.GetIP()
-	require.NoError(t, err, "Error getting IP")
+	s.Require().NoError(iperfServer.EnableBitTwister())
+	s.Require().NoError(iperfServer.Start(ctx))
+	s.Require().NoError(iperfServer.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(iperfClient.Start(ctx))
 
-	require.NoError(t, iperfServer.EnableBitTwister(), "Error enabling BitTwister")
-	require.NoError(t, iperfServer.Start(), "Error starting iperf-server instance")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	require.NoError(t, iperfServer.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
-
-	require.NoError(t, iperfClient.Start(), "Error starting iperf-client instance")
+	iperfServerIP, err := iperfServer.GetIP(ctx)
+	s.Require().NoError(err)
 
 	// Perform the test
-
-	tt := []struct {
+	type testCase struct {
 		name             string
 		targetBandwidth  int64
 		tolerancePercent int
-	}{{
-		name:             "512 Kbps",
-		targetBandwidth:  512 * 1000,
-		tolerancePercent: 50,
-	},
-		{
-			name:             "1 Mbps",
-			targetBandwidth:  1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "2 Mbps",
-			targetBandwidth:  2 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "4 Mbps",
-			targetBandwidth:  4 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "8 Mbps",
-			targetBandwidth:  8 * 1024 * 1000,
-			tolerancePercent: 55,
-		},
-		{
-			name:             "16 Mbps",
-			targetBandwidth:  16 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "32 Mbps",
-			targetBandwidth:  32 * 1024 * 1000,
-			tolerancePercent: 50,
-		},
+	}
+	tt := make([]testCase, maxRandomTestCases)
+	for i := 0; i < maxRandomTestCases; i++ {
+		tt[i] = testCase{
+			name: fmt.Sprintf("random test case %d", i+1),
+
+			// 512 Kbps to 4 Mbps
+			targetBandwidth: int64(rand.Intn(4_000_000-512_000) + 512_000),
+
+			// 40 to 50 percent tolerance
+			// high tolerance is chosen as sometimes specially when we run a large test (like all e2e at the same time),
+			// the bandwidth might not be stable and the test might fail due to some transient issues.
+			tolerancePercent: rand.Intn(10) + 40,
+		}
 	}
 
 	for _, tc := range tt {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			err = iperfServer.SetBandwidthLimit(tc.targetBandwidth)
-			require.NoError(t, err, "Error setting bandwidth limit")
+		s.Run(tc.name, func() {
+			s.T().Logf("Max bandwidth: %v \t tolerance: %v%%", formatBandwidth(float64(tc.targetBandwidth)), tc.tolerancePercent)
 
-			t.Log("Starting bandwidth test. It takes a while.")
+			s.Require().NoError(iperfServer.SetBandwidthLimit(tc.targetBandwidth))
+
+			s.T().Log("Starting bandwidth test. It takes a while.")
 			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
-			output, err := iperfClient.ExecuteCommandWithContext(ctx,
+			output, err := iperfClient.ExecuteCommand(ctx,
 				"iperf3", "-c", iperfServerIP,
 				"-t", fmt.Sprint(int64(iperfTestDuration.Seconds())),
 				"-P", fmt.Sprint(iperfParallelClients), "--json")
-			require.NoError(t, err, "Error executing command")
+			s.Require().NoError(err)
 
 			elapsed := time.Since(startTime)
-			t.Logf("Test took %d seconds", int64(elapsed.Seconds()))
+			s.T().Logf("test took %d seconds", int64(elapsed.Seconds()))
 
 			var iperfOutput struct {
 				End struct {
@@ -135,13 +107,12 @@ func TestBittwister_Bandwidth(t *testing.T) {
 					} `json:"sum_received"`
 				} `json:"end"`
 			}
-			err = json.Unmarshal([]byte(output), &iperfOutput)
-			require.NoError(t, err, "Error unmarshalling JSON")
+			s.Require().NoError(json.Unmarshal([]byte(output), &iperfOutput))
 
 			deviationPercent := math.Abs(iperfOutput.End.SumReceived.BitsPerSecond-float64(tc.targetBandwidth)) / float64(tc.targetBandwidth) * 100
-			assert.LessOrEqual(t, deviationPercent, float64(tc.tolerancePercent), "Deviation is too high")
+			s.Assert().LessOrEqual(deviationPercent, float64(tc.tolerancePercent), "deviation is too high")
 
-			t.Logf("Bandwidth expected: %v \tgot: %v \tdeviation: %v%% \ttolerance: %v%%",
+			s.T().Logf("bandwidth expected: %v \tgot: %v \tdeviation: %v%% \ttolerance: %v%%",
 				formatBandwidth(float64(tc.targetBandwidth)),
 				formatBandwidth(iperfOutput.End.SumReceived.BitsPerSecond),
 				math.Round(deviationPercent),
@@ -150,121 +121,101 @@ func TestBittwister_Bandwidth(t *testing.T) {
 	}
 }
 
-func TestBittwister_Packetloss(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBittwisterPacketloss() {
+	s.T().Parallel()
 	// Setup
 
 	const (
-		numOfPingPackets = 1000
+		numOfPingPackets = 100
 		packetTimeout    = 1 * time.Second
-		commandTimeout   = 60 * time.Minute
+		gopingPort       = 8001
 	)
+	ctx := context.Background()
 
-	mother, err := knuu.NewInstance("mother")
-	require.NoError(t, err, "Error creating instance")
+	mother, err := s.Knuu.NewInstance("mother")
+	s.Require().NoError(err)
 
-	err = mother.SetImage(gopingImage)
-	require.NoError(t, err, "Error setting image")
+	err = mother.SetImage(ctx, gopingImage)
+	s.Require().NoError(err)
 
-	gopingPort := 8001
-
-	require.NoError(t, mother.AddPortTCP(gopingPort), "Error adding port")
-	require.NoError(t, mother.Commit(), "Error committing instance")
+	s.Require().NoError(mother.AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Commit())
 
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
-	require.NoError(t, err, "Error setting environment variable")
+	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
 	executor, err := mother.CloneWithName("executor")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor, target))
+	s.T().Cleanup(func() {
+		s.T().Log("Tearing down TestBittwisterPacketloss test...")
+		err := instance.BatchDestroy(ctx, executor, target)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
 	// Prepare ping executor & target
 
-	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
-	require.NoError(t, target.Start(), "Error starting target instance")
+	s.Require().NoError(target.EnableBitTwister())
+	s.Require().NoError(target.Start(ctx))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	require.NoError(t, target.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
-
-	require.NoError(t, executor.Start(), "Error starting executor instance")
+	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
-	tt := []struct {
+	type testCase struct {
 		name                 string
 		targetPacketlossRate int32
 		tolerancePercent     int
-	}{
-		{
-			name:                 "10%",
-			targetPacketlossRate: 10,
-			tolerancePercent:     50,
-		},
-		{
-			name:                 "20%",
-			targetPacketlossRate: 20,
-			tolerancePercent:     30,
-		},
-		{
-			name:                 "30%",
-			targetPacketlossRate: 30,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "50%",
-			targetPacketlossRate: 50,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "70%",
-			targetPacketlossRate: 70,
-			tolerancePercent:     10,
-		},
-		{
-			name:                 "90%",
-			targetPacketlossRate: 90,
-			tolerancePercent:     10,
-		},
+	}
+	tt := make([]testCase, maxRandomTestCases)
+	for i := 0; i < maxRandomTestCases; i++ {
+		randPacketloss := rand.Intn(80) + 10 // 10 to 90 %
+		tt[i] = testCase{
+			name:                 fmt.Sprintf("random test case %d", i+1),
+			targetPacketlossRate: int32(randPacketloss),
+
+			// higher tolerance for lower packetloss rates
+			tolerancePercent: 50 - randPacketloss/2,
+		}
 	}
 
-	targetIP, err := target.GetIP()
-	require.NoError(t, err, "Error getting IP")
+	targetIP, err := target.GetIP(ctx)
+	s.Require().NoError(err)
 
 	for _, tc := range tt {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			err = target.SetPacketLoss(tc.targetPacketlossRate)
-			require.NoError(t, err, "Error setting packetloss rate")
+		s.Run(tc.name, func() {
+			s.T().Logf("Target packetloss: %v%% \t tolerance: %v%%", tc.targetPacketlossRate, tc.tolerancePercent)
 
-			t.Log("Starting packetloss test. It takes a while.")
+			err = target.SetPacketLoss(tc.targetPacketlossRate)
+			s.Require().NoError(err)
+
+			s.T().Log("Starting packetloss test. It takes a while.")
 			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommandWithContext(ctx, "goping", "ping", "-q",
+			output, err := executor.ExecuteCommand(ctx, "goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				"-t", packetTimeout.String(),
 				"-m", "packetloss",
 				targetAddress)
-			require.NoError(t, err, "Error executing command")
+			s.Require().NoError(err)
 
 			elapsed := time.Since(startTime)
-			t.Logf("Test took %d seconds", int64(elapsed.Seconds()))
+			s.T().Logf("test took %d seconds", int64(elapsed.Seconds()))
 
 			gotPacketloss, err := strconv.ParseFloat(output, 64)
-			require.NoError(t, err, fmt.Sprintf("Error parsing output: `%s`", output))
+			s.Require().NoError(err, fmt.Sprintf("error parsing output: `%s`", output))
 
 			deviationPercent := math.Abs(gotPacketloss - float64(tc.targetPacketlossRate))
-			assert.LessOrEqual(t, deviationPercent, float64(tc.tolerancePercent), "Deviation is too high")
+			s.Assert().LessOrEqual(deviationPercent, float64(tc.tolerancePercent), "deviation is too high")
 
-			t.Logf("Packetloss expected: %v%% \tgot: %.2f%% \tdeviation: %.2f%% \ttolerance: %v%%",
+			s.T().Logf("Packetloss expected: %v%% \tgot: %.2f%% \tdeviation: %.2f%% \ttolerance: %v%%",
 				tc.targetPacketlossRate,
 				gotPacketloss,
 				deviationPercent,
@@ -273,144 +224,107 @@ func TestBittwister_Packetloss(t *testing.T) {
 	}
 }
 
-func TestBittwister_Latency(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBittwisterLatency() {
+	s.T().Parallel()
 	// Setup
 
 	const (
 		numOfPingPackets = 100
+		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
-		commandTimeout   = 60 * time.Minute
 	)
+	ctx := context.Background()
 
-	mother, err := knuu.NewInstance("mother")
-	require.NoError(t, err, "Error creating instance")
+	mother, err := s.Knuu.NewInstance("mother")
+	s.Require().NoError(err)
 
-	err = mother.SetImage(gopingImage)
-	require.NoError(t, err, "Error setting image")
+	err = mother.SetImage(ctx, gopingImage)
+	s.Require().NoError(err)
 
-	gopingPort := 8001
-
-	require.NoError(t, mother.AddPortTCP(gopingPort), "Error adding port")
-	require.NoError(t, mother.Commit(), "Error committing instance")
+	s.Require().NoError(mother.AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Commit())
 
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
-	require.NoError(t, err, "Error setting environment variable")
+	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
 	executor, err := mother.CloneWithName("executor")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor, target))
+	s.T().Cleanup(func() {
+		s.T().Log("Tearing down TestBittwisterLatency test...")
+		err := instance.BatchDestroy(ctx, executor, target)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
 	// Prepare ping executor & target
 
-	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
-	require.NoError(t, target.Start(), "Error starting target instance")
+	s.Require().NoError(target.EnableBitTwister())
+	s.Require().NoError(target.Start(ctx))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	require.NoError(t, target.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
-
-	require.NoError(t, executor.Start(), "Error starting executor instance")
+	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
 
-	tt := []struct {
+	type testCase struct {
 		name             string
 		targetLatency    time.Duration
 		tolerancePercent int
-	}{
-		{
-			name:             "10Maxms",
-			targetLatency:    10 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "20Maxms",
-			targetLatency:    20 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "50Maxms",
-			targetLatency:    50 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "100Maxms",
-			targetLatency:    100 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "200Maxms",
-			targetLatency:    200 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "500Maxms",
-			targetLatency:    500 * time.Millisecond,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max1s",
-			targetLatency:    1 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max2s",
-			targetLatency:    2 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max3s",
-			targetLatency:    3 * time.Second,
-			tolerancePercent: 50,
-		},
-		{
-			name:             "Max5s",
-			targetLatency:    5 * time.Second,
-			tolerancePercent: 50,
-		},
+	}
+	tt := make([]testCase, maxRandomTestCases)
+	for i := 0; i < maxRandomTestCases; i++ {
+		tt[i] = testCase{
+			name: fmt.Sprintf("random test case %d", i+1),
+
+			// 50 to 1000ms
+			targetLatency: time.Duration(rand.Intn(1000)+50) * time.Millisecond,
+
+			// 30 to 50 percent tolerance
+			// high tolerance is chosen as sometimes specially when we run a large test (like all e2e at the same time),
+			// the latency might not be stable and the test might fail due to some transient issues.
+			tolerancePercent: rand.Intn(20) + 30,
+		}
 	}
 
-	targetIP, err := target.GetIP()
-	require.NoError(t, err, "Error getting IP")
+	targetIP, err := target.GetIP(ctx)
+	s.Require().NoError(err)
 
 	for _, tc := range tt {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			err = target.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
-			require.NoError(t, err, "Error setting packetloss rate")
+		s.Run(tc.name, func() {
+			s.T().Logf("Max latency: %v ms \t tolerance: %v%%", tc.targetLatency.Milliseconds(), tc.tolerancePercent)
 
-			t.Log("Starting latency test. It takes a while.")
+			err = target.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
+			s.Require().NoError(err)
+
+			s.T().Log("Starting latency test. It takes a while.")
 			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommandWithContext(ctx,
+			output, err := executor.ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond
 				"-t", (packetTimeout + tc.targetLatency).String(),
 				"-m", "latency",
 				targetAddress)
-			require.NoError(t, err, "Error executing command")
+			s.Require().NoError(err)
 
 			elapsed := time.Since(startTime)
-			t.Logf("Test took %d seconds", int64(elapsed.Seconds()))
+			s.T().Logf("Test took %d seconds", int64(elapsed.Seconds()))
 
 			gotLatency, err := time.ParseDuration(output)
-			require.NoError(t, err, "Error parsing output")
+			s.Require().NoError(err)
 
 			deviationPercent := math.Abs(float64(gotLatency-tc.targetLatency)/float64(tc.targetLatency)) * 100
-			assert.LessOrEqual(t, deviationPercent, float64(tc.tolerancePercent), "Deviation is too high")
+			s.Assert().LessOrEqual(deviationPercent, float64(tc.tolerancePercent), "Deviation is too high")
 
-			t.Logf("Latency expected: %v \tgot: %v \tdeviation: %.2f%% \ttolerance: %v%%",
+			s.T().Logf("Latency expected: %v \tgot: %v \tdeviation: %.2f%% \ttolerance: %v%%",
 				tc.targetLatency.String(),
 				gotLatency.String(),
 				deviationPercent,
@@ -418,127 +332,98 @@ func TestBittwister_Latency(t *testing.T) {
 		})
 	}
 }
-func TestBittwister_Jitter(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBittwisterJitter() {
+	s.T().Parallel()
 	// Setup
 
 	const (
 		numOfPingPackets = 100
+		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
-		commandTimeout   = 60 * time.Minute
 	)
+	ctx := context.Background()
 
-	mother, err := knuu.NewInstance("mother")
-	require.NoError(t, err, "Error creating instance")
+	mother, err := s.Knuu.NewInstance("mother")
+	s.Require().NoError(err)
 
-	err = mother.SetImage(gopingImage)
-	require.NoError(t, err, "Error setting image")
+	err = mother.SetImage(ctx, gopingImage)
+	s.Require().NoError(err)
 
-	gopingPort := 8001
-
-	require.NoError(t, mother.AddPortTCP(gopingPort), "Error adding port")
-	require.NoError(t, mother.Commit(), "Error committing instance")
+	s.Require().NoError(mother.AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Commit())
 
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
-	require.NoError(t, err, "Error setting environment variable")
+	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
 	executor, err := mother.CloneWithName("executor")
-	require.NoError(t, err, "Error cloning instance")
+	s.Require().NoError(err)
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor, target))
+	s.T().Cleanup(func() {
+		s.T().Log("Tearing down TestBittwisterJitter test...")
+		err := instance.BatchDestroy(ctx, executor, target)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
 	// Prepare ping executor & target
 
-	require.NoError(t, target.EnableBitTwister(), "Error enabling BitTwister")
-	require.NoError(t, target.Start(), "Error starting target instance")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	require.NoError(t, target.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
-
-	require.NoError(t, executor.Start(), "Error starting executor instance")
+	s.Require().NoError(target.EnableBitTwister())
+	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
 
-	tt := []struct {
+	type testCase struct {
 		name            string
 		maxTargetJitter time.Duration
-	}{
-		{
-			name:            "Max Jitter 10ms",
-			maxTargetJitter: 10 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 20ms",
-			maxTargetJitter: 20 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 50ms",
-			maxTargetJitter: 50 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 100ms",
-			maxTargetJitter: 100 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 200ms",
-			maxTargetJitter: 200 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 500ms",
-			maxTargetJitter: 500 * time.Millisecond,
-		},
-		{
-			name:            "Max Jitter 1s",
-			maxTargetJitter: 1 * time.Second,
-		},
-		{
-			name:            "Max Jitter 2s",
-			maxTargetJitter: 2 * time.Second,
-		},
-		{
-			name:            "Max Jitter 3s",
-			maxTargetJitter: 3 * time.Second,
-		},
+	}
+	tt := make([]testCase, maxRandomTestCases)
+	for i := 0; i < maxRandomTestCases; i++ {
+		tt[i] = testCase{
+			name: fmt.Sprintf("random test case %d", i+1),
+
+			// 10ms to 500ms
+			maxTargetJitter: time.Duration(rand.Intn(490)+10) * time.Millisecond,
+		}
 	}
 
-	targetIP, err := target.GetIP()
-	require.NoError(t, err, "Error getting IP")
+	targetIP, err := target.GetIP(ctx)
+	s.Require().NoError(err)
 
 	for _, tc := range tt {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			err = target.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
-			require.NoError(t, err, "Error setting packetloss rate")
+		s.Run(tc.name, func() {
+			s.T().Logf("Max jitter: %v", tc.maxTargetJitter.Milliseconds())
 
-			t.Log("Starting jitter test. It takes a while.")
+			err = target.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
+			s.Require().NoError(err)
+
+			s.T().Log("Starting jitter test. It takes a while.")
 			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommandWithContext(ctx,
+			output, err := executor.ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond
 				"-t", (packetTimeout + tc.maxTargetJitter).String(),
 				"-m", "jitter",
 				targetAddress)
-			require.NoError(t, err, "Error executing command")
+			s.Require().NoError(err)
 
 			elapsed := time.Since(startTime)
-			t.Logf("Test took %d seconds", int64(elapsed.Seconds()))
+			s.T().Logf("Test took %d seconds", int64(elapsed.Seconds()))
 
 			gotAvgJitter, err := time.ParseDuration(output)
-			require.NoError(t, err, "Error parsing output")
+			s.Require().NoError(err)
 
-			assert.LessOrEqual(t, gotAvgJitter, tc.maxTargetJitter, "Jitter is too high")
-			t.Logf("Max Jitter expected: %v \tgot (average): %v", tc.maxTargetJitter.String(), gotAvgJitter.String())
+			s.Assert().LessOrEqual(gotAvgJitter, tc.maxTargetJitter, "Jitter is too high")
+			s.T().Logf("Max Jitter expected: %v \tgot (average): %v", tc.maxTargetJitter.String(), gotAvgJitter.String())
 		})
 	}
 }

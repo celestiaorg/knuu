@@ -167,13 +167,13 @@ func (k *Knuu) CleanUp(ctx context.Context) error {
 	return k.K8sCli.DeleteNamespace(ctx, k.TestScope)
 }
 
-func (k *Knuu) HandleStopSignal() {
+func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
 		logrus.Info("Received signal to stop, cleaning up resources...")
-		if err := CleanUp(); err != nil {
+		if err := k.CleanUp(ctx); err != nil {
 			logrus.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
