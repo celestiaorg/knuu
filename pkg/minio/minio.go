@@ -46,6 +46,12 @@ type Minio struct {
 	Namespace string
 }
 
+type Config struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
+}
+
 func (m *Minio) DeployMinio(ctx context.Context) error {
 	if err := m.createOrUpdateDeployment(ctx); err != nil {
 		return ErrMinioFailedToStart.Wrap(err)
@@ -243,6 +249,19 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	}
 
 	return presignedURL.String(), nil
+}
+
+func (m *Minio) GetConfigs(ctx context.Context) (*Config, error) {
+	endpoint, err := m.getEndpoint(ctx)
+	if err != nil {
+		return nil, ErrMinioFailedToGetEndpoint.Wrap(err)
+	}
+
+	return &Config{
+		Endpoint:        endpoint,
+		AccessKeyID:     rootUser,
+		SecretAccessKey: rootPassword,
+	}, nil
 }
 
 func (m *Minio) createOrUpdateService(ctx context.Context) error {

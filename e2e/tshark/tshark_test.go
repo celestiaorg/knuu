@@ -2,68 +2,111 @@ package basic
 
 import (
 	"context"
-	"os"
+	"io"
+	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+)
+
+const (
+	s3BucketName = "tshark-test-bucket"
+	s3Location   = "eu-east-1"
 )
 
 func TestTshark(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
-	knuu, err := knuu.New(ctx)
-	require.NoError(t, err, "Error creating knuu")
+	kn, err := knuu.New(ctx)
+	require.NoError(t, err, "error creating knuu")
 
-	scope := knuu.Scope()
-	t.Log(scope)
+	defer func() {
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("error cleaning up knuu: %v", err)
+		}
+	}()
 
-	instance, err := knuu.NewInstance("alpine")
-	require.NoError(t, err, "Error creating instance")
+	scope := kn.Scope()
+	t.Logf("Test scope: %s", scope)
 
-	err = instance.SetImage(ctx, "docker.io/alpine:latest")
-	require.NoError(t, err, "Error setting image")
+	target, err := kn.NewInstance("busybox")
+	require.NoError(t, err, "error creating instance")
 
-	err = instance.SetCommand("sleep", "infinity")
-	require.NoError(t, err, "Error setting command")
+	err = target.SetImage(ctx, "busybox")
+	require.NoError(t, err, "error setting image")
 
-	err = instance.EnableTsharkCollector(
-		"10Gi", // Example volume size
-		os.Getenv("S3_ACCESS_KEY"),
-		os.Getenv("S3_SECRET_KEY"),
-		os.Getenv("S3_REGION"),
-		os.Getenv("S3_BUCKET_NAME"),
-		"tshark/"+scope,
+	err = target.SetCommand("sleep", "infinity")
+	require.NoError(t, err, "error setting command")
+
+	t.Log("deploying minio as s3 backend")
+	err = kn.MinioCli.DeployMinio(ctx)
+	require.NoError(t, err, "error deploying minio")
+
+	t.Log("getting minio configs")
+	minioConf, err := kn.MinioCli.GetConfigs(ctx)
+	require.NoError(t, err, "error getting S3 (minio) configs")
+
+	var (
+		filename  = target.K8sName() + instance.TsharkCaptureFileExtension
+		keyPrefix = "tshark/" + scope
+		fileKey   = filepath.Join(keyPrefix, filename)
 	)
-	require.NoError(t, err, "Error enabling tshark collector")
 
-	err = instance.Commit()
-	require.NoError(t, err, "Error committing instance")
+	err = target.EnableTsharkCollector(
+		instance.TsharkCollectorConfig{
+			VolumeSize:     "10Gi",
+			S3AccessKey:    minioConf.AccessKeyID,
+			S3SecretKey:    minioConf.SecretAccessKey,
+			S3Region:       s3Location,
+			S3Bucket:       s3BucketName,
+			S3KeyPrefix:    keyPrefix,
+			S3Endpoint:     minioConf.Endpoint,
+			UploadInterval: 1 * time.Second, // for sake of the test we keep this short
+		},
+	)
+	require.NoError(t, err, "error enabling tshark collector")
+
+	err = target.Commit()
+	require.NoError(t, err, "error committing instance")
 
 	t.Cleanup(func() {
-		require.NoError(t, instance.Destroy(context.Background()))
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("error cleaning up knuu: %v", err)
+		}
 	})
 
 	// Test logic
 
-	err = instance.Start(ctx)
-	require.NoError(t, err, "Error starting instance")
+	t.Log("starting target instance")
+	err = target.Start(ctx)
+	require.NoError(t, err, "error starting instance")
 
-	err = instance.WaitInstanceIsRunning(ctx)
-	require.NoError(t, err, "Error waiting for instance to be running")
+	err = target.WaitInstanceIsRunning(ctx)
+	require.NoError(t, err, "error waiting for instance to be running")
 
-	wget, err := instance.ExecuteCommand(ctx, "echo", "Hello World!")
-	require.NoError(t, err, "Error executing command")
+	// Perform a ping to do generate network traffic to allow tshark to capture it
+	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
+	require.NoError(t, err, "error executing command")
 
-	// wait for 1 minute to upload network traces to s3
-	time.Sleep(1 * time.Minute)
+	url, err := kn.MinioCli.GetMinioURL(ctx, fileKey, s3BucketName)
+	require.NoError(t, err, "error getting minio url")
 
-	assert.Contains(t, wget, "Hello World!")
+	resp, err := http.Get(url)
+	require.NoError(t, err, "error downloading from minio URL")
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "URL does not exist or is not accessible")
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "error reading response body")
+	assert.NotEmpty(t, bodyBytes, "downloaded log file is empty")
 }

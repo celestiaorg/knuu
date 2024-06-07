@@ -2,53 +2,67 @@ package instance
 
 import (
 	"context"
+	"fmt"
 )
 
 const (
-	tsharkCollectorName       = "tshark-collector"
-	tsharkCollectorImage      = "ghcr.io/celestiaorg/tshark-s3:pr-6"
-	tsharkCollectorCPU        = "100m"
-	tsharkCollectorMemory     = "250Mi"
-	tsharkCollectorVolumePath = "/tshark"
-	netAdminCapability        = "NET_ADMIN"
+	tsharkCollectorName        = "tshark-collector"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:f35863a"
+	tsharkCollectorCPU         = "100m"
+	tsharkCollectorMemory      = "250Mi"
+	tsharkCollectorVolumePath  = "/tshark"
+	netAdminCapability         = "NET_ADMIN"
+	TsharkCaptureFileExtension = ".pcapng"
+
+	envStorageAccessKeyID     = "STORAGE_ACCESS_KEY_ID"
+	envStorageSecretAccessKey = "STORAGE_SECRET_ACCESS_KEY"
+	envStorageRegion          = "STORAGE_REGION"
+	envStorageBucketName      = "STORAGE_BUCKET_NAME"
+	envStorageKeyPrefix       = "STORAGE_KEY_PREFIX"
+	envStorageEndpoint        = "STORAGE_ENDPOINT"
+	envCaptureFileName        = "CAPTURE_FILE_NAME"
+	envUploadInterval         = "UPLOAD_INTERVAL"
 )
 
 func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance, error) {
-	tsharkCollector, err := New(tsharkCollectorName, i.SystemDependencies)
+	tsc, err := New(tsharkCollectorName, i.SystemDependencies)
 	if err != nil {
 		return nil, err
 	}
-	if tsharkCollector.SetImage(ctx, tsharkCollectorImage) != nil {
+	if err := tsc.SetImage(ctx, tsharkCollectorImage); err != nil {
 		return nil, err
 	}
-	if tsharkCollector.Commit() != nil {
+	if err := tsc.Commit(); err != nil {
 		return nil, err
 	}
-	if tsharkCollector.SetCPU(tsharkCollectorCPU) != nil {
+	if err := tsc.SetCPU(tsharkCollectorCPU); err != nil {
 		return nil, err
 	}
-	if tsharkCollector.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory) != nil {
+	if err := tsc.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
 		return nil, err
 	}
-	if tsharkCollector.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.volumeSize) != nil {
+	if err := tsc.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.VolumeSize); err != nil {
 		return nil, err
 	}
+
 	envVars := map[string]string{
-		"STORAGE_ACCESS_KEY_ID":     i.tsharkCollectorConfig.s3AccessKey,
-		"STORAGE_SECRET_ACCESS_KEY": i.tsharkCollectorConfig.s3SecretKey,
-		"STORAGE_REGION":            i.tsharkCollectorConfig.s3Region,
-		"STORAGE_BUCKET_NAME":       i.tsharkCollectorConfig.s3Bucket,
-		"STORAGE_KEY_PREFIX":        i.tsharkCollectorConfig.s3KeyPrefix,
-		"CAPTURE_FILE_NAME":         i.k8sName + ".pcapng",
+		envStorageAccessKeyID:     i.tsharkCollectorConfig.S3AccessKey,
+		envStorageSecretAccessKey: i.tsharkCollectorConfig.S3SecretKey,
+		envStorageRegion:          i.tsharkCollectorConfig.S3Region,
+		envStorageBucketName:      i.tsharkCollectorConfig.S3Bucket,
+		envStorageKeyPrefix:       i.tsharkCollectorConfig.S3KeyPrefix,
+		envCaptureFileName:        i.k8sName + TsharkCaptureFileExtension,
+		envStorageEndpoint:        i.tsharkCollectorConfig.S3Endpoint,
+		envUploadInterval:         fmt.Sprintf("%d", int64(i.tsharkCollectorConfig.UploadInterval.Seconds())),
 	}
 
 	for key, value := range envVars {
-		if tsharkCollector.SetEnvironmentVariable(key, value) != nil {
+		if err := tsc.SetEnvironmentVariable(key, value); err != nil {
 			return nil, err
 		}
 	}
-	if tsharkCollector.AddCapability(netAdminCapability) != nil {
+	if err := tsc.AddCapability(netAdminCapability); err != nil {
 		return nil, err
 	}
-	return tsharkCollector, nil
+	return tsc, nil
 }

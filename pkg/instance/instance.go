@@ -71,18 +71,23 @@ type ObsyConfig struct {
 
 // TsharkCollectorConfig represents the configuration for the tshark collector
 type TsharkCollectorConfig struct {
-	// volumeSize is the size of the volume to use for the tshark collector
-	volumeSize string
-	// s3AccessKey is the access key to use for the s3 server
-	s3AccessKey string
-	// s3SecretKey is the secret key to use for the s3 server
-	s3SecretKey string
-	// s3Region is the region of the s3 server
-	s3Region string
-	// s3Bucket is the bucket to use for the s3 server
-	s3Bucket string
-	// s3KeyPrefix is the key prefix to use for the s3 server
-	s3KeyPrefix string
+	// VolumeSize is the size of the volume to use for the tshark collector
+	VolumeSize string
+	// S3AccessKey is the access key to use for the s3 server
+	S3AccessKey string
+	// S3SecretKey is the secret key to use for the s3 server
+	S3SecretKey string
+	// S3Region is the region of the s3 server
+	S3Region string
+	// S3Bucket is the bucket to use for the s3 server
+	S3Bucket string
+	// S3KeyPrefix is the key prefix to use for the s3 server
+	S3KeyPrefix string
+	// S3Endpoint is the endpoint of the s3 server
+	S3Endpoint string
+
+	// UploadInterval is the interval at which the tshark collector will upload the pcap file to the s3 server
+	UploadInterval time.Duration
 }
 
 // SecurityContext represents the security settings for a container
@@ -204,6 +209,10 @@ func (i *Instance) DisableBitTwister() error {
 // Name returns the name of the instance
 func (i *Instance) Name() string {
 	return i.name
+}
+
+func (i *Instance) K8sName() string {
+	return i.k8sName
 }
 
 func (i *Instance) SetInstanceType(instanceType InstanceType) {
@@ -984,26 +993,19 @@ func (i *Instance) TsharkCollectorEnabled() bool {
 
 // EnableTsharkCollector enables the tshark collector for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) EnableTsharkCollector(volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string) error {
-	// volumeSize, s3AccessKey, s3SecretKey, s3Region, s3BucketName, s3KeyPrefix string
-	if err := i.validateStateForObsy("Tshark collector"); err != nil {
+func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
+	if err := i.validateStateForObsy(tsharkCollectorName); err != nil {
 		return err
 	}
 	if i.TsharkCollectorEnabled() {
 		return ErrTsharkCollectorAlreadyEnabled
 	}
 	// prefix can be empty, so it's not needed to check it
-	if volumeSize == "" || s3AccessKey == "" || s3SecretKey == "" || s3Region == "" || s3BucketName == "" {
-		return ErrTsharkCollectorConfigNotSet.WithParams(volumeSize, "REDACTED", "REDACTED", s3Region, s3BucketName)
+	if conf.VolumeSize == "" || conf.S3AccessKey == "" ||
+		conf.S3SecretKey == "" || conf.S3Region == "" || conf.S3Bucket == "" {
+		return ErrTsharkCollectorConfigNotSet.WithParams(conf.VolumeSize, "REDACTED", "REDACTED", conf.S3Region, conf.S3Bucket)
 	}
-	i.tsharkCollectorConfig = &TsharkCollectorConfig{
-		volumeSize:  volumeSize,
-		s3AccessKey: s3AccessKey,
-		s3SecretKey: s3SecretKey,
-		s3Region:    s3Region,
-		s3Bucket:    s3BucketName,
-		s3KeyPrefix: s3KeyPrefix,
-	}
+	i.tsharkCollectorConfig = &conf
 	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
 	return nil
 }
