@@ -81,6 +81,8 @@ type TsharkCollectorConfig struct {
 	S3Region string
 	// S3Bucket is the bucket to use for the s3 server
 	S3Bucket string
+	// CreateBucket is the flag to create the bucket if it does not exist
+	CreateBucket bool
 	// S3KeyPrefix is the key prefix to use for the s3 server
 	S3KeyPrefix string
 	// S3Endpoint is the endpoint of the s3 server

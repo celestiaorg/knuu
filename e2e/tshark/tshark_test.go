@@ -68,6 +68,7 @@ func TestTshark(t *testing.T) {
 			S3SecretKey:    minioConf.SecretAccessKey,
 			S3Region:       s3Location,
 			S3Bucket:       s3BucketName,
+			CreateBucket:   true, // Since we fire up a fresh minio server, we need to create the bucket
 			S3KeyPrefix:    keyPrefix,
 			S3Endpoint:     minioConf.Endpoint,
 			UploadInterval: 1 * time.Second, // for sake of the test we keep this short

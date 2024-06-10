@@ -7,7 +7,7 @@ import (
 
 const (
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:f35863a"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-11"
 	tsharkCollectorCPU         = "100m"
 	tsharkCollectorMemory      = "250Mi"
 	tsharkCollectorVolumePath  = "/tshark"
@@ -18,6 +18,7 @@ const (
 	envStorageSecretAccessKey = "STORAGE_SECRET_ACCESS_KEY"
 	envStorageRegion          = "STORAGE_REGION"
 	envStorageBucketName      = "STORAGE_BUCKET_NAME"
+	envCreateBucket           = "STORAGE_CREATE_BUCKET"
 	envStorageKeyPrefix       = "STORAGE_KEY_PREFIX"
 	envStorageEndpoint        = "STORAGE_ENDPOINT"
 	envCaptureFileName        = "CAPTURE_FILE_NAME"
@@ -54,6 +55,7 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		envCaptureFileName:        i.k8sName + TsharkCaptureFileExtension,
 		envStorageEndpoint:        i.tsharkCollectorConfig.S3Endpoint,
 		envUploadInterval:         fmt.Sprintf("%d", int64(i.tsharkCollectorConfig.UploadInterval.Seconds())),
+		envCreateBucket:           fmt.Sprintf("%t", i.tsharkCollectorConfig.CreateBucket),
 	}
 
 	for key, value := range envVars {
