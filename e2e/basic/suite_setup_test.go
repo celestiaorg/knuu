@@ -10,32 +10,29 @@ import (
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-type Suite struct {
+type TestSuite struct {
 	suite.Suite
 	Knuu *knuu.Knuu
 }
 
-func (s *Suite) SetupSuite() {
+func (s *TestSuite) SetupSuite() {
 	var (
 		err error
 		ctx = context.Background()
 	)
-	s.Knuu, err = knuu.New(ctx, knuu.WithProxyEnabled())
+	s.Knuu, err = knuu.New(ctx)
 	s.Require().NoError(err)
-	s.T().Logf("Scope: %s", s.Knuu.Scope())
+	s.T().Logf("Error cleaning up test suite: %v", err)
 	s.Knuu.HandleStopSignal(ctx)
 }
 
-func (s *Suite) TearDownSuite() {
+func (s *TestSuite) TearDownSuite() {
 	s.T().Cleanup(func() {
 		logrus.Info("Tearing down test suite...")
-		err := s.Knuu.CleanUp(context.Background())
-		if err != nil {
-			s.T().Logf("Error cleaning up test suite: %v", err)
-		}
+		s.Require().NoError(s.Knuu.CleanUp(context.Background()))
 	})
 }
 
 func TestRunSuite(t *testing.T) {
-	suite.Run(t, new(Suite))
+	suite.Run(t, new(TestSuite))
 }

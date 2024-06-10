@@ -3,15 +3,16 @@ package basic
 import (
 	"context"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 const (
 	TestImage = "alpine:latest"
 )
 
-func (s *Suite) TestBasic() {
+func (s *TestSuite) TestBasic() {
 	s.T().Parallel()
 	// Setup
 
@@ -36,23 +37,23 @@ func (s *Suite) TestBasic() {
 	s.Require().NoError(target.Start(ctx))
 	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
-	s.Require().NoError(err)
-
-	//Perform the test
+	// Perform the test
 	type testCase struct {
 		name string
 	}
 
-	tt := make([]testCase, 1)
+	tt := []testCase{
+		{"Hello World"},
+	}
 
 	for _, tc := range tt {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Running test case: %s", tc.name)
-			output, err := target.ExecuteCommand(ctx, "echo", "Hello World")
+			output, err := target.ExecuteCommand(ctx, "echo", tc.name)
 			s.Require().NoError(err)
 
-			assert.Contains(s.T(), output, "Hello World")
+			assert.Contains(s.T(), output, tc.name)
 		})
 	}
 
