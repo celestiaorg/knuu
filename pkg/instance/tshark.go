@@ -46,6 +46,10 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		return nil, err
 	}
 
+	if i.tsharkCollectorConfig == nil {
+		return nil, ErrTsharkCollectorConfigNotSet
+	}
+
 	envVars := map[string]string{
 		envStorageAccessKeyID:     i.tsharkCollectorConfig.S3AccessKey,
 		envStorageSecretAccessKey: i.tsharkCollectorConfig.S3SecretKey,
