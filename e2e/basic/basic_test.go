@@ -1,53 +1,59 @@
 package basic
 
 import (
-	"testing"
+	"context"
 
+	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestBasic(t *testing.T) {
-	t.Parallel()
+const (
+	TestImage = "alpine:latest"
+)
+
+func (s *Suite) TestBasic() {
+	s.T().Parallel()
 	// Setup
 
-	instance, err := knuu.NewInstance("alpine")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = instance.SetImage("docker.io/alpine:latest")
-	if err != nil {
-		t.Fatalf("Error setting image: %v", err)
-	}
-	err = instance.SetCommand("sleep", "infinity")
-	if err != nil {
-		t.Fatalf("Error setting command: %v", err)
-	}
-	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	ctx := context.Background()
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(instance))
+	target, err := s.Knuu.NewInstance("alpine")
+	s.Require().NoError(err)
+
+	s.Require().NoError(target.SetImage(ctx, TestImage))
+	s.Require().NoError(target.SetCommand("sleep", "infinity"))
+	s.Require().NoError(target.Commit())
+
+	s.T().Cleanup(func() {
+		s.T().Log("Tearing down Basic Test...")
+		err := instance.BatchDestroy(ctx, target)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
-	// Test logic
+	// Test Logic
+	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
-	err = instance.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = instance.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
-	wget, err := instance.ExecuteCommand("echo", "Hello World!")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
+	s.Require().NoError(err)
+
+	//Perform the test
+	type testCase struct {
+		name string
 	}
 
-	assert.Contains(t, wget, "Hello World!")
+	tt := make([]testCase, 1)
+
+	for _, tc := range tt {
+		tc := tc
+		s.Run(tc.name, func() {
+			s.T().Logf("Running test case: %s", tc.name)
+			output, err := target.ExecuteCommand(ctx, "echo", "Hello World")
+			s.Require().NoError(err)
+
+			assert.Contains(s.T(), output, "Hello World")
+		})
+	}
+
 }
