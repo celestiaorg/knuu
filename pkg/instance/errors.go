@@ -198,4 +198,7 @@ var (
 	ErrAddingToProxy                             = errors.New("AddingToProxy", "error adding '%s' to traefik proxy for service '%s'")
 	ErrGettingProxyURL                           = errors.New("GettingProxyURL", "error getting proxy URL for service '%s'")
 	ErrProxyNotInitialized                       = errors.New("ProxyNotInitialized", "proxy not initialized")
+	ErrCheckFailed                               = errors.New("CheckFailed", "check failed")
+	ErrContextCanceled                           = errors.New("ContextCanceled", "context canceled")
+	ErrBitTwisterClientIsNil                     = errors.New("BitTwisterClientIsNil", "bit twister client is nil")
 )

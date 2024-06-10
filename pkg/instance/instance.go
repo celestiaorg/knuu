@@ -2,7 +2,6 @@ package instance
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -1345,20 +1344,4 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
 	return i.K8sCli.CustomResourceDefinitionExists(ctx, gvr), nil
-}
-
-func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
-	if i.Proxy == nil {
-		return "", ErrProxyNotInitialized
-	}
-
-	prefix := fmt.Sprintf("%s-%d", i.k8sName, port)
-	if err := i.Proxy.AddHost(ctx, i.k8sName, prefix, port); err != nil {
-		return "", ErrAddingToProxy.WithParams(i.k8sName).Wrap(err)
-	}
-	host, err = i.Proxy.URL(ctx, prefix)
-	if err != nil {
-		return "", ErrGettingProxyURL.WithParams(i.k8sName).Wrap(err)
-	}
-	return host, nil
 }
