@@ -86,20 +86,3 @@ func TestProbe(t *testing.T) {
 
 	assert.Contains(t, wget, "Hello World!")
 }
-
-func (s *TestSuite) TestProbe {
-	s.T().Parallel()
-	// Setup
-
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		s.T().Fatalf("Error creating executor: %v", err)
-	}
-
-	web, err := knuu.NewInstance("web")
-	if err != nil {
-		s.T().Fatalf("Error creating instance '%v':", err)
-	}
-	err = web.SetImage("docker.io/nginx:latest")
-	if
-}
