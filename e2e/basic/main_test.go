@@ -21,7 +21,7 @@ func (ts *TestSuite) TestMain() {
 
 	// Perform the test
 	exitVal := ts.Run("TestMain", func() {
-		s.T().Logf("Scope: %s", ts.Knuu.Scope())
+		ts.T().Logf("Scope: %s", ts.Knuu.Scope())
 	})
 
 	exitValue := convertViaMap(exitVal)

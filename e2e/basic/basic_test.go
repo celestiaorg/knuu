@@ -26,10 +26,10 @@ func (ts *TestSuite) TestBasic() {
 	ts.Require().NoError(target.Commit())
 
 	ts.T().Cleanup(func() {
-		s.T().Log("Tearing down Basic Test...")
+		ts.T().Log("Tearing down Basic Test...")
 		err := instance.BatchDestroy(ctx, target)
 		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
+			ts.T().Logf("error destroying instances: %v", err)
 		}
 	})
 
