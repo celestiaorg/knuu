@@ -12,16 +12,16 @@ func convertViaMap(b bool) int {
 	return table[b]
 }
 
-func (s *TestSuite) TestMain() {
-	s.T().Parallel()
+func (ts *TestSuite) TestMain() {
+	ts.T().Parallel()
 	// Setup
 
 	// Test Logic
-	s.T().Log("Running test case: TestMain")
+	ts.T().Log("Running test case: TestMain")
 
 	// Perform the test
-	exitVal := s.Run("TestMain", func() {
-		s.T().Logf("Scope: %s", s.Knuu.Scope())
+	exitVal := ts.Run("TestMain", func() {
+		s.T().Logf("Scope: %s", ts.Knuu.Scope())
 	})
 
 	exitValue := convertViaMap(exitVal)

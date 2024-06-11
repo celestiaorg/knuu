@@ -22,14 +22,16 @@ func (s *TestSuite) SetupSuite() {
 	)
 	s.Knuu, err = knuu.New(ctx)
 	s.Require().NoError(err)
-	s.T().Logf("Error cleaning up test suite: %v", err)
 	s.Knuu.HandleStopSignal(ctx)
 }
 
 func (s *TestSuite) TearDownSuite() {
 	s.T().Cleanup(func() {
 		logrus.Info("Tearing down test suite...")
-		s.Require().NoError(s.Knuu.CleanUp(context.Background()))
+		err := s.Knuu.CleanUp(context.Background())
+		if err != nil {
+			s.T().Logf("Error cleaning up test suite: %v", err)
+		}
 	})
 }
 

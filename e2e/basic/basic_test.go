@@ -9,23 +9,23 @@ import (
 )
 
 const (
-	TestImage = "alpine:latest"
+	testImage = "alpine:latest"
 )
 
-func (s *TestSuite) TestBasic() {
-	s.T().Parallel()
+func (ts *TestSuite) TestBasic() {
+	ts.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
 
-	target, err := s.Knuu.NewInstance("alpine")
-	s.Require().NoError(err)
+	target, err := ts.Knuu.NewInstance("alpine")
+	ts.Require().NoError(err)
 
-	s.Require().NoError(target.SetImage(ctx, TestImage))
-	s.Require().NoError(target.SetCommand("sleep", "infinity"))
-	s.Require().NoError(target.Commit())
+	ts.Require().NoError(target.SetImage(ctx, testImage))
+	ts.Require().NoError(target.SetCommand("sleep", "infinity"))
+	ts.Require().NoError(target.Commit())
 
-	s.T().Cleanup(func() {
+	ts.T().Cleanup(func() {
 		s.T().Log("Tearing down Basic Test...")
 		err := instance.BatchDestroy(ctx, target)
 		if err != nil {
@@ -34,8 +34,8 @@ func (s *TestSuite) TestBasic() {
 	})
 
 	// Test Logic
-	s.Require().NoError(target.Start(ctx))
-	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
+	ts.Require().NoError(target.Start(ctx))
+	ts.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
 	// Perform the test
 	type testCase struct {
@@ -48,12 +48,11 @@ func (s *TestSuite) TestBasic() {
 
 	for _, tc := range tt {
 		tc := tc
-		s.Run(tc.name, func() {
-			s.T().Logf("Running test case: %s", tc.name)
+		ts.Run(tc.name, func() {
 			output, err := target.ExecuteCommand(ctx, "echo", tc.name)
-			s.Require().NoError(err)
+			ts.Require().NoError(err)
 
-			assert.Contains(s.T(), output, tc.name)
+			assert.Contains(ts.T(), output, tc.name)
 		})
 	}
 
