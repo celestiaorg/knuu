@@ -61,12 +61,12 @@ func TestSanitizeName(t *testing.T) {
 		{
 			name:     "empty name",
 			input:    "",
-			expected: "",
+			expected: defaultNameOnEmptyInput,
 		},
 		{
 			name:     "name with only invalid characters",
 			input:    "!!@@##$$",
-			expected: "",
+			expected: defaultNameOnEmptyInput,
 		},
 		{
 			name:     "name with leading and trailing spaces",

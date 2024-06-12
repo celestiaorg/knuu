@@ -10,6 +10,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const defaultNameOnEmptyInput = "empty-name"
+
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
 func isClusterEnvironment() bool {
 	return fileExists(tokenPath) && fileExists(certPath)
@@ -52,6 +54,10 @@ func SanitizeName(name string) string {
 		sanitized = sanitized[:63]
 		// Ensure it does not end with a hyphen after cutting it to the max length
 		sanitized = strings.TrimRight(sanitized, "-")
+	}
+
+	if len(sanitized) == 0 {
+		return defaultNameOnEmptyInput
 	}
 	return sanitized
 }
