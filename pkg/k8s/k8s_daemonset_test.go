@@ -397,13 +397,3 @@ func (s *TestSuite) TestDeleteDaemonSet() {
 		})
 	}
 }
-
-func (suite *TestSuite) createDaemonSet(name string) error {
-	_, err := suite.client.Clientset().AppsV1().DaemonSets(suite.namespace).Create(context.Background(), &appv1.DaemonSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: suite.namespace,
-		},
-	}, metav1.CreateOptions{})
-	return err
-}

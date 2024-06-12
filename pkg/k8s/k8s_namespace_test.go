@@ -238,12 +238,3 @@ func (s *TestSuite) TestNamespaceExists() {
 		})
 	}
 }
-
-func (s *TestSuite) createNamespace(name string) error {
-	_, err := s.client.Clientset().CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}, metav1.CreateOptions{})
-	return err
-}

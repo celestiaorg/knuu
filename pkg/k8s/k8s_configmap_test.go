@@ -266,13 +266,3 @@ func (s *TestSuite) TestDeleteConfigMap() {
 		})
 	}
 }
-
-func (suite *TestSuite) createConfigMap(name string) error {
-	_, err := suite.client.Clientset().CoreV1().ConfigMaps(suite.namespace).Create(context.Background(), &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: suite.namespace,
-		},
-	}, metav1.CreateOptions{})
-	return err
-}

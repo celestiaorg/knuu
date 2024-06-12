@@ -231,13 +231,3 @@ func (s *TestSuite) TestNetworkPolicyExists() {
 		})
 	}
 }
-
-func (s *TestSuite) createNetworkPolicy(name string) error {
-	_, err := s.client.Clientset().NetworkingV1().NetworkPolicies(s.namespace).Create(context.Background(), &v1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: s.namespace,
-		},
-	}, metav1.CreateOptions{})
-	return err
-}
