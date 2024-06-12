@@ -26,6 +26,10 @@ const (
 )
 
 func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance, error) {
+	if i.tsharkCollectorConfig == nil {
+		return nil, ErrTsharkCollectorConfigNotSet
+	}
+
 	tsc, err := New(tsharkCollectorName, i.SystemDependencies)
 	if err != nil {
 		return nil, err
@@ -44,10 +48,6 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 	}
 	if err := tsc.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.VolumeSize); err != nil {
 		return nil, err
-	}
-
-	if i.tsharkCollectorConfig == nil {
-		return nil, ErrTsharkCollectorConfigNotSet
 	}
 
 	envVars := map[string]string{

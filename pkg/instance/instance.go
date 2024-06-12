@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -733,7 +734,7 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
-	logrus.Debugf("Set environment variable '%s' to '%s' in instance '%s'", key, value, i.name)
+	logrus.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
 	return nil
 }
 
@@ -1002,13 +1003,45 @@ func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
 	if i.TsharkCollectorEnabled() {
 		return ErrTsharkCollectorAlreadyEnabled
 	}
-	// prefix can be empty, so it's not needed to check it
-	if conf.VolumeSize == "" || conf.S3AccessKey == "" ||
-		conf.S3SecretKey == "" || conf.S3Region == "" || conf.S3Bucket == "" {
-		return ErrTsharkCollectorConfigNotSet.WithParams(conf.VolumeSize, "REDACTED", "REDACTED", conf.S3Region, conf.S3Bucket)
+
+	if err := validateTsharkCollectorConfig(conf); err != nil {
+		return err
 	}
+
 	i.tsharkCollectorConfig = &conf
 	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
+	return nil
+}
+
+// validateTsharkCollectorConfig checks the configuration fields for proper formatting
+func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
+	// Regex patterns for validation
+	volumeSizePattern, err := regexp.Compile(`^\d+[KMGT]?i$`) // Example: "10Gi", "500Mi"
+	if err != nil {
+		return ErrRegexpCompile.WithParams("volumeSizePattern")
+	}
+	awsKeyPattern, err := regexp.Compile(`^[A-Z0-9]{20}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsKeyPattern")
+	}
+	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{40}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsSecretPattern")
+	}
+
+	if !volumeSizePattern.MatchString(conf.VolumeSize) {
+		return ErrTsharkCollectorInvalidVolumeSize.WithParams(conf.VolumeSize)
+	}
+	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
+		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
+	}
+	if !awsSecretPattern.MatchString(conf.S3SecretKey) {
+		return ErrTsharkCollectorInvalidS3SecretKey.WithParams(conf.S3SecretKey)
+	}
+	if conf.S3Region == "" || conf.S3Bucket == "" {
+		return ErrTsharkCollectorS3RegionOrBucketEmpty.WithParams(conf.S3Region, conf.S3Bucket)
+	}
+
 	return nil
 }
 
