@@ -1020,11 +1020,11 @@ func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
 	if err != nil {
 		return ErrRegexpCompile.WithParams("volumeSizePattern")
 	}
-	awsKeyPattern, err := regexp.Compile(`^[A-Z0-9]{20}$`)
+	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
 	if err != nil {
 		return ErrRegexpCompile.WithParams("awsKeyPattern")
 	}
-	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{40}$`)
+	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{1,40}$`)
 	if err != nil {
 		return ErrRegexpCompile.WithParams("awsSecretPattern")
 	}
