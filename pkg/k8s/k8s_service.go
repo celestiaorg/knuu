@@ -146,17 +146,14 @@ func prepareService(
 }
 
 func (c *Client) WaitForService(ctx context.Context, name string) error {
-	ticker := time.NewTicker(waitRetry)
-	defer ticker.Stop()
-
-	for firstIteration := true; ; firstIteration = false {
-		if !firstIteration {
-			select {
-			case <-ctx.Done():
-				return ErrTimeoutWaitingForServiceReady
-			case <-ticker.C:
-				// Wait for the next tick before proceeding
-			}
+	retryInterval := time.Duration(0)
+	for {
+		select {
+		case <-ctx.Done():
+			return ErrTimeoutWaitingForServiceReady
+		case <-time.After(retryInterval):
+			// Reset to default interval
+			retryInterval = waitRetry
 		}
 
 		ready, err := c.isServiceReady(ctx, name)

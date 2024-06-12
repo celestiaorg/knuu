@@ -117,7 +117,7 @@ func New(ctx context.Context, opts ...Option) (*Knuu, error) {
 
 	if k.K8sCli == nil {
 		var err error
-		k.K8sCli, err = k8s.New(ctx, k.TestScope)
+		k.K8sCli, err = k8s.NewClient(ctx, k.TestScope)
 		if err != nil {
 			return nil, ErrCannotInitializeK8s.Wrap(err)
 		}

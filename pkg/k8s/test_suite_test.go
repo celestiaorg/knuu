@@ -30,12 +30,16 @@ func TestKubeManagerTestSuite(t *testing.T) {
 }
 
 func (s *TestSuite) SetupTest() {
-	clientset := fake.NewSimpleClientset()
-	discoveryClient := &discfake.FakeDiscovery{Fake: &k8stesting.Fake{}}
-	dynamicClient := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 	s.namespace = "test"
-
-	s.client = k8s.NewCustom(clientset, discoveryClient, dynamicClient, s.namespace)
+	var err error
+	s.client, err = k8s.NewClientCustom(
+		context.Background(),
+		fake.NewSimpleClientset(),
+		&discfake.FakeDiscovery{Fake: &k8stesting.Fake{}},
+		dynfake.NewSimpleDynamicClient(runtime.NewScheme()),
+		s.namespace,
+	)
+	s.Require().NoError(err)
 }
 
 func (s *TestSuite) createConfigMap(name string) error {

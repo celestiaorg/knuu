@@ -10,7 +10,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const defaultNameOnEmptyInput = "empty-name"
+// build the configuration from the kubeconfig file
+var kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
 
 // isClusterEnvironment checks if the program is running in a Kubernetes cluster.
 func isClusterEnvironment() bool {
@@ -27,9 +28,6 @@ func getClusterConfig() (*rest.Config, error) {
 	if isClusterEnvironment() {
 		return rest.InClusterConfig()
 	}
-
-	// build the configuration from the kubeconfig file
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
 
@@ -44,6 +42,7 @@ var invalidCharsRegexp = regexp.MustCompile(`[^a-z0-9-]+`)
 //     and ensuring it does not end with a hyphen after trimming.
 //
 // Use this function to sanitize strings to be used as Kubernetes names for resources.
+// It will panic if the sanitized name is empty.
 func SanitizeName(name string) string {
 	sanitized := strings.ToLower(name)
 	// Replace underscores and any other disallowed characters with hyphens
@@ -57,7 +56,7 @@ func SanitizeName(name string) string {
 	}
 
 	if len(sanitized) == 0 {
-		return defaultNameOnEmptyInput
+		panic("sanitized name is empty")
 	}
 	return sanitized
 }

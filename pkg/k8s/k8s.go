@@ -37,7 +37,7 @@ type Client struct {
 
 var _ KubeManager = &Client{}
 
-func New(ctx context.Context, namespace string) (*Client, error) {
+func NewClient(ctx context.Context, namespace string) (*Client, error) {
 	config, err := getClusterConfig()
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
@@ -48,19 +48,31 @@ func New(ctx context.Context, namespace string) (*Client, error) {
 		return nil, ErrCreatingClientset.Wrap(err)
 	}
 
-	// create discovery client
 	dc, err := discovery.NewDiscoveryClientForConfig(config)
 	if err != nil {
 		return nil, ErrCreatingDiscoveryClient.Wrap(err)
 	}
 
-	// Create the dynamic client
 	dC, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, ErrCreatingDynamicClient.Wrap(err)
 	}
-	kc := &Client{clientset: cs, discoveryClient: dc, dynamicClient: dC}
+	return NewClientCustom(ctx, cs, dc, dC, namespace)
+}
 
+func NewClientCustom(
+	ctx context.Context,
+	cs kubernetes.Interface,
+	dc discovery.DiscoveryInterface,
+	dC dynamic.Interface,
+	namespace string,
+) (*Client, error) {
+	kc := &Client{
+		clientset:       cs,
+		discoveryClient: dc,
+		dynamicClient:   dC,
+		namespace:       namespace,
+	}
 	namespace = SanitizeName(namespace)
 	kc.namespace = namespace
 	if kc.NamespaceExists(ctx, namespace) {
@@ -71,22 +83,7 @@ func New(ctx context.Context, namespace string) (*Client, error) {
 	if err := kc.CreateNamespace(ctx, namespace); err != nil {
 		return nil, ErrCreatingNamespace.WithParams(namespace).Wrap(err)
 	}
-
 	return kc, nil
-}
-
-func NewCustom(
-	cs kubernetes.Interface,
-	dc discovery.DiscoveryInterface,
-	dC dynamic.Interface,
-	namespace string,
-) *Client {
-	return &Client{
-		clientset:       cs,
-		discoveryClient: dc,
-		dynamicClient:   dC,
-		namespace:       namespace,
-	}
 }
 
 func (c *Client) Clientset() kubernetes.Interface {
