@@ -166,7 +166,7 @@ func loadEnvVariables() error {
 		return ErrCannotLoadEnv.Wrap(err)
 	}
 	if os.IsNotExist(err) {
-	        logrus.Info("The .env file does not exist, continuing without loading environment variables.")
+		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
 	}
 	return nil
 }
