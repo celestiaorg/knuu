@@ -96,7 +96,7 @@ func InitializeWithScope(testScope string) error {
 	}
 
 	// TODO: this must be moved to somewhere more meaningful
-	tmpKnuu.HandleStopSignal()
+	tmpKnuu.HandleStopSignal(context.Background())
 	return nil
 }
 
