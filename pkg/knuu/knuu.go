@@ -161,10 +161,13 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 }
 
 func loadEnvVariables() error {
-	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+	err := godotenv.Load()
+	if err != nil && !os.IsNotExist(err) {
 		return ErrCannotLoadEnv.Wrap(err)
 	}
-	logrus.Info("The .env file does not exist, continuing without loading environment variables.")
+	if os.IsNotExist(err) {
+	        logrus.Info("The .env file does not exist, continuing without loading environment variables.")
+	}
 	return nil
 }
 
