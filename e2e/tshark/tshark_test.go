@@ -26,7 +26,7 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	kn, err := knuu.New(ctx)
+	kn, err := knuu.New(ctx, knuu.Options{})
 	require.NoError(t, err, "error creating knuu")
 
 	defer func() {
