@@ -25,8 +25,10 @@ const (
 
 func TestKanikoBuilder(t *testing.T) {
 	k8sCS := fake.NewSimpleClientset()
+	k8sClient, err := k8s.NewClientCustom(context.Background(), k8sCS, k8sCS.Discovery(), nil, k8sNamespace)
+	require.NoError(t, err)
 	kb := &Kaniko{
-		K8s: k8s.NewCustom(k8sCS, k8sCS.Discovery(), nil, k8sNamespace),
+		K8s: k8sClient,
 	}
 	ctx := context.Background()
 
