@@ -69,11 +69,11 @@ func InitializeWithScope(testScope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	var err error
-	tmpKnuu, err = New(ctx,
-		WithTestScope(testScope),
-		WithTimeout(timeout),
-		WithProxyEnabled(),
-	)
+	tmpKnuu, err = New(ctx, Options{
+		TestScope:    testScope,
+		Timeout:      timeout,
+		ProxyEnabled: true,
+	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
