@@ -82,13 +82,13 @@ func InitializeWithScope(testScope string) error {
 	switch builderType {
 	case "kubernetes":
 		tmpKnuu.ImageBuilder = &kaniko.Kaniko{
-			K8s:   tmpKnuu.K8sCli,
-			Minio: tmpKnuu.MinioCli,
+			K8s:   tmpKnuu.K8sClient,
+			Minio: tmpKnuu.MinioClient,
 		}
 	case "docker", "":
 		tmpKnuu.ImageBuilder = &docker.Docker{
-			K8sClientset: tmpKnuu.K8sCli.Clientset(),
-			K8sNamespace: tmpKnuu.K8sCli.Namespace(),
+			K8sClientset: tmpKnuu.K8sClient.Clientset(),
+			K8sNamespace: tmpKnuu.K8sClient.Namespace(),
 		}
 	default:
 		return ErrInvalidKnuuBuilder.WithParams(builderType)

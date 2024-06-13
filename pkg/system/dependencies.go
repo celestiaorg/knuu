@@ -11,8 +11,8 @@ import (
 
 type SystemDependencies struct {
 	ImageBuilder builder.Builder
-	K8sCli       k8s.KubeManager
-	MinioCli     *minio.Minio
+	K8sClient    k8s.KubeManager
+	MinioClient  *minio.Minio
 	Logger       *logrus.Logger
 	Proxy        *traefik.Traefik
 	TestScope    string
