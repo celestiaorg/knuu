@@ -1,10 +1,10 @@
 module github.com/celestiaorg/knuu
 
-go 1.22.3
+go 1.22.4
 
 require (
 	github.com/celestiaorg/bittwister v0.0.0-20231213180407-65cdbaf5b8c7
-	github.com/docker/docker v26.1.3+incompatible
+	github.com/docker/docker v26.1.4+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.0.70
