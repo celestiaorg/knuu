@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,7 +43,7 @@ func (s *TestSuite) SetupTest() {
 
 func (s *TestSuite) createConfigMap(name string) error {
 	_, err := s.client.Clientset().CoreV1().ConfigMaps(s.namespace).
-		Create(context.Background(), &v1.ConfigMap{
+		Create(context.Background(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: s.namespace,
