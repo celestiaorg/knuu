@@ -55,8 +55,8 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
-			K8sCli:       opts.K8s,
-			MinioCli:     opts.Minio,
+			K8sClient:    opts.K8s,
+			MinioClient:  opts.Minio,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
 			TestScope:    opts.TestScope,
@@ -87,7 +87,7 @@ func (k *Knuu) Scope() string {
 }
 
 func (k *Knuu) CleanUp(ctx context.Context) error {
-	return k.K8sCli.DeleteNamespace(ctx, k.TestScope)
+	return k.K8sClient.DeleteNamespace(ctx, k.TestScope)
 }
 
 func (k *Knuu) HandleStopSignal(ctx context.Context) {
@@ -126,15 +126,15 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands,
 		fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s",
-			k.TestScope, k.K8sCli.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sCli.Namespace()))
+			k.TestScope, k.K8sClient.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sClient.Namespace()))
 
 	// Delete the namespace as it was created by knuu.
-	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sCli.Namespace())
-	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k.K8sCli.Namespace()))
+	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sClient.Namespace())
+	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k.K8sClient.Namespace()))
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.TestScope, k.K8sCli.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.TestScope, k.K8sClient.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
@@ -185,26 +185,24 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		k.timeout = defaultTimeout
 	}
 
-	if k.K8sCli == nil {
+	if k.K8sClient == nil {
 		var err error
-		k.K8sCli, err = k8s.New(ctx, k.TestScope)
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}
 	}
 
-	if k.MinioCli == nil {
-		k.MinioCli = &minio.Minio{
-			Clientset: k.K8sCli.Clientset(),
-			Namespace: k.K8sCli.Namespace(),
+	if k.MinioClient == nil {
+		k.MinioClient = &minio.Minio{
+			K8s: k.K8sClient,
 		}
 	}
 
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
-			K8sClientset: k.K8sCli.Clientset(),
-			K8sNamespace: k.K8sCli.Namespace(),
-			Minio:        k.MinioCli,
+			K8s:   k.K8sClient,
+			Minio: k.MinioClient,
 		}
 	}
 
@@ -213,7 +211,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 func setupProxy(ctx context.Context, k *Knuu) error {
 	k.Proxy = &traefik.Traefik{
-		K8s: k.K8sCli,
+		K8s: k.K8sClient,
 	}
 	if err := k.Proxy.Deploy(ctx); err != nil {
 		return ErrCannotDeployTraefik.Wrap(err)

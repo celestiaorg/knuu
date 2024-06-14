@@ -318,13 +318,13 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 	}
 
 	// Forward the port
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, i.k8sName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, i.k8sName)
 	if err != nil {
 		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := i.K8sCli.PortForwardPod(ctx, pod.Name, localPort, port)
+		err := i.K8sClient.PortForwardPod(ctx, pod.Name, localPort, port)
 		if err == nil {
 			break
 		}
@@ -385,13 +385,13 @@ func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (strin
 		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
 	}
 
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, instanceName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
 		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-	output, err := i.K8sCli.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
+	output, err := i.K8sClient.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
 	if err != nil {
 		return "", eErr.Wrap(err)
 	}
@@ -468,7 +468,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		if os.IsNotExist(err) || srcInfo.IsDir() {
 			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
 		}
-		file := i.K8sCli.NewFile(dstPath, dest)
+		file := i.K8sClient.NewFile(dstPath, dest)
 
 		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
@@ -661,7 +661,7 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
-	volume := i.K8sCli.NewVolume(path, size, owner)
+	volume := i.K8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
 	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
 	return nil
@@ -716,14 +716,14 @@ func (i *Instance) GetIP(ctx context.Context) (string, error) {
 		return i.kubernetesService.Spec.ClusterIP, nil
 	}
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := i.K8sCli.GetService(ctx, i.k8sName)
+	svc, err := i.K8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		svc, err = i.K8sCli.GetService(ctx, i.k8sName)
+		svc, err = i.K8sClient.GetService(ctx, i.k8sName)
 		if err != nil {
 			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
@@ -1079,7 +1079,7 @@ func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.IsReplicaSetRunning(ctx, i.k8sName)
+	return i.K8sClient.IsReplicaSetRunning(ctx, i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -1119,7 +1119,7 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 		"knuu.sh/type": ExecutorInstance.String(),
 	}
 
-	err := i.K8sCli.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1234,7 +1234,7 @@ func (i *Instance) EnableNetwork(ctx context.Context) error {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
-	err := i.K8sCli.DeleteNetworkPolicy(ctx, i.k8sName)
+	err := i.K8sClient.DeleteNetworkPolicy(ctx, i.k8sName)
 	if err != nil {
 		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1248,7 +1248,7 @@ func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.NetworkPolicyExists(ctx, i.k8sName), nil
+	return i.K8sClient.NetworkPolicyExists(ctx, i.k8sName), nil
 }
 
 // WaitInstanceIsStopped waits until the instance is not running anymore
@@ -1339,12 +1339,12 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
 	}
 
-	return i.K8sCli.CreateCustomResource(ctx, i.k8sName, gvr, obj)
+	return i.K8sClient.CreateCustomResource(ctx, i.k8sName, gvr, obj)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sCli.CustomResourceDefinitionExists(ctx, gvr), nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
 }
 
 func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
