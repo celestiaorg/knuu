@@ -26,7 +26,7 @@ type mockK8s struct {
 	mock.Mock
 }
 
-func (m *mockK8s) Clientset() *kubernetes.Clientset {
+func (m *mockK8s) Clientset() kubernetes.Interface {
 	return &kubernetes.Clientset{}
 }
 
@@ -71,8 +71,8 @@ func TestNew(t *testing.T) {
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
-				assert.NotNil(t, k.K8sCli)
-				assert.NotNil(t, k.MinioCli)
+				assert.NotNil(t, k.K8sClient)
+				assert.NotNil(t, k.MinioClient)
 				assert.NotNil(t, k.ImageBuilder)
 				assert.Equal(t, defaultTimeout, k.timeout)
 			},
@@ -107,7 +107,7 @@ func TestNew(t *testing.T) {
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
-				assert.NotNil(t, k.K8sCli)
+				assert.NotNil(t, k.K8sClient)
 			},
 		},
 		{
@@ -118,7 +118,7 @@ func TestNew(t *testing.T) {
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
-				assert.NotNil(t, k.MinioCli)
+				assert.NotNil(t, k.MinioClient)
 			},
 		},
 		{
