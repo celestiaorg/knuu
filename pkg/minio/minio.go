@@ -44,7 +44,7 @@ const (
 type Minio struct {
 	Clientset kubernetes.Interface
 	Namespace string
-	cli       *miniogo.Client
+	client       *miniogo.Client
 }
 
 func (m *Minio) DeployMinio(ctx context.Context) error {
@@ -162,7 +162,7 @@ func (m *Minio) IsMinioDeployed(ctx context.Context) (bool, error) {
 }
 
 func (m *Minio) init(ctx context.Context) error {
-	if m.cli != nil {
+	if m.client != nil {
 		return nil
 	}
 
@@ -171,7 +171,7 @@ func (m *Minio) init(ctx context.Context) error {
 		return ErrMinioFailedToGetEndpoint.Wrap(err)
 	}
 
-	m.cli, err = miniogo.New(endpoint, &miniogo.Options{
+	m.client, err = miniogo.New(endpoint, &miniogo.Options{
 		Creds:  credentials.NewStaticV4(rootUser, rootPassword, ""),
 		Secure: false,
 	})
@@ -192,7 +192,7 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 		return ErrMinioFailedToCreateBucket.Wrap(err)
 	}
 
-	uploadInfo, err := m.cli.PutObject(ctx, bucketName, minioFilePath, localReader, -1, miniogo.PutObjectOptions{})
+	uploadInfo, err := m.client.PutObject(ctx, bucketName, minioFilePath, localReader, -1, miniogo.PutObjectOptions{})
 	if err != nil {
 		return ErrMinioFailedToUploadData.Wrap(err)
 	}
@@ -208,12 +208,12 @@ func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName s
 	}
 
 	// Check if the object exists before attempting to delete
-	_, err := m.cli.StatObject(ctx, bucketName, minioFilePath, miniogo.StatObjectOptions{})
+	_, err := m.client.StatObject(ctx, bucketName, minioFilePath, miniogo.StatObjectOptions{})
 	if err != nil {
 		return ErrMinioFailedToFindFileBeforeDeletion.Wrap(err)
 	}
 
-	err = m.cli.RemoveObject(ctx, bucketName, minioFilePath, miniogo.RemoveObjectOptions{})
+	err = m.client.RemoveObject(ctx, bucketName, minioFilePath, miniogo.RemoveObjectOptions{})
 	if err != nil {
 		return ErrMinioFailedToDeleteFile.Wrap(err)
 	}
@@ -232,7 +232,7 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	expiration := 24 * time.Hour
 
 	// Generate a presigned URL for the object
-	presignedURL, err := m.cli.PresignedGetObject(ctx, bucketName, minioFilePath, expiration, nil)
+	presignedURL, err := m.client.PresignedGetObject(ctx, bucketName, minioFilePath, expiration, nil)
 	if err != nil {
 		return "", ErrMinioFailedToGeneratePresignedURL.Wrap(err)
 	}
@@ -295,7 +295,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 		return err
 	}
 
-	exists, err := m.cli.BucketExists(ctx, bucketName)
+	exists, err := m.client.BucketExists(ctx, bucketName)
 	if err != nil {
 		return ErrMinioFailedToCheckBucket.Wrap(err)
 	}
@@ -303,7 +303,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 		return nil
 	}
 
-	if err := m.cli.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
+	if err := m.client.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
 		return ErrMinioFailedToCreateBucket.Wrap(err)
 	}
 	logrus.Debugf("Bucket `%s` created successfully.", bucketName)
