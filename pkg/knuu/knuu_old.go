@@ -69,11 +69,11 @@ func InitializeWithScope(testScope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	var err error
-	tmpKnuu, err = New(ctx,
-		WithTestScope(testScope),
-		WithTimeout(timeout),
-		WithProxyEnabled(),
-	)
+	tmpKnuu, err = New(ctx, Options{
+		TestScope:    testScope,
+		Timeout:      timeout,
+		ProxyEnabled: true,
+	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
@@ -82,21 +82,20 @@ func InitializeWithScope(testScope string) error {
 	switch builderType {
 	case "kubernetes":
 		tmpKnuu.ImageBuilder = &kaniko.Kaniko{
-			K8sClientset: tmpKnuu.K8sCli.Clientset(),
-			K8sNamespace: tmpKnuu.K8sCli.Namespace(),
-			Minio:        tmpKnuu.MinioCli,
+			K8s:   tmpKnuu.K8sClient,
+			Minio: tmpKnuu.MinioClient,
 		}
 	case "docker", "":
 		tmpKnuu.ImageBuilder = &docker.Docker{
-			K8sClientset: tmpKnuu.K8sCli.Clientset(),
-			K8sNamespace: tmpKnuu.K8sCli.Namespace(),
+			K8sClientset: tmpKnuu.K8sClient.Clientset(),
+			K8sNamespace: tmpKnuu.K8sClient.Namespace(),
 		}
 	default:
 		return ErrInvalidKnuuBuilder.WithParams(builderType)
 	}
 
 	// TODO: this must be moved to somewhere more meaningful
-	tmpKnuu.HandleStopSignal()
+	tmpKnuu.HandleStopSignal(context.Background())
 	return nil
 }
 

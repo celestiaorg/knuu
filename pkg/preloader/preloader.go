@@ -80,7 +80,7 @@ func (p *Preloader) EmptyImages(ctx context.Context) error {
 func (p *Preloader) preloadImages(ctx context.Context) error {
 	// delete the daemonset if no images are preloaded
 	if len(p.Images) == 0 {
-		return p.K8sCli.DeleteDaemonSet(ctx, p.K8sName)
+		return p.K8sClient.DeleteDaemonSet(ctx, p.K8sName)
 	}
 	var initContainers []v1.Container
 
@@ -110,18 +110,18 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 		"knuu.sh/test-started":         p.StartTime,
 	}
 
-	exists, err := p.K8sCli.DaemonSetExists(ctx, p.K8sName)
+	exists, err := p.K8sClient.DaemonSetExists(ctx, p.K8sName)
 	if err != nil {
 		return err
 	}
 
 	// update the daemonset if it already exists
 	if exists {
-		_, err = p.K8sCli.UpdateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+		_, err = p.K8sClient.UpdateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 		return err
 	}
 
 	// create the daemonset if it doesn't exist
-	_, err = p.K8sCli.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+	_, err = p.K8sClient.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 	return err
 }
