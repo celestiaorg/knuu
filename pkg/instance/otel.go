@@ -434,7 +434,7 @@ func (i *Instance) createProcessors() Processors {
 		Actions: []Action{
 			{
 				Key:    "namespace",
-				Value:  i.K8sCli.Namespace(),
+				Value:  i.K8sClient.Namespace(),
 				Action: "insert",
 			},
 		},

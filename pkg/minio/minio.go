@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"time"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -16,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -42,9 +42,14 @@ const (
 )
 
 type Minio struct {
-	Clientset kubernetes.Interface
-	Namespace string
-	client       *miniogo.Client
+	client *miniogo.Client
+	K8s    k8s.KubeManager
+}
+
+type Config struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
 func (m *Minio) DeployMinio(ctx context.Context) error {
@@ -60,7 +65,7 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 		return ErrMinioFailedToCreateOrUpdateService.Wrap(err)
 	}
 
-	if err := m.waitForMinioService(ctx); err != nil {
+	if err := m.K8s.WaitForService(ctx, ServiceName); err != nil {
 		return ErrMinioFailedToBeReadyService.Wrap(err)
 	}
 
@@ -69,13 +74,13 @@ func (m *Minio) DeployMinio(ctx context.Context) error {
 }
 
 func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
-	deploymentClient := m.Clientset.AppsV1().Deployments(m.Namespace)
+	deploymentClient := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace())
 
 	// Define the Minio deployment
 	minioDeployment := &appsV1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DeploymentName,
-			Namespace: m.Namespace,
+			Namespace: m.K8s.Namespace(),
 		},
 		Spec: appsV1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -148,7 +153,7 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 }
 
 func (m *Minio) IsMinioDeployed(ctx context.Context) (bool, error) {
-	deploymentClient := m.Clientset.AppsV1().Deployments(m.Namespace)
+	deploymentClient := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace())
 
 	_, err := deploymentClient.Get(ctx, DeploymentName, metav1.GetOptions{})
 	if err != nil {
@@ -240,14 +245,27 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 	return presignedURL.String(), nil
 }
 
+func (m *Minio) GetConfigs(ctx context.Context) (*Config, error) {
+	endpoint, err := m.getEndpoint(ctx)
+	if err != nil {
+		return nil, ErrMinioFailedToGetEndpoint.Wrap(err)
+	}
+
+	return &Config{
+		Endpoint:        endpoint,
+		AccessKeyID:     rootUser,
+		SecretAccessKey: rootPassword,
+	}, nil
+}
+
 func (m *Minio) createOrUpdateService(ctx context.Context) error {
-	serviceClient := m.Clientset.CoreV1().Services(m.Namespace)
+	serviceClient := m.K8s.Clientset().CoreV1().Services(m.K8s.Namespace())
 
 	// Define Minio service
 	minioService := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ServiceName,
-			Namespace: m.Namespace,
+			Namespace: m.K8s.Namespace(),
 		},
 		Spec: v1.ServiceSpec{
 			Selector: map[string]string{"app": "minio"},
@@ -312,7 +330,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 }
 
 func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
-	minioService, err := m.Clientset.CoreV1().Services(m.Namespace).Get(ctx, ServiceName, metav1.GetOptions{})
+	minioService, err := m.K8s.Clientset().CoreV1().Services(m.K8s.Namespace()).Get(ctx, ServiceName, metav1.GetOptions{})
 	if err != nil {
 		return "", ErrMinioFailedToGetService.Wrap(err)
 	}
@@ -327,7 +345,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 
 	if minioService.Spec.Type == v1.ServiceTypeNodePort {
 		// Use the Node IP and NodePort
-		nodes, err := m.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		nodes, err := m.K8s.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return "", ErrMinioFailedToGetNodes.Wrap(err)
 		}
@@ -351,7 +369,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 
 func (m *Minio) waitForMinio(ctx context.Context) error {
 	for {
-		deployment, err := m.Clientset.AppsV1().Deployments(m.Namespace).Get(ctx, DeploymentName, metav1.GetOptions{})
+		deployment, err := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace()).Get(ctx, DeploymentName, metav1.GetOptions{})
 		if err == nil && deployment.Status.ReadyReplicas > 0 {
 			break
 		}
@@ -367,64 +385,13 @@ func (m *Minio) waitForMinio(ctx context.Context) error {
 	return nil
 }
 
-func (m *Minio) waitForMinioService(ctx context.Context) error {
-	for {
-		service, err := m.Clientset.CoreV1().Services(m.Namespace).Get(ctx, ServiceName, metav1.GetOptions{})
-		if err != nil {
-			return ErrMinioFailedToGetService.Wrap(err)
-		}
-
-		if service.Spec.Type == v1.ServiceTypeLoadBalancer {
-			if len(service.Status.LoadBalancer.Ingress) == 0 {
-				time.Sleep(waitRetry)
-				continue // Wait until the LoadBalancer IP is available
-			}
-		} else if service.Spec.Type == v1.ServiceTypeNodePort {
-			if service.Spec.Ports[0].NodePort == 0 {
-				return ErrMinioNodePortNotSet
-			}
-		} else if len(service.Spec.ExternalIPs) == 0 {
-			return ErrMinioExternalIPsNotSet
-		}
-
-		// Check if Minio is reachable
-		endpoint, err := m.getEndpoint(ctx)
-		if err != nil {
-			return ErrMinioFailedToGetEndpoint.Wrap(err)
-		}
-
-		if err := checkServiceConnectivity(endpoint); err != nil {
-			time.Sleep(waitRetry) // Retry after some seconds if Minio is not reachable
-			continue
-		}
-
-		break // Minio is reachable, exit the loop
-	}
-
-	select {
-	case <-ctx.Done():
-		return ErrMinioTimeoutWaitingForServiceReady
-	default:
-		return nil
-	}
-}
-
-func checkServiceConnectivity(serviceEndpoint string) error {
-	conn, err := net.DialTimeout("tcp", serviceEndpoint, 2*time.Second)
-	if err != nil {
-		return ErrMinioFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
-	}
-	defer conn.Close()
-	return nil // success
-}
-
 func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize string, createOptions metav1.CreateOptions) error {
 	storageQt, err := resource.ParseQuantity(storageSize)
 	if err != nil {
 		return ErrMinioFailedToParseStorageSize.Wrap(err)
 	}
 
-	pvcClient := m.Clientset.CoreV1().PersistentVolumeClaims(m.Namespace)
+	pvcClient := m.K8s.Clientset().CoreV1().PersistentVolumeClaims(m.K8s.Namespace())
 
 	// Check if PVC already exists
 	_, err = pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
@@ -434,7 +401,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	}
 
 	// Create a simple PersistentVolume if no suitable one is found
-	pvList, err := m.Clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	pvList, err := m.K8s.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return ErrMinioFailedToListPersistentVolumes.Wrap(err)
 	}
@@ -450,7 +417,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 
 	if existingPV == nil {
 		// Create a simple PV if no existing PV is suitable
-		_, err = m.Clientset.CoreV1().PersistentVolumes().Create(ctx, &v1.PersistentVolume{
+		_, err = m.K8s.Clientset().CoreV1().PersistentVolumes().Create(ctx, &v1.PersistentVolume{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: pvPrefix,
 			},
@@ -476,7 +443,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: m.Namespace,
+			Namespace: m.K8s.Namespace(),
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
