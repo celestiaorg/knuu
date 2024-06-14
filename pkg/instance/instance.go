@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +70,29 @@ type ObsyConfig struct {
 	prometheusRemoteWriteExporterEndpoint string
 }
 
+// TsharkCollectorConfig represents the configuration for the tshark collector
+type TsharkCollectorConfig struct {
+	// VolumeSize is the size of the volume to use for the tshark collector
+	VolumeSize string
+	// S3AccessKey is the access key to use for the s3 server
+	S3AccessKey string
+	// S3SecretKey is the secret key to use for the s3 server
+	S3SecretKey string
+	// S3Region is the region of the s3 server
+	S3Region string
+	// S3Bucket is the bucket to use for the s3 server
+	S3Bucket string
+	// CreateBucket is the flag to create the bucket if it does not exist
+	CreateBucket bool
+	// S3KeyPrefix is the key prefix to use for the s3 server
+	S3KeyPrefix string
+	// S3Endpoint is the endpoint of the s3 server
+	S3Endpoint string
+
+	// UploadInterval is the interval at which the tshark collector will upload the pcap file to the s3 server
+	UploadInterval time.Duration
+}
+
 // SecurityContext represents the security settings for a container
 type SecurityContext struct {
 	// Privileged indicates whether the container should be run in privileged mode
@@ -81,35 +105,36 @@ type SecurityContext struct {
 // Instance represents a instance
 type Instance struct {
 	system.SystemDependencies
-	name                 string
-	imageName            string
-	k8sName              string
-	state                InstanceState
-	instanceType         InstanceType
-	kubernetesService    *v1.Service
-	builderFactory       *container.BuilderFactory
-	kubernetesReplicaSet *appv1.ReplicaSet
-	portsTCP             []int
-	portsUDP             []int
-	command              []string
-	args                 []string
-	env                  map[string]string
-	volumes              []*k8s.Volume
-	memoryRequest        string
-	memoryLimit          string
-	cpuRequest           string
-	policyRules          []rbacv1.PolicyRule
-	livenessProbe        *v1.Probe
-	readinessProbe       *v1.Probe
-	startupProbe         *v1.Probe
-	files                []*k8s.File
-	isSidecar            bool
-	parentInstance       *Instance
-	sidecars             []*Instance
-	fsGroup              int64
-	obsyConfig           *ObsyConfig
-	securityContext      *SecurityContext
-	BitTwister           *btConfig
+	name                  string
+	imageName             string
+	k8sName               string
+	state                 InstanceState
+	instanceType          InstanceType
+	kubernetesService     *v1.Service
+	builderFactory        *container.BuilderFactory
+	kubernetesReplicaSet  *appv1.ReplicaSet
+	portsTCP              []int
+	portsUDP              []int
+	command               []string
+	args                  []string
+	env                   map[string]string
+	volumes               []*k8s.Volume
+	memoryRequest         string
+	memoryLimit           string
+	cpuRequest            string
+	policyRules           []rbacv1.PolicyRule
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
+	files                 []*k8s.File
+	isSidecar             bool
+	parentInstance        *Instance
+	sidecars              []*Instance
+	fsGroup               int64
+	obsyConfig            *ObsyConfig
+	tsharkCollectorConfig *TsharkCollectorConfig
+	securityContext       *SecurityContext
+	BitTwister            *btConfig
 }
 
 func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
@@ -141,32 +166,33 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 
 	// Create the instance
 	return &Instance{
-		name:               name,
-		k8sName:            k8sName,
-		imageName:          "",
-		state:              None,
-		instanceType:       BasicInstance,
-		portsTCP:           make([]int, 0),
-		portsUDP:           make([]int, 0),
-		command:            make([]string, 0),
-		args:               make([]string, 0),
-		env:                make(map[string]string),
-		volumes:            make([]*k8s.Volume, 0),
-		memoryRequest:      "",
-		memoryLimit:        "",
-		cpuRequest:         "",
-		policyRules:        make([]rbacv1.PolicyRule, 0),
-		livenessProbe:      nil,
-		readinessProbe:     nil,
-		startupProbe:       nil,
-		files:              make([]*k8s.File, 0),
-		isSidecar:          false,
-		parentInstance:     nil,
-		sidecars:           make([]*Instance, 0),
-		obsyConfig:         obsyConfig,
-		securityContext:    securityContext,
-		BitTwister:         getBitTwisterDefaultConfig(),
-		SystemDependencies: sysDeps,
+		name:                  name,
+		k8sName:               k8sName,
+		imageName:             "",
+		state:                 None,
+		instanceType:          BasicInstance,
+		portsTCP:              make([]int, 0),
+		portsUDP:              make([]int, 0),
+		command:               make([]string, 0),
+		args:                  make([]string, 0),
+		env:                   make(map[string]string),
+		volumes:               make([]*k8s.Volume, 0),
+		memoryRequest:         "",
+		memoryLimit:           "",
+		cpuRequest:            "",
+		policyRules:           make([]rbacv1.PolicyRule, 0),
+		livenessProbe:         nil,
+		readinessProbe:        nil,
+		startupProbe:          nil,
+		files:                 make([]*k8s.File, 0),
+		isSidecar:             false,
+		parentInstance:        nil,
+		sidecars:              make([]*Instance, 0),
+		obsyConfig:            obsyConfig,
+		tsharkCollectorConfig: nil,
+		securityContext:       securityContext,
+		BitTwister:            getBitTwisterDefaultConfig(),
+		SystemDependencies:    sysDeps,
 	}, nil
 }
 
@@ -186,6 +212,10 @@ func (i *Instance) DisableBitTwister() error {
 // Name returns the name of the instance
 func (i *Instance) Name() string {
 	return i.name
+}
+
+func (i *Instance) K8sName() string {
+	return i.k8sName
 }
 
 func (i *Instance) SetInstanceType(instanceType InstanceType) {
@@ -318,13 +348,13 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 	}
 
 	// Forward the port
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, i.k8sName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, i.k8sName)
 	if err != nil {
 		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := i.K8sCli.PortForwardPod(ctx, pod.Name, localPort, port)
+		err := i.K8sClient.PortForwardPod(ctx, pod.Name, localPort, port)
 		if err == nil {
 			break
 		}
@@ -385,13 +415,13 @@ func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (strin
 		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
 	}
 
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, instanceName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
 		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-	output, err := i.K8sCli.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
+	output, err := i.K8sClient.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
 	if err != nil {
 		return "", eErr.Wrap(err)
 	}
@@ -468,7 +498,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		if os.IsNotExist(err) || srcInfo.IsDir() {
 			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
 		}
-		file := i.K8sCli.NewFile(dstPath, dest)
+		file := i.K8sClient.NewFile(dstPath, dest)
 
 		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
@@ -661,7 +691,7 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
-	volume := i.K8sCli.NewVolume(path, size, owner)
+	volume := i.K8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
 	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
 	return nil
@@ -704,7 +734,7 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
-	logrus.Debugf("Set environment variable '%s' to '%s' in instance '%s'", key, value, i.name)
+	logrus.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
 	return nil
 }
 
@@ -716,14 +746,14 @@ func (i *Instance) GetIP(ctx context.Context) (string, error) {
 		return i.kubernetesService.Spec.ClusterIP, nil
 	}
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := i.K8sCli.GetService(ctx, i.k8sName)
+	svc, err := i.K8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		svc, err = i.K8sCli.GetService(ctx, i.k8sName)
+		svc, err = i.K8sClient.GetService(ctx, i.k8sName)
 		if err != nil {
 			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
@@ -959,6 +989,62 @@ func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
 	return nil
 }
 
+// TsharkCollectorEnabled returns true if the tshark collector is enabled
+func (i *Instance) TsharkCollectorEnabled() bool {
+	return i.tsharkCollectorConfig != nil
+}
+
+// EnableTsharkCollector enables the tshark collector for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
+	if err := i.validateStateForObsy(tsharkCollectorName); err != nil {
+		return err
+	}
+	if i.TsharkCollectorEnabled() {
+		return ErrTsharkCollectorAlreadyEnabled
+	}
+
+	if err := validateTsharkCollectorConfig(conf); err != nil {
+		return err
+	}
+
+	i.tsharkCollectorConfig = &conf
+	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
+	return nil
+}
+
+// validateTsharkCollectorConfig checks the configuration fields for proper formatting
+func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
+	// Regex patterns for validation
+	volumeSizePattern, err := regexp.Compile(`^\d+[KMGT]?i$`) // Example: "10Gi", "500Mi"
+	if err != nil {
+		return ErrRegexpCompile.WithParams("volumeSizePattern")
+	}
+	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsKeyPattern")
+	}
+	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{1,40}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsSecretPattern")
+	}
+
+	if !volumeSizePattern.MatchString(conf.VolumeSize) {
+		return ErrTsharkCollectorInvalidVolumeSize.WithParams(conf.VolumeSize)
+	}
+	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
+		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
+	}
+	if !awsSecretPattern.MatchString(conf.S3SecretKey) {
+		return ErrTsharkCollectorInvalidS3SecretKey.WithParams(conf.S3SecretKey)
+	}
+	if conf.S3Region == "" || conf.S3Bucket == "" {
+		return ErrTsharkCollectorS3RegionOrBucketEmpty.WithParams(conf.S3Region, conf.S3Bucket)
+	}
+
+	return nil
+}
+
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrivileged(privileged bool) error {
@@ -1030,6 +1116,13 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 			}
 		}
 
+		// deploy tshark collector if enabled
+		if i.TsharkCollectorEnabled() {
+			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
+				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+			}
+		}
+
 		if i.BitTwister.Enabled() {
 			if err := i.addBitTwisterSidecar(ctx); err != nil {
 				return ErrAddingNetworkSidecar.WithParams(i.k8sName).Wrap(err)
@@ -1079,7 +1172,7 @@ func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.IsReplicaSetRunning(ctx, i.k8sName)
+	return i.K8sClient.IsReplicaSetRunning(ctx, i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -1119,7 +1212,7 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 		"knuu.sh/type": ExecutorInstance.String(),
 	}
 
-	err := i.K8sCli.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1234,7 +1327,7 @@ func (i *Instance) EnableNetwork(ctx context.Context) error {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
-	err := i.K8sCli.DeleteNetworkPolicy(ctx, i.k8sName)
+	err := i.K8sClient.DeleteNetworkPolicy(ctx, i.k8sName)
 	if err != nil {
 		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1248,7 +1341,7 @@ func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.NetworkPolicyExists(ctx, i.k8sName), nil
+	return i.K8sClient.NetworkPolicyExists(ctx, i.k8sName), nil
 }
 
 // WaitInstanceIsStopped waits until the instance is not running anymore
@@ -1339,12 +1432,12 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
 	}
 
-	return i.K8sCli.CreateCustomResource(ctx, i.k8sName, gvr, obj)
+	return i.K8sClient.CreateCustomResource(ctx, i.k8sName, gvr, obj)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sCli.CustomResourceDefinitionExists(ctx, gvr), nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
 }
 
 func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
