@@ -361,34 +361,35 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
 
 	return &Instance{
-		name:                 i.name + suffix,
-		k8sName:              i.k8sName + suffix,
-		imageName:            i.imageName,
-		state:                i.state,
-		instanceType:         i.instanceType,
-		kubernetesService:    i.kubernetesService,
-		builderFactory:       i.builderFactory,
-		kubernetesReplicaSet: i.kubernetesReplicaSet,
-		portsTCP:             i.portsTCP,
-		portsUDP:             i.portsUDP,
-		command:              i.command,
-		args:                 i.args,
-		env:                  i.env,
-		volumes:              i.volumes,
-		memoryRequest:        i.memoryRequest,
-		memoryLimit:          i.memoryLimit,
-		cpuRequest:           i.cpuRequest,
-		policyRules:          i.policyRules,
-		livenessProbe:        i.livenessProbe,
-		readinessProbe:       i.readinessProbe,
-		startupProbe:         i.startupProbe,
-		isSidecar:            false,
-		parentInstance:       nil,
-		sidecars:             clonedSidecars,
-		obsyConfig:           i.obsyConfig,
-		securityContext:      &clonedSecurityContext,
-		BitTwister:           &clonedBitTwister,
-		SystemDependencies:   i.SystemDependencies,
+		name:                  i.name + suffix,
+		k8sName:               i.k8sName + suffix,
+		imageName:             i.imageName,
+		state:                 i.state,
+		instanceType:          i.instanceType,
+		kubernetesService:     i.kubernetesService,
+		builderFactory:        i.builderFactory,
+		kubernetesReplicaSet:  i.kubernetesReplicaSet,
+		portsTCP:              i.portsTCP,
+		portsUDP:              i.portsUDP,
+		command:               i.command,
+		args:                  i.args,
+		env:                   i.env,
+		volumes:               i.volumes,
+		memoryRequest:         i.memoryRequest,
+		memoryLimit:           i.memoryLimit,
+		cpuRequest:            i.cpuRequest,
+		policyRules:           i.policyRules,
+		livenessProbe:         i.livenessProbe,
+		readinessProbe:        i.readinessProbe,
+		startupProbe:          i.startupProbe,
+		isSidecar:             false,
+		parentInstance:        nil,
+		sidecars:              clonedSidecars,
+		obsyConfig:            i.obsyConfig,
+		tsharkCollectorConfig: i.tsharkCollectorConfig,
+		securityContext:       &clonedSecurityContext,
+		BitTwister:            &clonedBitTwister,
+		SystemDependencies:    i.SystemDependencies,
 	}
 }
 
@@ -590,6 +591,17 @@ func (i *Instance) addOtelCollectorSidecar(ctx context.Context) error {
 	}
 	if err := i.AddSidecar(otelSidecar); err != nil {
 		return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+	}
+	return nil
+}
+
+func (i *Instance) addTsharkCollectorSidecar(ctx context.Context) error {
+	tsharkSidecar, err := i.createTsharkCollectorInstance(ctx)
+	if err != nil {
+		return ErrCreatingTsharkCollectorInstance.WithParams(i.k8sName).Wrap(err)
+	}
+	if err := i.AddSidecar(tsharkSidecar); err != nil {
+		return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }
