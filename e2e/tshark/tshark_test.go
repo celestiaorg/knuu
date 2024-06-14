@@ -48,11 +48,11 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error setting command")
 
 	t.Log("deploying minio as s3 backend")
-	err = kn.MinioCli.DeployMinio(ctx)
+	err = kn.MinioClient.DeployMinio(ctx)
 	require.NoError(t, err, "error deploying minio")
 
 	t.Log("getting minio configs")
-	minioConf, err := kn.MinioCli.GetConfigs(ctx)
+	minioConf, err := kn.MinioClient.GetConfigs(ctx)
 	require.NoError(t, err, "error getting S3 (minio) configs")
 
 	var (
@@ -98,7 +98,7 @@ func TestTshark(t *testing.T) {
 	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
 	require.NoError(t, err, "error executing command")
 
-	url, err := kn.MinioCli.GetMinioURL(ctx, fileKey, s3BucketName)
+	url, err := kn.MinioClient.GetMinioURL(ctx, fileKey, s3BucketName)
 	require.NoError(t, err, "error getting minio url")
 
 	resp, err := http.Get(url)
