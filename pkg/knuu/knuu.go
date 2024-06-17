@@ -193,16 +193,10 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		}
 	}
 
-	if k.MinioClient == nil {
-		k.MinioClient = &minio.Minio{
-			K8s: k.K8sClient,
-		}
-	}
-
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
-			K8s:   k.K8sClient,
-			Minio: k.MinioClient,
+			K8sClient:   k.K8sClient,
+			MinioClient: k.MinioClient,
 		}
 	}
 

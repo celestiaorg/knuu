@@ -31,8 +31,8 @@ const (
 )
 
 type Kaniko struct {
-	K8s         k8s.KubeManager
-	Minio       *minio.Minio // Minio service to store the build context if it's a directory
+	K8sClient   k8s.KubeManager
+	MinioClient *minio.Minio // Minio service to store the build context if it's a directory
 	ContentName string       // Name of the content pushed to Minio
 }
 
@@ -44,7 +44,7 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 		return "", ErrPreparingJob.Wrap(err)
 	}
 
-	cJob, err := k.K8s.Clientset().BatchV1().Jobs(k.K8s.Namespace()).Create(ctx, job, metav1.CreateOptions{})
+	cJob, err := k.K8sClient.Clientset().BatchV1().Jobs(k.K8sClient.Namespace()).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		return "", ErrCreatingJob.Wrap(err)
 	}
@@ -76,7 +76,7 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 }
 
 func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
-	watcher, err := k.K8s.Clientset().BatchV1().Jobs(k.K8s.Namespace()).Watch(ctx, metav1.ListOptions{
+	watcher, err := k.K8sClient.Clientset().BatchV1().Jobs(k.K8sClient.Namespace()).Watch(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("metadata.name=%s", job.Name),
 	})
 	if err != nil {
@@ -107,7 +107,7 @@ func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*b
 }
 
 func (k *Kaniko) firstPodFromJob(ctx context.Context, job *batchv1.Job) (*v1.Pod, error) {
-	podList, err := k.K8s.Clientset().CoreV1().Pods(k.K8s.Namespace()).List(ctx, metav1.ListOptions{
+	podList, err := k.K8sClient.Clientset().CoreV1().Pods(k.K8sClient.Namespace()).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("job-name=%s", job.Name),
 	})
 	if err != nil {
@@ -130,7 +130,7 @@ func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error)
 		Container: pod.Spec.Containers[0].Name,
 	}
 
-	req := k.K8s.Clientset().CoreV1().Pods(k.K8s.Namespace()).GetLogs(pod.Name, &logOptions)
+	req := k.K8sClient.Clientset().CoreV1().Pods(k.K8sClient.Namespace()).GetLogs(pod.Name, &logOptions)
 	logs, err := req.DoRaw(ctx)
 	if err != nil {
 		return "", err
@@ -140,7 +140,7 @@ func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error)
 }
 
 func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
-	err := k.K8s.Clientset().BatchV1().Jobs(k.K8s.Namespace()).
+	err := k.K8sClient.Clientset().BatchV1().Jobs(k.K8sClient.Namespace()).
 		Delete(ctx, job.Name, metav1.DeleteOptions{
 			PropagationPolicy: &[]metav1.DeletionPropagation{metav1.DeletePropagationBackground}[0],
 		})
@@ -149,7 +149,7 @@ func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
 	}
 
 	// Delete the associated Pods
-	err = k.K8s.Clientset().CoreV1().Pods(k.K8s.Namespace()).
+	err = k.K8sClient.Clientset().CoreV1().Pods(k.K8sClient.Namespace()).
 		DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("job-name=%s", job.Name),
 		})
@@ -159,12 +159,25 @@ func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
 
 	// Delete the content pushed to Minio
 	if k.ContentName != "" {
-		if err := k.Minio.DeleteFromMinio(ctx, k.ContentName, MinioBucketName); err != nil {
+		if err := k.initMinio(ctx); err != nil {
+			return ErrMinioFailedToGetDeployment.Wrap(err)
+		}
+		if err := k.MinioClient.DeleteFromMinio(ctx, k.ContentName, MinioBucketName); err != nil {
 			return ErrDeletingMinioContent.Wrap(err)
 		}
 	}
 
 	return nil
+}
+
+func (k *Kaniko) initMinio(ctx context.Context) error {
+	if k.MinioClient != nil {
+		return nil
+	}
+
+	var err error
+	k.MinioClient, err = minio.New(ctx, k.K8sClient)
+	return err
 }
 
 func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*batchv1.Job, error) {
@@ -248,8 +261,8 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 // As kaniko also supports directly tar.gz archives, no need to extract it,
 // we just need to set the context to tar://<path-to-archive>
 func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
-	if k.Minio == nil {
-		return nil, ErrMinioNotConfigured
+	if err := k.initMinio(ctx); err != nil {
+		return nil, ErrMinioFailedToGetDeployment.Wrap(err)
 	}
 
 	// Create the tar.gz archive
@@ -263,15 +276,11 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	hash.Write(archiveData)
 	k.ContentName = hex.EncodeToString(hash.Sum(nil))
 
-	if err := k.Minio.DeployMinio(ctx); err != nil {
-		return nil, ErrMinioDeploymentFailed.Wrap(err)
-	}
-
-	if err := k.Minio.PushToMinio(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
+	if err := k.MinioClient.PushToMinio(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
 		return nil, err
 	}
 
-	s3URL, err := k.Minio.GetMinioURL(ctx, k.ContentName, MinioBucketName)
+	s3URL, err := k.MinioClient.GetMinioURL(ctx, k.ContentName, MinioBucketName)
 	if err != nil {
 		return nil, err
 	}

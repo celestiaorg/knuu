@@ -13,6 +13,7 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (
@@ -48,7 +49,7 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error setting command")
 
 	t.Log("deploying minio as s3 backend")
-	err = kn.MinioClient.DeployMinio(ctx)
+	kn.MinioClient, err = minio.New(ctx, kn.K8sClient)
 	require.NoError(t, err, "error deploying minio")
 
 	t.Log("getting minio configs")

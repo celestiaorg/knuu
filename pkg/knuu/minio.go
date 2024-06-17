@@ -3,23 +3,23 @@ package knuu
 import (
 	"context"
 	"io"
+
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const minioBucketName = "knuu"
 
+// initMinio initializes the Minio client
+// Since not always we need minio to be deployed and ready,
+// We deploy it on the first use. i.e. minio.New deploys it
 func (k *Knuu) initMinio(ctx context.Context) error {
-	if k.MinioClient == nil {
-		return ErrMinioNotInitialized
-	}
-
-	ok, err := k.MinioClient.IsMinioDeployed(ctx)
-	if err != nil {
-		return err
-	}
-	if ok {
+	if k.MinioClient != nil {
 		return nil
 	}
-	return k.MinioClient.DeployMinio(ctx)
+
+	var err error
+	k.MinioClient, err = minio.New(ctx, k.K8sClient)
+	return err
 }
 
 // contentName is a unique string to identify the content in Minio
