@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -815,62 +814,6 @@ func (i *Instance) AddSidecar(ctx context.Context, sc SidecarManager) error {
 	return nil
 }
 
-// TsharkCollectorEnabled returns true if the tshark collector is enabled
-func (i *Instance) TsharkCollectorEnabled() bool {
-	return i.tsharkCollectorConfig != nil
-}
-
-// EnableTsharkCollector enables the tshark collector for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
-	if err := i.validateStateForObsy(tsharkCollectorName); err != nil {
-		return err
-	}
-	if i.TsharkCollectorEnabled() {
-		return ErrTsharkCollectorAlreadyEnabled
-	}
-
-	if err := validateTsharkCollectorConfig(conf); err != nil {
-		return err
-	}
-
-	i.tsharkCollectorConfig = &conf
-	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
-	return nil
-}
-
-// validateTsharkCollectorConfig checks the configuration fields for proper formatting
-func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
-	// Regex patterns for validation
-	volumeSizePattern, err := regexp.Compile(`^\d+[KMGT]?i$`) // Example: "10Gi", "500Mi"
-	if err != nil {
-		return ErrRegexpCompile.WithParams("volumeSizePattern")
-	}
-	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
-	if err != nil {
-		return ErrRegexpCompile.WithParams("awsKeyPattern")
-	}
-	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{1,40}$`)
-	if err != nil {
-		return ErrRegexpCompile.WithParams("awsSecretPattern")
-	}
-
-	if !volumeSizePattern.MatchString(conf.VolumeSize) {
-		return ErrTsharkCollectorInvalidVolumeSize.WithParams(conf.VolumeSize)
-	}
-	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
-		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
-	}
-	if !awsSecretPattern.MatchString(conf.S3SecretKey) {
-		return ErrTsharkCollectorInvalidS3SecretKey.WithParams(conf.S3SecretKey)
-	}
-	if conf.S3Region == "" || conf.S3Bucket == "" {
-		return ErrTsharkCollectorS3RegionOrBucketEmpty.WithParams(conf.S3Region, conf.S3Bucket)
-	}
-
-	return nil
-}
-
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrivileged(privileged bool) error {
@@ -933,19 +876,17 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 	}
 
 	if i.state == Committed {
-		// deploy tshark collector if enabled
-		if i.TsharkCollectorEnabled() {
-			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
-				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
-			}
-		}
-
 		if err := i.deployResources(ctx); err != nil {
 			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-			return sidecar.deployResources(ctx)
-		}); err != nil {
+		err := applyFunctionToSidecars(i.sidecars,
+			func(sc SidecarManager) error {
+				if err := sc.PreStart(ctx); err != nil {
+					return err
+				}
+				return sc.Instance().deployResources(ctx)
+			})
+		if err != nil {
 			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}

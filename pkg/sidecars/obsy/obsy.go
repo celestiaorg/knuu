@@ -117,7 +117,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 		Receivers:  o.createReceivers(),
 		Exporters:  o.createExporters(),
 		Service:    o.createService(),
-		Processors: o.createProcessors(sysDeps.K8sCli.Namespace()),
+		Processors: o.createProcessors(sysDeps.K8sClient.Namespace()),
 	}
 
 	bytes, err := yaml.Marshal(config)

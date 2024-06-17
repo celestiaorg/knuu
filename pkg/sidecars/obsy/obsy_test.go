@@ -34,7 +34,7 @@ func (s *TestSuite) SetupTest() {
 	s.ctx = context.Background()
 
 	s.sysDeps = system.SystemDependencies{
-		K8sCli: &mockK8sCli{
+		K8sClient: &mockK8sCli{
 			namespace: "test",
 		},
 	}

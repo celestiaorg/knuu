@@ -2,6 +2,7 @@ package basic
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -11,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/sidecars/tshark"
 )
 
 const (
@@ -30,6 +31,7 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error creating knuu")
 
 	defer func() {
+		return
 		if err := kn.CleanUp(ctx); err != nil {
 			t.Logf("error cleaning up knuu: %v", err)
 		}
@@ -56,34 +58,30 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error getting S3 (minio) configs")
 
 	var (
-		filename  = target.K8sName() + instance.TsharkCaptureFileExtension
+		filename  = target.K8sName() + tshark.TsharkCaptureFileExtension
 		keyPrefix = "tshark/" + scope
 		fileKey   = filepath.Join(keyPrefix, filename)
 	)
 
-	err = target.EnableTsharkCollector(
-		instance.TsharkCollectorConfig{
-			VolumeSize:     "10Gi",
-			S3AccessKey:    minioConf.AccessKeyID,
-			S3SecretKey:    minioConf.SecretAccessKey,
-			S3Region:       s3Location,
-			S3Bucket:       s3BucketName,
-			CreateBucket:   true, // Since we fire up a fresh minio server, we need to create the bucket
-			S3KeyPrefix:    keyPrefix,
-			S3Endpoint:     minioConf.Endpoint,
-			UploadInterval: 1 * time.Second, // for sake of the test we keep this short
-		},
-	)
-	require.NoError(t, err, "error enabling tshark collector")
+	fmt.Printf("fileKey: %v\n", fileKey)
+
+	tsc := &tshark.Tshark{
+		VolumeSize:     "10Gi",
+		S3AccessKey:    minioConf.AccessKeyID,
+		S3SecretKey:    minioConf.SecretAccessKey,
+		S3Region:       s3Location,
+		S3Bucket:       s3BucketName,
+		CreateBucket:   true, // Since we fire up a fresh minio server, we need to create the bucket
+		S3KeyPrefix:    keyPrefix,
+		S3Endpoint:     minioConf.Endpoint,
+		UploadInterval: 1 * time.Second, // for sake of the test we keep this short
+	}
+
+	err = target.AddSidecar(ctx, tsc)
+	require.NoError(t, err, "error adding tshark collector")
 
 	err = target.Commit()
 	require.NoError(t, err, "error committing instance")
-
-	t.Cleanup(func() {
-		if err := kn.CleanUp(ctx); err != nil {
-			t.Logf("error cleaning up knuu: %v", err)
-		}
-	})
 
 	// Test logic
 
@@ -100,6 +98,8 @@ func TestTshark(t *testing.T) {
 
 	url, err := kn.MinioClient.GetMinioURL(ctx, fileKey, s3BucketName)
 	require.NoError(t, err, "error getting minio url")
+
+	fmt.Printf("url: %v\n", url)
 
 	resp, err := http.Get(url)
 	require.NoError(t, err, "error downloading from minio URL")
