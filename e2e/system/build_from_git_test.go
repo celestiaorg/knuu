@@ -18,7 +18,7 @@ func TestBuildFromGit(t *testing.T) {
 	ctx := context.Background()
 
 	// The default image builder is kaniko here
-	kn, err := knuu.New(ctx)
+	kn, err := knuu.New(ctx, knuu.Options{})
 	require.NoError(t, err, "Error creating knuu")
 
 	sampleInstance, err := kn.NewInstance("git-builder")

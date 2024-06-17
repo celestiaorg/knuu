@@ -146,36 +146,36 @@ func prepareService(
 }
 
 func (c *Client) WaitForService(ctx context.Context, name string) error {
-	ticker := time.NewTicker(waitRetry)
-	defer ticker.Stop()
-
+	retryInterval := time.Duration(0)
 	for {
 		select {
 		case <-ctx.Done():
 			return ErrTimeoutWaitingForServiceReady
-
-		case <-ticker.C:
-			ready, err := c.isServiceReady(ctx, name)
-			if err != nil {
-				return ErrCheckingServiceReady.WithParams(name).Wrap(err)
-			}
-			if !ready {
-				continue
-			}
-
-			// Check if service is reachable
-			endpoint, err := c.GetServiceEndpoint(ctx, name)
-			if err != nil {
-				return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
-			}
-
-			if err := checkServiceConnectivity(endpoint); err != nil {
-				continue
-			}
-
-			// Service is reachable
-			return nil
+		case <-time.After(retryInterval):
+			// Reset to default interval
+			retryInterval = waitRetry
 		}
+
+		ready, err := c.isServiceReady(ctx, name)
+		if err != nil {
+			return ErrCheckingServiceReady.WithParams(name).Wrap(err)
+		}
+		if !ready {
+			continue
+		}
+
+		// Check if service is reachable
+		endpoint, err := c.GetServiceEndpoint(ctx, name)
+		if err != nil {
+			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
+		}
+
+		if err := checkServiceConnectivity(endpoint); err != nil {
+			continue
+		}
+
+		// Service is reachable
+		return nil
 	}
 }
 
@@ -206,7 +206,7 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 		// Use the first node for simplicity, you might need to handle multiple nodes
 		var nodeIP string
 		for _, address := range nodes.Items[0].Status.Addresses {
-			if address.Type == "ExternalIP" {
+			if address.Type == v1.NodeExternalIP {
 				nodeIP = address.Address
 				break
 			}
@@ -231,6 +231,7 @@ func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) 
 	if err != nil {
 		return false, ErrGettingService.WithParams(name).Wrap(err)
 	}
+
 	switch service.Spec.Type {
 	case v1.ServiceTypeLoadBalancer:
 		return len(service.Status.LoadBalancer.Ingress) > 0, nil
