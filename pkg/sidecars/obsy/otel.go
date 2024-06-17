@@ -1,10 +1,31 @@
-package instance
+package obsy
 
 import (
-	"context"
 	"fmt"
+)
 
-	"gopkg.in/yaml.v3"
+const (
+	localhostEndpoint = "localhost:%d"
+
+	internalTelemetryEndpoint = "localhost:8888"
+	internalTelemetryJobName  = "internal-telemetry"
+	internalTelemetryInterval = "10s"
+	basicTelemetryLevel       = "basic"
+
+	basicAuthOTLPAuthAuthenticator = "basicauth/otlp"
+
+	otlpReceiverName       = "otlp"
+	prometheusReceiverName = "prometheus"
+	jaegerReceiverName     = "jaeger"
+
+	otlpHttpExporterName              = "otlphttp"
+	jaegerExporterName                = "jaeger"
+	prometheusExporterName            = "prometheus"
+	prometheusRemoteWriteExporterName = "prometheusremotewrite"
+	attributesProcessorName           = "attributes"
+
+	namespaceAttributeKey = "namespace"
+	insertAction          = "insert"
 )
 
 type OTelConfig struct {
@@ -176,99 +197,50 @@ type Action struct {
 	Action string `yaml:"action,omitempty"`
 }
 
-func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, error) {
-	otelAgent, err := New("otel-agent", i.SystemDependencies)
-	if err != nil {
-		return nil, ErrCreatingOtelAgentInstance.Wrap(err)
-	}
-
-	if err := otelAgent.SetImage(ctx, fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
-		return nil, ErrSettingOtelAgentImage.Wrap(err)
-	}
-	if err := otelAgent.AddPortTCP(8888); err != nil {
-		return nil, ErrAddingOtelAgentPort.Wrap(err)
-	}
-	if err := otelAgent.AddPortTCP(9090); err != nil {
-		return nil, ErrAddingOtelAgentPort.Wrap(err)
-	}
-	if err := otelAgent.SetCPU("100m"); err != nil {
-		return nil, ErrSettingOtelAgentCPU.Wrap(err)
-	}
-	if err := otelAgent.SetMemory("100Mi", "200Mi"); err != nil {
-		return nil, ErrSettingOtelAgentMemory.Wrap(err)
-	}
-	if err := otelAgent.Commit(); err != nil {
-		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
-	}
-
-	config := OTelConfig{
-		Extensions: i.createExtensions(),
-		Receivers:  i.createReceivers(),
-		Exporters:  i.createExporters(),
-		Service:    i.createService(),
-		Processors: i.createProcessors(),
-	}
-
-	bytes, err := yaml.Marshal(config)
-	if err != nil {
-		return nil, ErrMarshalingYAML.Wrap(err)
-	}
-
-	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
-		return nil, ErrAddingOtelAgentConfigFile.Wrap(err)
-	}
-
-	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
-		return nil, ErrSettingOtelAgentCommand.Wrap(err)
-	}
-
-	return otelAgent, nil
-}
-
-func (i *Instance) createExtensions() Extensions {
-	if i.obsyConfig.otlpEndpoint == "" {
+func (o *Obsy) createExtensions() Extensions {
+	if o.obsyConfig.otlpEndpoint == "" {
 		return Extensions{}
 	}
 
 	return Extensions{
 		BasicAuthOTLP: BasicAuthOTLP{
 			ClientAuth: ClientAuth{
-				Username: i.obsyConfig.otlpUsername,
-				Password: i.obsyConfig.otlpPassword,
+				Username: o.obsyConfig.otlpUsername,
+				Password: o.obsyConfig.otlpPassword,
 			},
 		},
 	}
 }
 
-func (i *Instance) createOtlpReceiver() OTLP {
+func (o *Obsy) createOtlpReceiver() OTLP {
 	return OTLP{
 		Protocols: OTLPProtocols{
 			HTTP: OTLPHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.otlpPort),
+				Endpoint: fmt.Sprintf(localhostEndpoint, o.obsyConfig.otlpPort),
 			},
 		},
 	}
 }
 
-func (i *Instance) createPrometheusReceiver() Prometheus {
+func (o *Obsy) createPrometheusReceiver() Prometheus {
 	return Prometheus{
 		Config: PrometheusConfig{
 			ScrapeConfigs: []ScrapeConfig{
 				{
-					JobName:        i.obsyConfig.prometheusEndpointJobName,
-					ScrapeInterval: i.obsyConfig.prometheusEndpointScrapeInterval,
+					JobName:        o.obsyConfig.prometheusEndpointJobName,
+					ScrapeInterval: o.obsyConfig.prometheusEndpointScrapeInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
+							Targets: []string{fmt.Sprintf(localhostEndpoint, o.obsyConfig.prometheusEndpointPort)},
 						},
 					},
 				},
 				{
-					JobName:        "internal-telemetry",
-					ScrapeInterval: "10s",
+					JobName:        internalTelemetryJobName,
+					ScrapeInterval: internalTelemetryInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{"localhost:8888"},
+							Targets: []string{internalTelemetryEndpoint},
 						},
 					},
 				},
@@ -277,146 +249,146 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 	}
 }
 
-func (i *Instance) createJaegerReceiver() Jaeger {
+func (o *Obsy) createJaegerReceiver() Jaeger {
 	return Jaeger{
 		Protocols: JaegerProtocols{
-			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerGrpcPort)},
+			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf(localhostEndpoint, o.obsyConfig.jaegerGrpcPort)},
 			ThriftCompact: JaegerThriftCompact{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftCompactPort),
+				Endpoint: fmt.Sprintf(localhostEndpoint, o.obsyConfig.jaegerThriftCompactPort),
 			},
 			ThriftHTTP: JaegerThriftHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftHttpPort),
+				Endpoint: fmt.Sprintf(localhostEndpoint, o.obsyConfig.jaegerThriftHttpPort),
 			},
 		},
 	}
 }
 
-func (i *Instance) createReceivers() Receivers {
+func (o *Obsy) createReceivers() Receivers {
 	receivers := Receivers{}
 
-	if i.obsyConfig.otlpPort != 0 {
-		receivers.OTLP = i.createOtlpReceiver()
+	if o.obsyConfig.otlpPort != 0 {
+		receivers.OTLP = o.createOtlpReceiver()
 	}
 
-	if i.obsyConfig.prometheusEndpointPort != 0 {
-		receivers.Prometheus = i.createPrometheusReceiver()
+	if o.obsyConfig.prometheusEndpointPort != 0 {
+		receivers.Prometheus = o.createPrometheusReceiver()
 	}
 
-	if i.obsyConfig.jaegerGrpcPort != 0 {
-		receivers.Jaeger = i.createJaegerReceiver()
+	if o.obsyConfig.jaegerGrpcPort != 0 {
+		receivers.Jaeger = o.createJaegerReceiver()
 	}
 
 	return receivers
 }
 
-func (i *Instance) createOtlpHttpExporter() OTLPHTTPExporter {
+func (o *Obsy) createOtlpHttpExporter() OTLPHTTPExporter {
 	return OTLPHTTPExporter{
 		Auth: OTLPAuth{
-			Authenticator: "basicauth/otlp",
+			Authenticator: basicAuthOTLPAuthAuthenticator,
 		},
-		Endpoint: i.obsyConfig.otlpEndpoint,
+		Endpoint: o.obsyConfig.otlpEndpoint,
 	}
 }
 
-func (i *Instance) createJaegerExporter() JaegerExporter {
+func (o *Obsy) createJaegerExporter() JaegerExporter {
 	return JaegerExporter{
-		Endpoint: i.obsyConfig.jaegerEndpoint,
+		Endpoint: o.obsyConfig.jaegerEndpoint,
 		TLS: TLS{
 			Insecure: true,
 		},
 	}
 }
 
-func (i *Instance) createPrometheusExporter() PrometheusExporter {
+func (o *Obsy) createPrometheusExporter() PrometheusExporter {
 	return PrometheusExporter{
-		Endpoint: i.obsyConfig.prometheusExporterEndpoint,
+		Endpoint: o.obsyConfig.prometheusExporterEndpoint,
 	}
 }
 
-func (i *Instance) createPrometheusRemoteWriteExporter() PrometheusRemoteWriteExporter {
+func (o *Obsy) createPrometheusRemoteWriteExporter() PrometheusRemoteWriteExporter {
 	return PrometheusRemoteWriteExporter{
-		Endpoint: i.obsyConfig.prometheusRemoteWriteExporterEndpoint,
+		Endpoint: o.obsyConfig.prometheusRemoteWriteExporterEndpoint,
 		TLS: TLS{
 			Insecure: true,
 		},
 	}
 }
 
-func (i *Instance) createExporters() Exporters {
+func (o *Obsy) createExporters() Exporters {
 	exporters := Exporters{}
 
-	if i.obsyConfig.otlpEndpoint != "" {
-		exporters.OTLPHTTP = i.createOtlpHttpExporter()
+	if o.obsyConfig.otlpEndpoint != "" {
+		exporters.OTLPHTTP = o.createOtlpHttpExporter()
 	}
 
-	if i.obsyConfig.jaegerEndpoint != "" {
-		exporters.Jaeger = i.createJaegerExporter()
+	if o.obsyConfig.jaegerEndpoint != "" {
+		exporters.Jaeger = o.createJaegerExporter()
 	}
 
-	if i.obsyConfig.prometheusEndpointPort != 0 {
-		exporters.Prometheus = i.createPrometheusExporter()
+	if o.obsyConfig.prometheusEndpointPort != 0 {
+		exporters.Prometheus = o.createPrometheusExporter()
 	}
 
-	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
-		exporters.PrometheusRemoteWrite = i.createPrometheusRemoteWriteExporter()
+	if o.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		exporters.PrometheusRemoteWrite = o.createPrometheusRemoteWriteExporter()
 	}
 
 	return exporters
 }
 
-func (i *Instance) prepareMetricsForServicePipeline() Metrics {
+func (o *Obsy) prepareMetricsForServicePipeline() Metrics {
 	metrics := Metrics{}
-	if i.obsyConfig.otlpPort != 0 {
-		metrics.Receivers = append(metrics.Receivers, "otlp")
+	if o.obsyConfig.otlpPort != 0 {
+		metrics.Receivers = append(metrics.Receivers, otlpReceiverName)
 	}
-	if i.obsyConfig.prometheusEndpointPort != 0 {
-		metrics.Receivers = append(metrics.Receivers, "prometheus")
+	if o.obsyConfig.prometheusEndpointPort != 0 {
+		metrics.Receivers = append(metrics.Receivers, prometheusReceiverName)
 	}
-	if i.obsyConfig.otlpEndpoint != "" {
-		metrics.Exporters = append(metrics.Exporters, "otlphttp")
+	if o.obsyConfig.otlpEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, otlpHttpExporterName)
 	}
-	if i.obsyConfig.prometheusExporterEndpoint != "" {
-		metrics.Exporters = append(metrics.Exporters, "prometheus")
+	if o.obsyConfig.prometheusExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, prometheusExporterName)
 	}
-	if i.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
-		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
+	if o.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
+		metrics.Exporters = append(metrics.Exporters, prometheusRemoteWriteExporterName)
 	}
-	metrics.Processors = []string{"attributes"}
+	metrics.Processors = []string{attributesProcessorName}
 	return metrics
 }
 
-func (i *Instance) prepareTracesForServicePipeline() Traces {
+func (o *Obsy) prepareTracesForServicePipeline() Traces {
 	traces := Traces{}
-	if i.obsyConfig.otlpPort != 0 {
-		traces.Receivers = append(traces.Receivers, "otlp")
+	if o.obsyConfig.otlpPort != 0 {
+		traces.Receivers = append(traces.Receivers, otlpReceiverName)
 	}
-	if i.obsyConfig.jaegerGrpcPort != 0 || i.obsyConfig.jaegerThriftCompactPort != 0 || i.obsyConfig.jaegerThriftHttpPort != 0 {
-		traces.Receivers = append(traces.Receivers, "jaeger")
+	if o.obsyConfig.jaegerGrpcPort != 0 || o.obsyConfig.jaegerThriftCompactPort != 0 || o.obsyConfig.jaegerThriftHttpPort != 0 {
+		traces.Receivers = append(traces.Receivers, jaegerReceiverName)
 	}
-	if i.obsyConfig.otlpEndpoint != "" {
-		traces.Exporters = append(traces.Exporters, "otlphttp")
+	if o.obsyConfig.otlpEndpoint != "" {
+		traces.Exporters = append(traces.Exporters, otlpHttpExporterName)
 	}
-	if i.obsyConfig.jaegerEndpoint != "" {
-		traces.Exporters = append(traces.Exporters, "jaeger")
+	if o.obsyConfig.jaegerEndpoint != "" {
+		traces.Exporters = append(traces.Exporters, jaegerExporterName)
 	}
-	traces.Processors = []string{"attributes"}
+	traces.Processors = []string{attributesProcessorName}
 	return traces
 }
 
-func (i *Instance) createService() Service {
+func (o *Obsy) createService() Service {
 	var extensions []string
-	if i.obsyConfig.otlpEndpoint != "" {
-		extensions = append(extensions, "basicauth/otlp")
+	if o.obsyConfig.otlpEndpoint != "" {
+		extensions = append(extensions, basicAuthOTLPAuthAuthenticator)
 	}
 
 	pipelines := Pipelines{}
-	pipelines.Metrics = i.prepareMetricsForServicePipeline()
-	pipelines.Traces = i.prepareTracesForServicePipeline()
+	pipelines.Metrics = o.prepareMetricsForServicePipeline()
+	pipelines.Traces = o.prepareTracesForServicePipeline()
 
 	telemetry := Telemetry{
 		Metrics: MetricsTelemetry{
-			Address: "localhost:8888",
-			Level:   "basic",
+			Address: internalTelemetryEndpoint,
+			Level:   basicTelemetryLevel,
 		},
 	}
 
@@ -427,15 +399,15 @@ func (i *Instance) createService() Service {
 	}
 }
 
-func (i *Instance) createProcessors() Processors {
+func (o *Obsy) createProcessors(namespace string) Processors {
 	processors := Processors{}
 
 	processors.Attributes = Attributes{
 		Actions: []Action{
 			{
-				Key:    "namespace",
-				Value:  i.K8sClient.Namespace(),
-				Action: "insert",
+				Key:    namespaceAttributeKey,
+				Value:  namespace,
+				Action: insertAction,
 			},
 		},
 	}

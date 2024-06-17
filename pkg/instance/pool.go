@@ -21,7 +21,7 @@ func (i *Instance) NewPool(amount int) (*InstancePool, error) {
 	}
 	instances := make([]*Instance, amount)
 	for j := 0; j < amount; j++ {
-		instances[j] = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
+		instances[j] = i.CloneWithSuffix(fmt.Sprintf("-%d", j))
 	}
 
 	i.state = Destroyed

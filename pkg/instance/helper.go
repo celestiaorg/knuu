@@ -283,8 +283,8 @@ func (i *Instance) deployResources(ctx context.Context) error {
 		portsTCP := i.portsTCP
 		portsUDP := i.portsUDP
 		for _, sidecar := range i.sidecars {
-			portsTCP = append(portsTCP, sidecar.portsTCP...)
-			portsUDP = append(portsUDP, sidecar.portsUDP...)
+			portsTCP = append(portsTCP, sidecar.Instance().portsTCP...)
+			portsUDP = append(portsUDP, sidecar.Instance().portsUDP...)
 		}
 		if len(portsTCP) != 0 || len(portsUDP) != 0 {
 			if err := i.deployOrPatchService(ctx, portsTCP, portsUDP); err != nil {
@@ -348,48 +348,42 @@ func (i *Instance) destroyResources(ctx context.Context) error {
 }
 
 // cloneWithSuffix clones the instance with a suffix
-func (i *Instance) cloneWithSuffix(suffix string) *Instance {
-	clonedSidecars := make([]*Instance, len(i.sidecars))
+func (i *Instance) CloneWithSuffix(suffix string) *Instance {
+	clonedSidecars := make([]SidecarManager, len(i.sidecars))
 	for i, sidecar := range i.sidecars {
-		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
+		clonedSidecars[i] = sidecar.CloneWithSuffix(suffix)
 	}
 
 	// Deep copy of securityContext to ensure cloned instance has its own copy
 	clonedSecurityContext := *i.securityContext
 
-	clonedBitTwister := *i.BitTwister
-	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
-
 	return &Instance{
-		name:                  i.name + suffix,
-		k8sName:               i.k8sName + suffix,
-		imageName:             i.imageName,
-		state:                 i.state,
-		instanceType:          i.instanceType,
-		kubernetesService:     i.kubernetesService,
-		builderFactory:        i.builderFactory,
-		kubernetesReplicaSet:  i.kubernetesReplicaSet,
-		portsTCP:              i.portsTCP,
-		portsUDP:              i.portsUDP,
-		command:               i.command,
-		args:                  i.args,
-		env:                   i.env,
-		volumes:               i.volumes,
-		memoryRequest:         i.memoryRequest,
-		memoryLimit:           i.memoryLimit,
-		cpuRequest:            i.cpuRequest,
-		policyRules:           i.policyRules,
-		livenessProbe:         i.livenessProbe,
-		readinessProbe:        i.readinessProbe,
-		startupProbe:          i.startupProbe,
-		isSidecar:             false,
-		parentInstance:        nil,
-		sidecars:              clonedSidecars,
-		obsyConfig:            i.obsyConfig,
-		tsharkCollectorConfig: i.tsharkCollectorConfig,
-		securityContext:       &clonedSecurityContext,
-		BitTwister:            &clonedBitTwister,
-		SystemDependencies:    i.SystemDependencies,
+		name:                 i.name + suffix,
+		k8sName:              i.k8sName + suffix,
+		imageName:            i.imageName,
+		state:                i.state,
+		instanceType:         i.instanceType,
+		kubernetesService:    i.kubernetesService,
+		builderFactory:       i.builderFactory,
+		kubernetesReplicaSet: i.kubernetesReplicaSet,
+		portsTCP:             i.portsTCP,
+		portsUDP:             i.portsUDP,
+		command:              i.command,
+		args:                 i.args,
+		env:                  i.env,
+		volumes:              i.volumes,
+		memoryRequest:        i.memoryRequest,
+		memoryLimit:          i.memoryLimit,
+		cpuRequest:           i.cpuRequest,
+		policyRules:          i.policyRules,
+		livenessProbe:        i.livenessProbe,
+		readinessProbe:       i.readinessProbe,
+		startupProbe:         i.startupProbe,
+		isSidecar:            false,
+		parentInstance:       nil,
+		sidecars:             clonedSidecars,
+		securityContext:      &clonedSecurityContext,
+		SystemDependencies:   i.SystemDependencies,
 	}
 }
 
@@ -491,20 +485,20 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:            sidecar.k8sName,
-			Image:           sidecar.imageName,
-			Command:         sidecar.command,
-			Args:            sidecar.args,
-			Env:             sidecar.env,
-			Volumes:         sidecar.volumes,
-			MemoryRequest:   sidecar.memoryRequest,
-			MemoryLimit:     sidecar.memoryLimit,
-			CPURequest:      sidecar.cpuRequest,
-			LivenessProbe:   sidecar.livenessProbe,
-			ReadinessProbe:  sidecar.readinessProbe,
-			StartupProbe:    sidecar.startupProbe,
-			Files:           sidecar.files,
-			SecurityContext: prepareSecurityContext(sidecar.securityContext),
+			Name:            sidecar.Instance().k8sName,
+			Image:           sidecar.Instance().imageName,
+			Command:         sidecar.Instance().command,
+			Args:            sidecar.Instance().args,
+			Env:             sidecar.Instance().env,
+			Volumes:         sidecar.Instance().volumes,
+			MemoryRequest:   sidecar.Instance().memoryRequest,
+			MemoryLimit:     sidecar.Instance().memoryLimit,
+			CPURequest:      sidecar.Instance().cpuRequest,
+			LivenessProbe:   sidecar.Instance().livenessProbe,
+			ReadinessProbe:  sidecar.Instance().readinessProbe,
+			StartupProbe:    sidecar.Instance().startupProbe,
+			Files:           sidecar.Instance().files,
+			SecurityContext: prepareSecurityContext(sidecar.Instance().securityContext),
 		})
 	}
 	// Generate the pod configuration
@@ -547,117 +541,22 @@ func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string
 	return nil
 }
 
-// applyFunctionToInstances applies a function to all instances
-func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
-	for _, i := range instances {
-		if err := function(*i); err != nil {
-			return ErrApplyingFunctionToInstance.WithParams(i.k8sName).Wrap(err)
+// applyFunctionToSidecars applies a function to all sidecars
+func applyFunctionToSidecars(sidecars []SidecarManager, function func(sidecar SidecarManager) error) error {
+	for _, i := range sidecars {
+		if err := function(i); err != nil {
+			return ErrApplyingFunctionToSidecar.WithParams(i.Instance().k8sName).Wrap(err)
 		}
 	}
 	return nil
 }
 
-func setStateForSidecars(sidecars []*Instance, state InstanceState) {
+func setStateForSidecars(sidecars []SidecarManager, state InstanceState) {
 	// We don't handle errors here, as the function can't return an error
-	err := applyFunctionToInstances(sidecars, func(sidecar Instance) error {
-		sidecar.state = state
+	_ = applyFunctionToSidecars(sidecars, func(sidecar SidecarManager) error {
+		sidecar.Instance().state = state
 		return nil
 	})
-	if err != nil {
-		return
-	}
-}
-
-// isObservabilityEnabled returns true if observability is enabled
-func (i *Instance) isObservabilityEnabled() bool {
-	return i.obsyConfig.otlpPort != 0 ||
-		i.obsyConfig.prometheusEndpointPort != 0 ||
-		i.obsyConfig.jaegerGrpcPort != 0 ||
-		i.obsyConfig.jaegerThriftCompactPort != 0 ||
-		i.obsyConfig.jaegerThriftHttpPort != 0
-}
-
-func (i *Instance) validateStateForObsy(endpoint string) error {
-	if !i.IsInState(Preparing, Committed) {
-		return ErrSettingNotAllowed.WithParams(endpoint, i.state.String())
-	}
-	return nil
-}
-
-func (i *Instance) addOtelCollectorSidecar(ctx context.Context) error {
-	otelSidecar, err := i.createOtelCollectorInstance(ctx)
-	if err != nil {
-		return ErrCreatingOtelCollectorInstance.WithParams(i.k8sName).Wrap(err)
-	}
-	if err := i.AddSidecar(otelSidecar); err != nil {
-		return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
-	}
-	return nil
-}
-
-func (i *Instance) addTsharkCollectorSidecar(ctx context.Context) error {
-	tsharkSidecar, err := i.createTsharkCollectorInstance(ctx)
-	if err != nil {
-		return ErrCreatingTsharkCollectorInstance.WithParams(i.k8sName).Wrap(err)
-	}
-	if err := i.AddSidecar(tsharkSidecar); err != nil {
-		return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
-	}
-	return nil
-}
-
-func (i *Instance) createBitTwisterInstance(ctx context.Context) (*Instance, error) {
-	bt, err := New("bit-twister", i.SystemDependencies)
-	if err != nil {
-		return nil, ErrCreatingBitTwisterInstance.Wrap(err)
-	}
-
-	if err := bt.SetImage(ctx, i.BitTwister.Image()); err != nil {
-		return nil, ErrSettingBitTwisterImage.Wrap(err)
-	}
-
-	// This is needed to make BT reachable
-	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
-		return nil, ErrAddingBitTwisterPort.Wrap(err)
-	}
-	serviceName := i.k8sName // the main instance name
-	btURL, err := i.AddHost(ctx, i.BitTwister.Port())
-	if err != nil {
-		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
-	}
-	logrus.Debugf("BitTwister URL: %s", btURL)
-
-	i.BitTwister.SetNewClientByURL(btURL)
-
-	if err := bt.Commit(); err != nil {
-		return nil, ErrCommittingBitTwisterInstance.Wrap(err)
-	}
-
-	if err := bt.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", i.BitTwister.Port())); err != nil {
-		return nil, ErrSettingBitTwisterEnv.Wrap(err)
-	}
-
-	return bt, nil
-}
-
-func (i *Instance) addBitTwisterSidecar(ctx context.Context) error {
-	networkConfigSidecar, err := i.createBitTwisterInstance(ctx)
-	if err != nil {
-		return ErrCreatingBitTwisterInstance.WithParams(i.k8sName).Wrap(err)
-	}
-
-	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
-		return ErrSettingBitTwisterPrivileged.WithParams(i.k8sName).Wrap(err)
-	}
-
-	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
-		return ErrAddingBitTwisterCapability.WithParams(i.k8sName).Wrap(err)
-	}
-
-	if err := i.AddSidecar(networkConfigSidecar); err != nil {
-		return ErrAddingBitTwisterSidecar.WithParams(i.k8sName).Wrap(err)
-	}
-	return nil
 }
 
 // isSubFolderOfVolumes checks if the given path is a subfolder of the volumes
