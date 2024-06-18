@@ -57,8 +57,6 @@ func New(ctx context.Context, k8sClient k8s.KubeManager) (*Minio, error) {
 		K8s: k8sClient,
 	}
 
-	fmt.Println("minio.New is called")
-
 	// [optimization] since it might be called from different places,
 	// we need to check if minio is already deployed
 	isMinioDeployed, err := m.isMinioDeployed(ctx)
