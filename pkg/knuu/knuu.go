@@ -39,23 +39,23 @@ type Knuu struct {
 }
 
 type Options struct {
-	K8s          k8s.KubeManager
 	TestScope    string
 	ImageBuilder builder.Builder
-	MinioEnabled bool
+	MinioClient  *minio.Minio
 	ProxyEnabled bool
 	Timeout      time.Duration
 	Logger       *logrus.Logger
 }
 
-func New(ctx context.Context, opts Options) (*Knuu, error) {
+func New(ctx context.Context, k8sClient k8s.KubeManager, opts Options) (*Knuu, error) {
 	if err := loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
-			K8sClient:    opts.K8s,
+			K8sClient:    k8sClient,
+			MinioClient:  opts.MinioClient,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
 			TestScope:    opts.TestScope,
@@ -64,14 +64,8 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 		timeout: opts.Timeout,
 	}
 
-	if err := setDefaults(ctx, k); err != nil {
+	if err := setDefaults(k); err != nil {
 		return nil, err
-	}
-
-	if opts.MinioEnabled {
-		if err := setupMinio(ctx, k); err != nil {
-			return nil, err
-		}
 	}
 
 	if opts.ProxyEnabled {
@@ -85,6 +79,11 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	}
 
 	return k, nil
+}
+
+func DefaultTestScope() string {
+	t := time.Now()
+	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 }
 
 func (k *Knuu) Scope() string {
@@ -176,26 +175,17 @@ func loadEnvVariables() error {
 	return nil
 }
 
-func setDefaults(ctx context.Context, k *Knuu) error {
+func setDefaults(k *Knuu) error {
 	if k.Logger == nil {
 		k.Logger = log.DefaultLogger()
 	}
 
 	if k.TestScope == "" {
-		t := time.Now()
-		k.TestScope = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+		k.TestScope = k.K8sClient.Namespace()
 	}
 
 	if k.timeout == 0 {
 		k.timeout = defaultTimeout
-	}
-
-	if k.K8sClient == nil {
-		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
-		if err != nil {
-			return ErrCannotInitializeK8s.Wrap(err)
-		}
 	}
 
 	if k.ImageBuilder == nil {
@@ -220,9 +210,4 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 	}
 	k.Logger.Debugf("Proxy endpoint: %s", endpoint)
 	return nil
-}
-
-func setupMinio(ctx context.Context, k *Knuu) (err error) {
-	k.MinioClient, err = minio.New(ctx, k.K8sClient)
-	return err
 }

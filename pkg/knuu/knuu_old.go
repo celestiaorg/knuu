@@ -19,6 +19,8 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const minioBucketName = "knuu"
@@ -70,12 +72,22 @@ func InitializeWithScope(testScope string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	var err error
-	tmpKnuu, err = New(ctx, Options{
+
+	k8sClient, err := k8s.NewClient(ctx, testScope)
+	if err != nil {
+		return ErrCannotInitializeKnuu.Wrap(err)
+	}
+
+	minioClient, err := minio.New(ctx, k8sClient)
+	if err != nil {
+		return ErrCannotInitializeKnuu.Wrap(err)
+	}
+
+	tmpKnuu, err = New(ctx, k8sClient, Options{
 		TestScope:    testScope,
 		Timeout:      timeout,
 		ProxyEnabled: true,
-		MinioEnabled: true,
+		MinioClient:  minioClient,
 	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)

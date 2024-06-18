@@ -8,6 +8,7 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -18,7 +19,11 @@ func TestBuildFromGit(t *testing.T) {
 	ctx := context.Background()
 
 	// The default image builder is kaniko here
-	kn, err := knuu.New(ctx, knuu.Options{})
+
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	require.NoError(t, err, "error creating k8s client")
+
+	kn, err := knuu.New(ctx, k8sClient, knuu.Options{})
 	require.NoError(t, err, "Error creating knuu")
 
 	sampleInstance, err := kn.NewInstance("git-builder")

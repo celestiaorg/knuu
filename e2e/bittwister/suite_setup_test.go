@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -16,11 +17,11 @@ type Suite struct {
 }
 
 func (s *Suite) SetupSuite() {
-	var (
-		err error
-		ctx = context.Background()
-	)
-	s.Knuu, err = knuu.New(ctx, knuu.Options{ProxyEnabled: true})
+	ctx := context.Background()
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	s.Require().NoError(err)
+
+	s.Knuu, err = knuu.New(ctx, k8sClient, knuu.Options{ProxyEnabled: true})
 	s.Require().NoError(err)
 	s.T().Logf("Scope: %s", s.Knuu.Scope())
 	s.Knuu.HandleStopSignal(ctx)

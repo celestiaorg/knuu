@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (
@@ -26,7 +28,13 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	kn, err := knuu.New(ctx, knuu.Options{MinioEnabled: true})
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	require.NoError(t, err, "error creating k8s client")
+
+	minioClient, err := minio.New(ctx, k8sClient)
+	require.NoError(t, err, "error creating minio client")
+
+	kn, err := knuu.New(ctx, k8sClient, knuu.Options{MinioClient: minioClient})
 	require.NoError(t, err, "error creating knuu")
 
 	defer func() {

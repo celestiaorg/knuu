@@ -14,6 +14,7 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (
@@ -76,16 +77,12 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name:        "Minio enabled",
-			options:     Options{MinioEnabled: true},
+			name:        "With custom Minio client",
+			options:     Options{MinioClient: &minio.Minio{}},
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
-				assert.NotNil(t, k.Logger)
-				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.MinioClient)
-				assert.NotNil(t, k.ImageBuilder)
-				assert.Equal(t, defaultTimeout, k.timeout)
 			},
 		},
 		{
@@ -111,17 +108,6 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "With custom K8s client",
-			options: Options{
-				K8s: &mockK8s{},
-			},
-			expectError: false,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.NotNil(t, k.K8sClient)
-			},
-		},
-		{
 			name: "With custom Image Builder",
 			options: Options{
 				ImageBuilder: &kaniko.Kaniko{},
@@ -136,7 +122,7 @@ func TestNew(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			k, err := New(ctx, tc.options)
+			k, err := New(ctx, &mockK8s{}, tc.options)
 			if tc.expectError {
 				assert.Error(t, err)
 				return
