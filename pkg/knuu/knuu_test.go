@@ -14,7 +14,6 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (
@@ -72,6 +71,18 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
 				assert.NotNil(t, k.K8sClient)
+				assert.NotNil(t, k.ImageBuilder)
+				assert.Equal(t, defaultTimeout, k.timeout)
+			},
+		},
+		{
+			name:        "Minio enabled",
+			options:     Options{MinioEnabled: true},
+			expectError: false,
+			validateFunc: func(t *testing.T, k *Knuu) {
+				assert.NotNil(t, k)
+				assert.NotNil(t, k.Logger)
+				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.MinioClient)
 				assert.NotNil(t, k.ImageBuilder)
 				assert.Equal(t, defaultTimeout, k.timeout)
@@ -108,17 +119,6 @@ func TestNew(t *testing.T) {
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.K8sClient)
-			},
-		},
-		{
-			name: "With custom Minio client",
-			options: Options{
-				Minio: &minio.Minio{},
-			},
-			expectError: false,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.NotNil(t, k.MinioClient)
 			},
 		},
 		{

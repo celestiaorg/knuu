@@ -41,4 +41,5 @@ var (
 	ErrMinioFailedToCreatePersistentVolume      = errors.New("MinioFailedToCreatePersistentVolume", "failed to create PersistentVolume")
 	ErrMinioFailedToCreatePersistentVolumeClaim = errors.New("MinioFailedToCreatePersistentVolumeClaim", "failed to create PersistentVolumeClaim")
 	ErrMinioClientNotInitialized                = errors.New("MinioClientNotInitialized", "Minio client not initialized")
+	ErrMinioNotInitialized                      = errors.New("MinioNotInitialized", "Minio not initialized")
 )

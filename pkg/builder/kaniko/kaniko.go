@@ -13,9 +13,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/names"
+	"github.com/celestiaorg/knuu/pkg/system"
 )
 
 const (
@@ -31,9 +30,8 @@ const (
 )
 
 type Kaniko struct {
-	K8sClient   k8s.KubeManager
-	MinioClient *minio.Minio // Minio service to store the build context if it's a directory
-	ContentName string       // Name of the content pushed to Minio
+	system.SystemDependencies
+	ContentName string // Name of the content pushed to Minio
 }
 
 var _ builder.Builder = &Kaniko{}
@@ -159,25 +157,12 @@ func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
 
 	// Delete the content pushed to Minio
 	if k.ContentName != "" {
-		if err := k.initMinio(ctx); err != nil {
-			return ErrMinioFailedToGetDeployment.Wrap(err)
-		}
-		if err := k.MinioClient.DeleteFromMinio(ctx, k.ContentName, MinioBucketName); err != nil {
+		if err := k.MinioClient.Delete(ctx, k.ContentName, MinioBucketName); err != nil {
 			return ErrDeletingMinioContent.Wrap(err)
 		}
 	}
 
 	return nil
-}
-
-func (k *Kaniko) initMinio(ctx context.Context) error {
-	if k.MinioClient != nil {
-		return nil
-	}
-
-	var err error
-	k.MinioClient, err = minio.New(ctx, k.K8sClient)
-	return err
 }
 
 func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*batchv1.Job, error) {
@@ -261,10 +246,6 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 // As kaniko also supports directly tar.gz archives, no need to extract it,
 // we just need to set the context to tar://<path-to-archive>
 func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
-	if err := k.initMinio(ctx); err != nil {
-		return nil, ErrMinioFailedToGetDeployment.Wrap(err)
-	}
-
 	// Create the tar.gz archive
 	archiveData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
 	if err != nil {
@@ -276,11 +257,11 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	hash.Write(archiveData)
 	k.ContentName = hex.EncodeToString(hash.Sum(nil))
 
-	if err := k.MinioClient.PushToMinio(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
+	if err := k.MinioClient.Push(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
 		return nil, err
 	}
 
-	s3URL, err := k.MinioClient.GetMinioURL(ctx, k.ContentName, MinioBucketName)
+	s3URL, err := k.MinioClient.GetURL(ctx, k.ContentName, MinioBucketName)
 	if err != nil {
 		return nil, err
 	}

@@ -42,9 +42,9 @@ type Options struct {
 	K8s          k8s.KubeManager
 	TestScope    string
 	ImageBuilder builder.Builder
-	Minio        *minio.Minio
-	Timeout      time.Duration
+	MinioEnabled bool
 	ProxyEnabled bool
+	Timeout      time.Duration
 	Logger       *logrus.Logger
 }
 
@@ -56,7 +56,6 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
 			K8sClient:    opts.K8s,
-			MinioClient:  opts.Minio,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
 			TestScope:    opts.TestScope,
@@ -67,6 +66,12 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 
 	if err := setDefaults(ctx, k); err != nil {
 		return nil, err
+	}
+
+	if opts.MinioEnabled {
+		if err := setupMinio(ctx, k); err != nil {
+			return nil, err
+		}
 	}
 
 	if opts.ProxyEnabled {
@@ -195,8 +200,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
-			K8sClient:   k.K8sClient,
-			MinioClient: k.MinioClient,
+			SystemDependencies: k.SystemDependencies,
 		}
 	}
 
@@ -216,4 +220,9 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 	}
 	k.Logger.Debugf("Proxy endpoint: %s", endpoint)
 	return nil
+}
+
+func setupMinio(ctx context.Context, k *Knuu) (err error) {
+	k.MinioClient, err = minio.New(ctx, k.K8sClient)
+	return err
 }

@@ -42,8 +42,8 @@ const (
 )
 
 type Minio struct {
-	client *miniogo.Client
-	K8s    k8s.KubeManager
+	client    *miniogo.Client
+	k8sClient k8s.KubeManager
 }
 
 type Config struct {
@@ -54,19 +54,11 @@ type Config struct {
 
 func New(ctx context.Context, k8sClient k8s.KubeManager) (*Minio, error) {
 	m := &Minio{
-		K8s: k8sClient,
+		k8sClient: k8sClient,
 	}
 
-	// [optimization] since it might be called from different places,
-	// we need to check if minio is already deployed
-	isMinioDeployed, err := m.isMinioDeployed(ctx)
-	if err != nil {
-		return nil, ErrMinioFailedToGetDeployment.Wrap(err)
-	}
-	if !isMinioDeployed {
-		if err := m.deployMinio(ctx); err != nil {
-			return nil, err
-		}
+	if err := m.deployMinio(ctx); err != nil {
+		return nil, err
 	}
 
 	endpoint, err := m.getEndpoint(ctx)
@@ -85,10 +77,10 @@ func New(ctx context.Context, k8sClient k8s.KubeManager) (*Minio, error) {
 	return m, nil
 }
 
-// PushToMinio pushes data (i.e. a reader) to Minio
-func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFilePath, bucketName string) error {
-	if m.client == nil {
-		return ErrMinioClientNotInitialized
+// Push pushes data (i.e. a reader) to Minio
+func (m *Minio) Push(ctx context.Context, localReader io.Reader, minioFilePath, bucketName string) error {
+	if m == nil {
+		return ErrMinioNotInitialized
 	}
 
 	if err := m.createBucketIfNotExists(ctx, bucketName); err != nil {
@@ -104,10 +96,10 @@ func (m *Minio) PushToMinio(ctx context.Context, localReader io.Reader, minioFil
 	return nil
 }
 
-// DeleteFromMinio deletes a file from Minio and fails if the content does not exist
-func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName string) error {
-	if m.client == nil {
-		return ErrMinioClientNotInitialized
+// Delete deletes a file from Minio and fails if the content does not exist
+func (m *Minio) Delete(ctx context.Context, minioFilePath, bucketName string) error {
+	if m == nil {
+		return ErrMinioNotInitialized
 	}
 
 	// Check if the object exists before attempting to delete
@@ -125,10 +117,10 @@ func (m *Minio) DeleteFromMinio(ctx context.Context, minioFilePath, bucketName s
 	return nil
 }
 
-// GetMinioURL returns an S3-compatible URL for a Minio file
-func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName string) (string, error) {
-	if m.client == nil {
-		return "", ErrMinioClientNotInitialized
+// GetURL returns an S3-compatible URL for a Minio file
+func (m *Minio) GetURL(ctx context.Context, minioFilePath, bucketName string) (string, error) {
+	if m == nil {
+		return "", ErrMinioNotInitialized
 	}
 
 	// Set the expiration time for the URL (e.g., 24h from now)
@@ -144,6 +136,10 @@ func (m *Minio) GetMinioURL(ctx context.Context, minioFilePath, bucketName strin
 }
 
 func (m *Minio) GetConfigs(ctx context.Context) (*Config, error) {
+	if m == nil {
+		return nil, ErrMinioNotInitialized
+	}
+
 	endpoint, err := m.getEndpoint(ctx)
 	if err != nil {
 		return nil, ErrMinioFailedToGetEndpoint.Wrap(err)
@@ -169,7 +165,7 @@ func (m *Minio) deployMinio(ctx context.Context) error {
 		return ErrMinioFailedToCreateOrUpdateService.Wrap(err)
 	}
 
-	if err := m.K8s.WaitForService(ctx, ServiceName); err != nil {
+	if err := m.k8sClient.WaitForService(ctx, ServiceName); err != nil {
 		return ErrMinioFailedToBeReadyService.Wrap(err)
 	}
 
@@ -178,13 +174,13 @@ func (m *Minio) deployMinio(ctx context.Context) error {
 }
 
 func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
-	deploymentClient := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace())
+	deploymentClient := m.k8sClient.Clientset().AppsV1().Deployments(m.k8sClient.Namespace())
 
 	// Define the Minio deployment
 	minioDeployment := &appsV1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      DeploymentName,
-			Namespace: m.K8s.Namespace(),
+			Namespace: m.k8sClient.Namespace(),
 		},
 		Spec: appsV1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -256,28 +252,14 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 	return nil
 }
 
-func (m *Minio) isMinioDeployed(ctx context.Context) (bool, error) {
-	deploymentClient := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace())
-
-	_, err := deploymentClient.Get(ctx, DeploymentName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, ErrMinioFailedToGetService.Wrap(err)
-	}
-
-	return true, nil
-}
-
 func (m *Minio) createOrUpdateService(ctx context.Context) error {
-	serviceClient := m.K8s.Clientset().CoreV1().Services(m.K8s.Namespace())
+	serviceClient := m.k8sClient.Clientset().CoreV1().Services(m.k8sClient.Namespace())
 
 	// Define Minio service
 	minioService := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ServiceName,
-			Namespace: m.K8s.Namespace(),
+			Namespace: m.k8sClient.Namespace(),
 		},
 		Spec: v1.ServiceSpec{
 			Selector: map[string]string{"app": "minio"},
@@ -342,7 +324,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 }
 
 func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
-	minioService, err := m.K8s.Clientset().CoreV1().Services(m.K8s.Namespace()).Get(ctx, ServiceName, metav1.GetOptions{})
+	minioService, err := m.k8sClient.Clientset().CoreV1().Services(m.k8sClient.Namespace()).Get(ctx, ServiceName, metav1.GetOptions{})
 	if err != nil {
 		return "", ErrMinioFailedToGetService.Wrap(err)
 	}
@@ -357,7 +339,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 
 	if minioService.Spec.Type == v1.ServiceTypeNodePort {
 		// Use the Node IP and NodePort
-		nodes, err := m.K8s.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		nodes, err := m.k8sClient.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return "", ErrMinioFailedToGetNodes.Wrap(err)
 		}
@@ -381,7 +363,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 
 func (m *Minio) waitForMinio(ctx context.Context) error {
 	for {
-		deployment, err := m.K8s.Clientset().AppsV1().Deployments(m.K8s.Namespace()).Get(ctx, DeploymentName, metav1.GetOptions{})
+		deployment, err := m.k8sClient.Clientset().AppsV1().Deployments(m.k8sClient.Namespace()).Get(ctx, DeploymentName, metav1.GetOptions{})
 		if err == nil && deployment.Status.ReadyReplicas > 0 {
 			break
 		}
@@ -403,7 +385,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 		return ErrMinioFailedToParseStorageSize.Wrap(err)
 	}
 
-	pvcClient := m.K8s.Clientset().CoreV1().PersistentVolumeClaims(m.K8s.Namespace())
+	pvcClient := m.k8sClient.Clientset().CoreV1().PersistentVolumeClaims(m.k8sClient.Namespace())
 
 	// Check if PVC already exists
 	_, err = pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
@@ -413,7 +395,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	}
 
 	// Create a simple PersistentVolume if no suitable one is found
-	pvList, err := m.K8s.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	pvList, err := m.k8sClient.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return ErrMinioFailedToListPersistentVolumes.Wrap(err)
 	}
@@ -429,7 +411,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 
 	if existingPV == nil {
 		// Create a simple PV if no existing PV is suitable
-		_, err = m.K8s.Clientset().CoreV1().PersistentVolumes().Create(ctx, &v1.PersistentVolume{
+		_, err = m.k8sClient.Clientset().CoreV1().PersistentVolumes().Create(ctx, &v1.PersistentVolume{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: pvPrefix,
 			},
@@ -455,7 +437,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: m.K8s.Namespace(),
+			Namespace: m.k8sClient.Namespace(),
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},

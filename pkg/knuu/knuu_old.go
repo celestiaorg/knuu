@@ -21,6 +21,8 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 )
 
+const minioBucketName = "knuu"
+
 // This is a temporary variable to hold the knuu instance until we refactor knuu pkg
 // TODO: remove this temporary variable
 var tmpKnuu *Knuu
@@ -73,6 +75,7 @@ func InitializeWithScope(testScope string) error {
 		TestScope:    testScope,
 		Timeout:      timeout,
 		ProxyEnabled: true,
+		MinioEnabled: true,
 	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
@@ -82,8 +85,7 @@ func InitializeWithScope(testScope string) error {
 	switch builderType {
 	case "kubernetes":
 		tmpKnuu.ImageBuilder = &kaniko.Kaniko{
-			K8sClient:   tmpKnuu.K8sClient,
-			MinioClient: tmpKnuu.MinioClient,
+			SystemDependencies: tmpKnuu.SystemDependencies,
 		}
 	case "docker", "":
 		tmpKnuu.ImageBuilder = &docker.Docker{
@@ -135,10 +137,10 @@ func CleanUp() error {
 
 // Deprecated: Use the new package knuu instead.
 func PushFileToMinio(ctx context.Context, contentName string, reader io.Reader) error {
-	return tmpKnuu.PushFileToMinio(ctx, contentName, reader)
+	return tmpKnuu.MinioClient.Push(ctx, reader, contentName, minioBucketName)
 }
 
 // Deprecated: Use the new package knuu instead.
 func GetMinioURL(ctx context.Context, contentName string) (string, error) {
-	return tmpKnuu.GetMinioURL(ctx, contentName)
+	return tmpKnuu.MinioClient.GetURL(ctx, contentName, minioBucketName)
 }

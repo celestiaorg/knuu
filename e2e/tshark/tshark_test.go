@@ -27,7 +27,7 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	kn, err := knuu.New(ctx, knuu.Options{})
+	kn, err := knuu.New(ctx, knuu.Options{MinioEnabled: true})
 	require.NoError(t, err, "error creating knuu")
 
 	defer func() {
@@ -99,7 +99,7 @@ func TestTshark(t *testing.T) {
 	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
 	require.NoError(t, err, "error executing command")
 
-	url, err := kn.MinioClient.GetMinioURL(ctx, fileKey, s3BucketName)
+	url, err := kn.MinioClient.GetURL(ctx, fileKey, s3BucketName)
 	require.NoError(t, err, "error getting minio url")
 
 	resp, err := http.Get(url)
