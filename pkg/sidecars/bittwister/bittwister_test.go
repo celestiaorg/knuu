@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 

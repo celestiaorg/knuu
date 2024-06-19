@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/system"
-	"gopkg.in/yaml.v2"
 )
 
 const (
