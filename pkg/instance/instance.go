@@ -876,18 +876,8 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 	}
 
 	if i.state == Committed {
-		if err := i.deployResources(ctx); err != nil {
+		if err := i.deployResourcesForCommittedState(ctx); err != nil {
 			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
-		}
-		err := applyFunctionToSidecars(i.sidecars,
-			func(sc SidecarManager) error {
-				if err := sc.PreStart(ctx); err != nil {
-					return err
-				}
-				return sc.Instance().deployResources(ctx)
-			})
-		if err != nil {
-			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
