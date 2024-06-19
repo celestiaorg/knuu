@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -263,25 +262,25 @@ func (c *Client) PortForwardPod(
 	}
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
-
 	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
 
-	stopChan := make(chan struct{}, 1)
-	readyChan := make(chan struct{})
+	var (
+		stopChan  = make(chan struct{}, 1)
+		readyChan = make(chan struct{})
+		errChan   = make(chan error)
+	)
 
-	var stdout, stderr io.Writer
+	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
 	// Create a new PortForwarder
 	pf, err := portforward.New(dialer, ports, stopChan, readyChan, stdout, stderr)
 	if err != nil {
 		return ErrCreatingPortForwarder.Wrap(err)
 	}
-	if stderr != nil {
-		return ErrPortForwarding.WithParams(stderr)
+	if stderr.Len() > 0 {
+		return ErrPortForwarding.WithParams(stderr.String())
 	}
 	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
 	logrus.Debugf("Port forwarding stdout: %v", stdout)
-
-	errChan := make(chan error)
 
 	// Start the port forwarding
 	go func() {
@@ -300,7 +299,7 @@ func (c *Client) PortForwardPod(
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)
-	case <-time.After(time.Second * 5):
+	case <-time.After(waitRetry * 2):
 		return ErrPortForwardingTimeout
 	}
 
