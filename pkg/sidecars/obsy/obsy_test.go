@@ -12,8 +12,6 @@ import (
 
 type TestSuite struct {
 	suite.Suite
-	obsy    *Obsy
-	ctx     context.Context
 	sysDeps system.SystemDependencies
 }
 
@@ -31,12 +29,10 @@ func (m *mockK8sCli) Namespace() string {
 }
 
 func (s *TestSuite) SetupTest() {
-	s.obsy = New()
-	s.ctx = context.Background()
-
 	s.sysDeps = system.SystemDependencies{
 		K8sClient: &mockK8sCli{
-			namespace: "test",
+			namespace:   "test",
+			KubeManager: &k8s.Client{},
 		},
 	}
 }
@@ -48,10 +44,11 @@ func (s *TestSuite) TestNew() {
 }
 
 func (s *TestSuite) TestInitialize() {
-	err := s.obsy.Initialize(s.ctx, s.sysDeps)
+	o := New()
+	err := o.Initialize(context.Background(), s.sysDeps)
 	s.Require().NoError(err)
-	s.Assert().NotNil(s.obsy.Instance())
-	s.Assert().True(s.obsy.Instance().IsSidecar())
+	s.Assert().NotNil(o.Instance())
+	s.Assert().True(o.Instance().IsSidecar())
 }
 
 func (s *TestSuite) TestPreStart() {
@@ -59,45 +56,48 @@ func (s *TestSuite) TestPreStart() {
 }
 
 func (s *TestSuite) TestCloneWithSuffix() {
-	err := s.obsy.Initialize(s.ctx, s.sysDeps)
+	o := New()
+	err := o.Initialize(context.Background(), s.sysDeps)
 	s.Require().NoError(err)
 
-	clone := s.obsy.CloneWithSuffix("test")
+	clone := o.CloneWithSuffix("test")
 	s.Assert().NotNil(clone)
 
 	clonedObsy, ok := clone.(*Obsy)
 	s.Assert().True(ok)
-	s.Assert().Equal(s.obsy.obsyConfig, clonedObsy.obsyConfig)
+	s.Assert().Equal(o.obsyConfig, clonedObsy.obsyConfig)
 }
 
 func (s *TestSuite) TestSetters() {
-	s.obsy.SetOtelCollectorVersion("test-version")
-	s.Assert().Equal("test-version", s.obsy.obsyConfig.otelCollectorVersion)
+	o := New()
 
-	s.obsy.SetOtelEndpoint(8080)
-	s.Assert().Equal(8080, s.obsy.obsyConfig.otlpPort)
+	s.Require().NoError(o.SetOtelCollectorVersion("test-version"))
+	s.Assert().Equal("test-version", o.obsyConfig.otelCollectorVersion)
 
-	s.obsy.SetPrometheusEndpoint(9090, "test-job", "5s")
-	s.Assert().Equal(9090, s.obsy.obsyConfig.prometheusEndpointPort)
-	s.Assert().Equal("test-job", s.obsy.obsyConfig.prometheusEndpointJobName)
-	s.Assert().Equal("5s", s.obsy.obsyConfig.prometheusEndpointScrapeInterval)
+	s.Require().NoError(o.SetOtelEndpoint(8080))
+	s.Assert().Equal(8080, o.obsyConfig.otlpPort)
 
-	s.obsy.SetJaegerEndpoint(14250, 6831, 14268)
-	s.Assert().Equal(14250, s.obsy.obsyConfig.jaegerGrpcPort)
-	s.Assert().Equal(6831, s.obsy.obsyConfig.jaegerThriftCompactPort)
-	s.Assert().Equal(14268, s.obsy.obsyConfig.jaegerThriftHttpPort)
+	s.Require().NoError(o.SetPrometheusEndpoint(9090, "test-job", "5s"))
+	s.Assert().Equal(9090, o.obsyConfig.prometheusEndpointPort)
+	s.Assert().Equal("test-job", o.obsyConfig.prometheusEndpointJobName)
+	s.Assert().Equal("5s", o.obsyConfig.prometheusEndpointScrapeInterval)
 
-	s.obsy.SetOtlpExporter("http://test-endpoint", "user", "pass")
-	s.Assert().Equal("http://test-endpoint", s.obsy.obsyConfig.otlpEndpoint)
-	s.Assert().Equal("user", s.obsy.obsyConfig.otlpUsername)
-	s.Assert().Equal("pass", s.obsy.obsyConfig.otlpPassword)
+	s.Require().NoError(o.SetJaegerEndpoint(14250, 6831, 14268))
+	s.Assert().Equal(14250, o.obsyConfig.jaegerGrpcPort)
+	s.Assert().Equal(6831, o.obsyConfig.jaegerThriftCompactPort)
+	s.Assert().Equal(14268, o.obsyConfig.jaegerThriftHttpPort)
 
-	s.obsy.SetJaegerExporter("http://jaeger-endpoint")
-	s.Assert().Equal("http://jaeger-endpoint", s.obsy.obsyConfig.jaegerEndpoint)
+	s.Require().NoError(o.SetOtlpExporter("http://test-endpoint", "user", "pass"))
+	s.Assert().Equal("http://test-endpoint", o.obsyConfig.otlpEndpoint)
+	s.Assert().Equal("user", o.obsyConfig.otlpUsername)
+	s.Assert().Equal("pass", o.obsyConfig.otlpPassword)
 
-	s.obsy.SetPrometheusExporter("http://prometheus-endpoint")
-	s.Assert().Equal("http://prometheus-endpoint", s.obsy.obsyConfig.prometheusExporterEndpoint)
+	s.Require().NoError(o.SetJaegerExporter("http://jaeger-endpoint"))
+	s.Assert().Equal("http://jaeger-endpoint", o.obsyConfig.jaegerEndpoint)
 
-	s.obsy.SetPrometheusRemoteWriteExporter("http://prometheus-remote-write-endpoint")
-	s.Assert().Equal("http://prometheus-remote-write-endpoint", s.obsy.obsyConfig.prometheusRemoteWriteExporterEndpoint)
+	s.Require().NoError(o.SetPrometheusExporter("http://prometheus-endpoint"))
+	s.Assert().Equal("http://prometheus-endpoint", o.obsyConfig.prometheusExporterEndpoint)
+
+	s.Require().NoError(o.SetPrometheusRemoteWriteExporter("http://prometheus-remote-write-endpoint"))
+	s.Assert().Equal("http://prometheus-remote-write-endpoint", o.obsyConfig.prometheusRemoteWriteExporterEndpoint)
 }
