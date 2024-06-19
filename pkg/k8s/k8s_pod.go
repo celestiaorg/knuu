@@ -36,9 +36,9 @@ type ContainerConfig struct {
 	Args            []string            // Arguments to pass to the command in the container
 	Env             map[string]string   // Environment variables to set in the container
 	Volumes         []*Volume           // Volumes to mount in the Pod
-	MemoryRequest   string              // Memory request for the container
-	MemoryLimit     string              // Memory limit for the container
-	CPURequest      string              // CPU request for the container
+	MemoryRequest   resource.Quantity   // Memory request for the container
+	MemoryLimit     resource.Quantity   // Memory limit for the container
+	CPURequest      resource.Quantity   // CPU request for the container
 	LivenessProbe   *v1.Probe           // Liveness probe for the container
 	ReadinessProbe  *v1.Probe           // Readiness probe for the container
 	StartupProbe    *v1.Probe           // Startup probe for the container
@@ -59,7 +59,7 @@ type PodConfig struct {
 
 type Volume struct {
 	Path  string
-	Size  string
+	Size  resource.Quantity
 	Owner int64
 }
 
@@ -82,7 +82,7 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	return createdPod, nil
 }
 
-func (c *Client) NewVolume(path, size string, owner int64) *Volume {
+func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {
 	return &Volume{
 		Path:  path,
 		Size:  size,
@@ -466,36 +466,15 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
-func buildResources(memoryRequest string, memoryLimit string, cpuRequest string) (v1.ResourceRequirements, error) {
-	resources := v1.ResourceRequirements{}
-
-	memoryRequestQuantity, err := resource.ParseQuantity(memoryRequest)
-	if err != nil {
-		if memoryRequest != "" {
-			return resources, ErrParsingMemoryRequest.WithParams(memoryRequest).Wrap(err)
-		}
-	}
-	memoryLimitQuantity, err := resource.ParseQuantity(memoryLimit)
-	if err != nil {
-		if memoryLimit != "" {
-			return resources, ErrParsingMemoryLimit.WithParams(memoryLimit).Wrap(err)
-		}
-	}
-	cpuRequestQuantity, err := resource.ParseQuantity(cpuRequest)
-	if err != nil {
-		if cpuRequest != "" {
-			return resources, ErrParsingCPURequest.WithParams(cpuRequest).Wrap(err)
-		}
-	}
-
+func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) (v1.ResourceRequirements, error) {
 	// If a resource is not set it will use the default value of 0 which is the same as not setting it at all.
-	resources = v1.ResourceRequirements{
+	resources := v1.ResourceRequirements{
 		Requests: v1.ResourceList{
-			v1.ResourceMemory: memoryRequestQuantity,
-			v1.ResourceCPU:    cpuRequestQuantity,
+			v1.ResourceMemory: memoryRequest,
+			v1.ResourceCPU:    cpuRequest,
 		},
 		Limits: v1.ResourceList{
-			v1.ResourceMemory: memoryLimitQuantity,
+			v1.ResourceMemory: memoryLimit,
 		},
 	}
 

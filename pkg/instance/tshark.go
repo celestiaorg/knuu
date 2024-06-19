@@ -3,6 +3,8 @@ package instance
 import (
 	"context"
 	"fmt"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -40,13 +42,21 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 	if err := tsc.Commit(); err != nil {
 		return nil, err
 	}
-	if err := tsc.SetCPU(tsharkCollectorCPU); err != nil {
+	if err := tsc.SetCPU(resource.MustParse(tsharkCollectorCPU)); err != nil {
 		return nil, err
 	}
-	if err := tsc.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
+	err = tsc.SetMemory(
+		resource.MustParse(tsharkCollectorMemory),
+		resource.MustParse(tsharkCollectorMemory),
+	)
+	if err != nil {
 		return nil, err
 	}
-	if err := tsc.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.VolumeSize); err != nil {
+	err = tsc.AddVolume(
+		tsharkCollectorVolumePath,
+		resource.MustParse(i.tsharkCollectorConfig.VolumeSize),
+	)
+	if err != nil {
 		return nil, err
 	}
 

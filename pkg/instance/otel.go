@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type OTelConfig struct {
@@ -191,10 +192,10 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 	if err := otelAgent.AddPortTCP(9090); err != nil {
 		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
-	if err := otelAgent.SetCPU("100m"); err != nil {
+	if err := otelAgent.SetCPU(resource.MustParse("100m")); err != nil {
 		return nil, ErrSettingOtelAgentCPU.Wrap(err)
 	}
-	if err := otelAgent.SetMemory("100Mi", "200Mi"); err != nil {
+	if err := otelAgent.SetMemory(resource.MustParse("100Mi"), resource.MustParse("200Mi")); err != nil {
 		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
 	if err := otelAgent.Commit(); err != nil {

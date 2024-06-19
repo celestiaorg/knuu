@@ -3,6 +3,8 @@ package instance
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -37,11 +39,11 @@ func NewExecutor(ctx context.Context, sysDeps system.SystemDependencies) (*Execu
 		return nil, ErrSettingArgs.Wrap(err)
 	}
 
-	if err := i.SetMemory(memoryLimit, memoryLimit); err != nil {
+	if err := i.SetMemory(resource.MustParse(memoryLimit), resource.MustParse(memoryLimit)); err != nil {
 		return nil, ErrSettingMemory.Wrap(err)
 	}
 
-	if err := i.SetCPU(cpuLimit); err != nil {
+	if err := i.SetCPU(resource.MustParse(cpuLimit)); err != nil {
 		return nil, ErrSettingCPU.Wrap(err)
 	}
 	i.instanceType = ExecutorInstance

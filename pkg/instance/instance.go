@@ -11,15 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/celestiaorg/bittwister/sdk"
-
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -119,9 +118,9 @@ type Instance struct {
 	args                  []string
 	env                   map[string]string
 	volumes               []*k8s.Volume
-	memoryRequest         string
-	memoryLimit           string
-	cpuRequest            string
+	memoryRequest         resource.Quantity
+	memoryLimit           resource.Quantity
+	cpuRequest            resource.Quantity
 	policyRules           []rbacv1.PolicyRule
 	livenessProbe         *v1.Probe
 	readinessProbe        *v1.Probe
@@ -177,9 +176,9 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		args:                  make([]string, 0),
 		env:                   make(map[string]string),
 		volumes:               make([]*k8s.Volume, 0),
-		memoryRequest:         "",
-		memoryLimit:           "",
-		cpuRequest:            "",
+		memoryRequest:         resource.Quantity{},
+		memoryLimit:           resource.Quantity{},
+		cpuRequest:            resource.Quantity{},
 		policyRules:           make([]rbacv1.PolicyRule, 0),
 		livenessProbe:         nil,
 		readinessProbe:        nil,
@@ -670,7 +669,7 @@ func (i *Instance) Commit() error {
 // AddVolume adds a volume to the instance
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolume(path, size string) error {
+func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
 		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
@@ -682,7 +681,7 @@ func (i *Instance) AddVolume(path, size string) error {
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
+func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
@@ -693,30 +692,30 @@ func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
 	}
 	volume := i.K8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
-	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
+	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, i.name)
 	return nil
 }
 
 // SetMemory sets the memory of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetMemory(request, limit string) error {
+func (i *Instance) SetMemory(request, limit resource.Quantity) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
 	i.memoryLimit = limit
-	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request, limit, i.name)
+	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request.String(), limit.String(), i.name)
 	return nil
 }
 
 // SetCPU sets the CPU of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetCPU(request string) error {
+func (i *Instance) SetCPU(request resource.Quantity) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
-	logrus.Debugf("Set cpu to '%s' in instance '%s'", request, i.name)
+	logrus.Debugf("Set cpu to '%s' in instance '%s'", request.String(), i.name)
 	return nil
 }
 

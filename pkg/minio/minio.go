@@ -128,7 +128,12 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Deployment does not exist, create it
-			if err := m.createPVC(ctx, VolumeClaimName, PVCStorageSize, metav1.CreateOptions{}); err != nil {
+			err := m.createPVC(ctx,
+				VolumeClaimName,
+				resource.MustParse(PVCStorageSize),
+				metav1.CreateOptions{},
+			)
+			if err != nil {
 				return ErrMinioFailedToCreatePVC.Wrap(err)
 			}
 			_, err = deploymentClient.Create(ctx, minioDeployment, metav1.CreateOptions{})
@@ -386,16 +391,11 @@ func (m *Minio) waitForMinio(ctx context.Context) error {
 	return nil
 }
 
-func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize string, createOptions metav1.CreateOptions) error {
-	storageQt, err := resource.ParseQuantity(storageSize)
-	if err != nil {
-		return ErrMinioFailedToParseStorageSize.Wrap(err)
-	}
-
+func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resource.Quantity, createOptions metav1.CreateOptions) error {
 	pvcClient := m.K8s.Clientset().CoreV1().PersistentVolumeClaims(m.K8s.Namespace())
 
 	// Check if PVC already exists
-	_, err = pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
+	_, err := pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
 	if err == nil {
 		logrus.Debugf("PersistentVolumeClaim `%s` already exists.", pvcName)
 		return nil
@@ -410,7 +410,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 	var existingPV *v1.PersistentVolume
 	for _, pv := range pvList.Items {
 		// Not sure if this condition is ok
-		if pv.Spec.Capacity[v1.ResourceStorage].Equal(storageQt) {
+		if pv.Spec.Capacity[v1.ResourceStorage].Equal(storageSize) {
 			existingPV = &pv
 			break
 		}
@@ -424,7 +424,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 			},
 			Spec: v1.PersistentVolumeSpec{
 				Capacity: v1.ResourceList{
-					v1.ResourceStorage: storageQt,
+					v1.ResourceStorage: storageSize,
 				},
 				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 				PersistentVolumeSource: v1.PersistentVolumeSource{
@@ -450,7 +450,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize strin
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
-					v1.ResourceStorage: storageQt,
+					v1.ResourceStorage: storageSize,
 				},
 			},
 		},
