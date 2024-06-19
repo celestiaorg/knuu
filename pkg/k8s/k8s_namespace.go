@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,9 +20,9 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 		if !errors.IsAlreadyExists(err) {
 			return ErrCreatingNamespace.WithParams(name).Wrap(err)
 		}
-		logrus.Debugf("Namespace %s already exists, continuing.\n", name)
+		c.logger.Debugf("Namespace %s already exists, continuing.\n", name)
 	}
-	logrus.Debugf("Namespace %s created.\n", name)
+	c.logger.Debugf("Namespace %s created.\n", name)
 
 	return nil
 }
@@ -47,7 +46,7 @@ func (c *Client) GetNamespace(ctx context.Context, name string) (*corev1.Namespa
 func (c *Client) NamespaceExists(ctx context.Context, name string) bool {
 	_, err := c.GetNamespace(ctx, name)
 	if err != nil {
-		logrus.Debugf("Namespace %s does not exist, err: %v", name, err)
+		c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
 		return false
 	}
 	return true

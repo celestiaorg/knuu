@@ -49,10 +49,6 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
-	if err := loadEnvVariables(); err != nil {
-		return nil, err
-	}
-
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
 			K8sClient:    opts.K8s,
@@ -66,6 +62,10 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
+		return nil, err
+	}
+
+	if err := k.loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
@@ -95,9 +95,9 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
-		logrus.Info("Received signal to stop, cleaning up resources...")
+		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			logrus.Errorf("Error deleting namespace: %v", err)
+			k.Logger.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
 }
@@ -160,13 +160,13 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
-func loadEnvVariables() error {
+func (k *Knuu) loadEnvVariables() error {
 	err := godotenv.Load()
 	if err != nil && !os.IsNotExist(err) {
 		return ErrCannotLoadEnv.Wrap(err)
 	}
 	if os.IsNotExist(err) {
-		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
+		k.Logger.Info("The .env file does not exist, continuing without loading environment variables.")
 	}
 	return nil
 }
@@ -187,7 +187,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.K8sClient == nil {
 		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope, k.Logger)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}
