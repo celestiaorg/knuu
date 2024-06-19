@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/sidecars/bittwister"
 )
 
 const (
@@ -43,6 +44,9 @@ func (s *Suite) TestBittwisterBandwidth() {
 	iperfClient, err := iperfMother.CloneWithName("iperf-client")
 	s.Require().NoError(err)
 
+	btSidecar := bittwister.New()
+	s.Require().NoError(iperfServer.AddSidecar(ctx, btSidecar))
+
 	s.T().Cleanup(func() {
 		s.T().Log("Tearing down TestBittwisterBandwidth test...")
 		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
@@ -53,9 +57,9 @@ func (s *Suite) TestBittwisterBandwidth() {
 
 	// Prepare iperf client & server
 
-	s.Require().NoError(iperfServer.EnableBitTwister())
 	s.Require().NoError(iperfServer.Start(ctx))
-	s.Require().NoError(iperfServer.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
+
 	s.Require().NoError(iperfClient.Start(ctx))
 
 	iperfServerIP, err := iperfServer.GetIP(ctx)
@@ -86,8 +90,7 @@ func (s *Suite) TestBittwisterBandwidth() {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Max bandwidth: %v \t tolerance: %v%%", formatBandwidth(float64(tc.targetBandwidth)), tc.tolerancePercent)
-
-			s.Require().NoError(iperfServer.SetBandwidthLimit(tc.targetBandwidth))
+			s.Require().NoError(btSidecar.SetBandwidthLimit(tc.targetBandwidth))
 
 			s.T().Log("Starting bandwidth test. It takes a while.")
 			startTime := time.Now()
@@ -147,6 +150,9 @@ func (s *Suite) TestBittwisterPacketloss() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := bittwister.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
@@ -160,10 +166,9 @@ func (s *Suite) TestBittwisterPacketloss() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -191,9 +196,7 @@ func (s *Suite) TestBittwisterPacketloss() {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Target packetloss: %v%% \t tolerance: %v%%", tc.targetPacketlossRate, tc.tolerancePercent)
-
-			err = target.SetPacketLoss(tc.targetPacketlossRate)
-			s.Require().NoError(err)
+			s.Require().NoError(btSidecar.SetPacketLoss(tc.targetPacketlossRate))
 
 			s.T().Log("Starting packetloss test. It takes a while.")
 			startTime := time.Now()
@@ -250,6 +253,9 @@ func (s *Suite) TestBittwisterLatency() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := bittwister.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
@@ -263,10 +269,9 @@ func (s *Suite) TestBittwisterLatency() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -299,7 +304,7 @@ func (s *Suite) TestBittwisterLatency() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max latency: %v ms \t tolerance: %v%%", tc.targetLatency.Milliseconds(), tc.tolerancePercent)
 
-			err = target.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
+			err = btSidecar.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
 			s.Require().NoError(err)
 
 			s.T().Log("Starting latency test. It takes a while.")
@@ -358,6 +363,9 @@ func (s *Suite) TestBittwisterJitter() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := bittwister.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
@@ -371,9 +379,9 @@ func (s *Suite) TestBittwisterJitter() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
+
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -400,7 +408,7 @@ func (s *Suite) TestBittwisterJitter() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max jitter: %v", tc.maxTargetJitter.Milliseconds())
 
-			err = target.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
+			err = btSidecar.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
 			s.Require().NoError(err)
 
 			s.T().Log("Starting jitter test. It takes a while.")
