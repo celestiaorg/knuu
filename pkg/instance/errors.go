@@ -207,4 +207,8 @@ var (
 	ErrTsharkCollectorInvalidS3SecretKey         = errors.New("TsharkCollectorInvalidS3SecretKey", "invalid S3 secret key format for tshark collector: %s")
 	ErrTsharkCollectorS3RegionOrBucketEmpty      = errors.New("TsharkCollectorS3RegionOrBucketEmpty", "S3 region or bucket cannot be empty for tshark collector: %s, %s")
 	ErrRegexpCompile                             = errors.New("RegexpCompile", "error compiling regexp for %s")
+	ErrChaosMeshNotEnabledInInstance             = errors.New("ChaosMeshNotEnabledInInstance", "chaos mesh not enabled in instance '%s'")
+	ErrResourceMissing                           = errors.New("ResourceMissing", "resource missing")
+	ErrChaosMeshNotEnabledInKnuu                 = errors.New("ChaosMeshNotEnabledInKnuu", "chaos mesh not enabled in knuu")
+	ErrFailedToAddNetworkChaos                   = errors.New("FailedToAddNetworkChaos", "failed to add %s to network for instance '%s'")
 )

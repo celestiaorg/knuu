@@ -1,4 +1,4 @@
-package bittwister
+package chaosmesh
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func (s *Suite) SetupSuite() {
 		err error
 		ctx = context.Background()
 	)
-	s.Knuu, err = knuu.New(ctx, knuu.Options{EnableProxy: true})
+	s.Knuu, err = knuu.New(ctx, knuu.Options{EnableChaosMesh: true})
 	s.Require().NoError(err)
 	s.T().Logf("Scope: %s", s.Knuu.Scope())
 	s.Knuu.HandleStopSignal(ctx)

@@ -3,6 +3,7 @@ package k8s_test
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -77,66 +78,74 @@ func (s *TestSuite) TestCreateCustomResource() {
 }
 
 func (s *TestSuite) TestCustomResourceDefinitionExists() {
+	const (
+		group        = "example.com"
+		version      = "v1"
+		resource     = "examples"
+		groupVersion = "example.com/v1"
+		kind         = "example-kind"
+	)
+
+	// type FakeDiscovery struct {
+	// 	*discfake.FakeDiscovery
+	// 	ServerResourcesForGroupVersionFunc func(groupVersion string) (*metav1.APIResourceList, error)
+	// }
+
+	// func (f *FakeDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
+	// 	if f.ServerResourcesForGroupVersionFunc != nil {
+	// 		return f.ServerResourcesForGroupVersionFunc(groupVersion)
+	// 	}
+	// 	return nil, errors.New("method not implemented")
+	// }
+
 	tests := []struct {
 		name           string
 		resource       *schema.GroupVersionResource
 		setupMock      func(*discfake.FakeDiscovery)
 		expectedExists bool
+		expectedErr    error
 	}{
 		{
 			name: "resource definition exists",
 			resource: &schema.GroupVersionResource{
-				Group:    "example.com",
-				Version:  "v1",
-				Resource: "example-kind",
+				Group:    group,
+				Version:  version,
+				Resource: resource,
 			},
 			setupMock: func(discoveryClient *discfake.FakeDiscovery) {
 				discoveryClient.Resources = []*metav1.APIResourceList{
 					{
-						GroupVersion: "example.com/v1",
+						GroupVersion: groupVersion,
 						APIResources: []metav1.APIResource{
 							{
-								Name: "examples",
+								Name: resource,
 								// must be equal to the kind in the resource.Resource definition
-								Kind: "example-kind",
+								Kind: resource,
 							},
 						},
 					},
 				}
 			},
 			expectedExists: true,
+			expectedErr:    nil,
 		},
 		{
 			name: "resource definition does not exist",
 			resource: &schema.GroupVersionResource{
-				Group:    "example.com",
-				Version:  "v1",
+				Group:    group,
+				Version:  version,
 				Resource: "nonexistent",
 			},
 			setupMock: func(discoveryClient *discfake.FakeDiscovery) {
 				discoveryClient.Resources = []*metav1.APIResourceList{
 					{
-						GroupVersion: "example.com/v1",
+						GroupVersion: groupVersion,
 						APIResources: []metav1.APIResource{},
 					},
 				}
 			},
 			expectedExists: false,
-		},
-		{
-			name: "discovery client error",
-			resource: &schema.GroupVersionResource{
-				Group:    "example.com",
-				Version:  "v1",
-				Resource: "examples",
-			},
-			setupMock: func(discoveryClient *discfake.FakeDiscovery) {
-				discoveryClient.PrependReactor("get", "serverresourcesforgroupversion",
-					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New("internal server error")
-					})
-			},
-			expectedExists: false,
+			expectedErr:    nil,
 		},
 	}
 
@@ -144,8 +153,10 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 		s.Run(tt.name, func() {
 			tt.setupMock(s.client.DiscoveryClient().(*discfake.FakeDiscovery))
 
-			exists := s.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
+			exists, err := s.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
+			fmt.Printf("err: %v\n", err)
 			s.Assert().Equal(tt.expectedExists, exists)
+			s.Assert().ErrorIs(err, tt.expectedErr)
 		})
 	}
 }

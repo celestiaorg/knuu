@@ -11,15 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/celestiaorg/bittwister/sdk"
-
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -135,6 +133,7 @@ type Instance struct {
 	tsharkCollectorConfig *TsharkCollectorConfig
 	securityContext       *SecurityContext
 	BitTwister            *btConfig
+	gvr                   schema.GroupVersionResource
 }
 
 func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
@@ -1437,7 +1436,7 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr)
 }
 
 func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {

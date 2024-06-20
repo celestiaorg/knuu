@@ -205,4 +205,5 @@ var (
 	ErrCannotGetTraefikEndpoint                  = errors.New("CannotGetTraefikEndpoint", "cannot get traefik endpoint")
 	ErrGettingProxyURL                           = errors.New("GettingProxyURL", "error getting proxy URL for service '%s'")
 	ErrTraefikAPINotAvailable                    = errors.New("TraefikAPINotAvailable", "traefik API is not available")
+	ErrChaosMeshAPINotAvailable                  = errors.New("ChaosMeshAPINotAvailable", "chaos mesh API is not available")
 )

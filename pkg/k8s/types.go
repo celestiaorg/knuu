@@ -8,6 +8,7 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -29,7 +30,7 @@ type KubeManager interface {
 	CreateRoleBinding(ctx context.Context, name string, labels map[string]string, role, serviceAccount string) error
 	CreateService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
 	CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error
-	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool
+	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error)
 	DaemonSetExists(ctx context.Context, name string) (bool, error)
 	DeleteConfigMap(ctx context.Context, name string) error
 	DeleteDaemonSet(ctx context.Context, name string) error
@@ -48,6 +49,7 @@ type KubeManager interface {
 	DiscoveryClient() discovery.DiscoveryInterface
 	DynamicClient() dynamic.Interface
 	GetConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error)
+	GetCustomResource(ctx context.Context, gvr *schema.GroupVersionResource) (*metav1.APIResourceList, error)
 	GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error)
 	GetFirstPodFromReplicaSet(ctx context.Context, name string) (*corev1.Pod, error)
 	GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error)

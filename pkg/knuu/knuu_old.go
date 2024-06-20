@@ -70,9 +70,9 @@ func InitializeWithScope(testScope string) error {
 	defer cancel()
 	var err error
 	tmpKnuu, err = New(ctx, Options{
-		TestScope:    testScope,
-		Timeout:      timeout,
-		ProxyEnabled: true,
+		TestScope:   testScope,
+		Timeout:     timeout,
+		EnableProxy: true,
 	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,10 +39,13 @@ func (c *Client) CreateCustomResource(
 	return nil
 }
 
-func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool {
-	resourceList, err := c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
+	resourceList, err := c.GetCustomResource(ctx, gvr)
 	if err != nil {
-		return false
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
 
 	resourceExists := false
@@ -52,5 +56,9 @@ func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema
 		}
 	}
 
-	return resourceExists
+	return resourceExists, nil
+}
+
+func (c *Client) GetCustomResource(ctx context.Context, gvr *schema.GroupVersionResource) (*metav1.APIResourceList, error) {
+	return c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 }

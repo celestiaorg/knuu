@@ -10,11 +10,20 @@ import (
 )
 
 type SystemDependencies struct {
-	ImageBuilder builder.Builder
-	K8sClient    k8s.KubeManager
-	MinioClient  *minio.Minio
-	Logger       *logrus.Logger
-	Proxy        *traefik.Traefik
-	TestScope    string
-	StartTime    string
+	ImageBuilder     builder.Builder
+	K8sClient        k8s.KubeManager
+	MinioClient      *minio.Minio
+	Logger           *logrus.Logger
+	Proxy            *traefik.Traefik
+	enabledChaosMesh bool
+	TestScope        string
+	StartTime        string
+}
+
+func (s *SystemDependencies) SetChaosMeshEnabled(enabled bool) {
+	s.enabledChaosMesh = enabled
+}
+
+func (s *SystemDependencies) IsChaosMeshEnabled() bool {
+	return s.enabledChaosMesh
 }
