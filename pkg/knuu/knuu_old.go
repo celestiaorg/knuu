@@ -83,7 +83,8 @@ func InitializeWithScope(testScope string) error {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
 
-	tmpKnuu, err = New(ctx, k8sClient, Options{
+	tmpKnuu, err = New(ctx, Options{
+		K8sClient:    k8sClient,
 		TestScope:    testScope,
 		Timeout:      timeout,
 		ProxyEnabled: true,

@@ -66,7 +66,7 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name:        "Default initialization",
-			options:     Options{},
+			options:     Options{TestScope: "test"},
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
@@ -77,18 +77,28 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name:        "With custom Minio client",
+			name:        "With custom Minio client without setting k8sClient",
 			options:     Options{MinioClient: &minio.Minio{}},
+			expectError: true,
+		},
+		{
+			name: "With custom Minio client and K8sClient",
+			options: Options{
+				MinioClient: &minio.Minio{},
+				K8sClient:   &mockK8s{},
+			},
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.MinioClient)
+				assert.NotNil(t, k.K8sClient)
 			},
 		},
 		{
 			name: "With custom Logger",
 			options: Options{
-				Logger: &logrus.Logger{},
+				TestScope: "test",
+				Logger:    &logrus.Logger{},
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
@@ -99,7 +109,8 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Timeout",
 			options: Options{
-				Timeout: 30 * time.Minute,
+				TestScope: "test",
+				Timeout:   30 * time.Minute,
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, k *Knuu) {
@@ -110,6 +121,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Image Builder",
 			options: Options{
+				TestScope:    "test",
 				ImageBuilder: &kaniko.Kaniko{},
 			},
 			expectError: false,
@@ -118,11 +130,27 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k.ImageBuilder)
 			},
 		},
+		{
+			name:        "Without TestScope and K8sClient",
+			options:     Options{},
+			expectError: true,
+		},
+		{
+			name: "With K8sClient but without TestScope",
+			options: Options{
+				K8sClient: &mockK8s{},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, k *Knuu) {
+				assert.NotNil(t, k)
+				assert.Equal(t, "test", k.TestScope)
+			},
+		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			k, err := New(ctx, &mockK8s{}, tc.options)
+			k, err := New(ctx, tc.options)
 			if tc.expectError {
 				assert.Error(t, err)
 				return

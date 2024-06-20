@@ -39,6 +39,7 @@ type Knuu struct {
 }
 
 type Options struct {
+	K8sClient    k8s.KubeManager
 	TestScope    string
 	ImageBuilder builder.Builder
 	MinioClient  *minio.Minio
@@ -47,14 +48,14 @@ type Options struct {
 	Logger       *logrus.Logger
 }
 
-func New(ctx context.Context, k8sClient k8s.KubeManager, opts Options) (*Knuu, error) {
+func New(ctx context.Context, opts Options) (*Knuu, error) {
 	if err := loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
-			K8sClient:    k8sClient,
+			K8sClient:    opts.K8sClient,
 			MinioClient:  opts.MinioClient,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
@@ -64,7 +65,13 @@ func New(ctx context.Context, k8sClient k8s.KubeManager, opts Options) (*Knuu, e
 		timeout: opts.Timeout,
 	}
 
-	if err := setDefaults(k); err != nil {
+	// When Minio is set, K8sClient must be set too
+	// to make sure that there is only one source of truth for the k8s client
+	if k.MinioClient != nil && k.K8sClient == nil {
+		return nil, ErrK8sClientNotSet
+	}
+
+	if err := setDefaults(ctx, k); err != nil {
 		return nil, err
 	}
 
@@ -79,11 +86,6 @@ func New(ctx context.Context, k8sClient k8s.KubeManager, opts Options) (*Knuu, e
 	}
 
 	return k, nil
-}
-
-func DefaultTestScope() string {
-	t := time.Now()
-	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 }
 
 func (k *Knuu) Scope() string {
@@ -175,12 +177,15 @@ func loadEnvVariables() error {
 	return nil
 }
 
-func setDefaults(k *Knuu) error {
+func setDefaults(ctx context.Context, k *Knuu) error {
 	if k.Logger == nil {
 		k.Logger = log.DefaultLogger()
 	}
 
 	if k.TestScope == "" {
+		if k.K8sClient == nil {
+			return ErrTestScopeNotSet
+		}
 		k.TestScope = k.K8sClient.Namespace()
 	}
 
@@ -191,6 +196,14 @@ func setDefaults(k *Knuu) error {
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
 			SystemDependencies: k.SystemDependencies,
+		}
+	}
+
+	if k.K8sClient == nil {
+		var err error
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
+		if err != nil {
+			return ErrCannotInitializeK8s.Wrap(err)
 		}
 	}
 
