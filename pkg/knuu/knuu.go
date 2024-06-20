@@ -180,6 +180,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		t := time.Now()
 		k.TestScope = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 	}
+	k.TestScope = k8s.SanitizeName(k.TestScope)
 
 	if k.timeout == 0 {
 		k.timeout = defaultTimeout
