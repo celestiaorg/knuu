@@ -65,7 +65,7 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 	t.Parallel()
 
 	target, err := knuu.NewInstance("target")
-	require.NoError(t, err, "error creating instance")
+	require.NoError(t, err, "Error creating instance 'target'")
 
 	err = target.SetImage("nginx:latest")
 	require.NoError(t, err, "error setting image")
@@ -114,5 +114,5 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 	// Additional verification that the host is accessible
 	ok, err := checkFunc(host)
 	require.NoError(t, err, "error checking host")
-	assert.True(t, ok, "host should be ready and serving content")
+	assert.True(t, ok, "Host should be ready and serving content: expected true, got false")
 }
