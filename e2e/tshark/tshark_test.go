@@ -56,14 +56,14 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error getting S3 (minio) configs")
 
 	var (
-		filename  = target.K8sName() + instance.TsharkCaptureFileExtension
+		filename  = target.K8sName() + instance.TsharkCaptureFileExtension + ".tar.gz" // compressed file extension
 		keyPrefix = "tshark/" + scope
 		fileKey   = filepath.Join(keyPrefix, filename)
 	)
 
 	err = target.EnableTsharkCollector(
 		instance.TsharkCollectorConfig{
-			VolumeSize:     "10Gi",
+			VolumeSize:     "4Gi",
 			S3AccessKey:    minioConf.AccessKeyID,
 			S3SecretKey:    minioConf.SecretAccessKey,
 			S3Region:       s3Location,
@@ -72,18 +72,13 @@ func TestTshark(t *testing.T) {
 			S3KeyPrefix:    keyPrefix,
 			S3Endpoint:     minioConf.Endpoint,
 			UploadInterval: 1 * time.Second, // for sake of the test we keep this short
+			CompressFiles:  true,
 		},
 	)
 	require.NoError(t, err, "error enabling tshark collector")
 
 	err = target.Commit()
 	require.NoError(t, err, "error committing instance")
-
-	t.Cleanup(func() {
-		if err := kn.CleanUp(ctx); err != nil {
-			t.Logf("error cleaning up knuu: %v", err)
-		}
-	})
 
 	// Test logic
 
