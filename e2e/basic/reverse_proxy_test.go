@@ -70,9 +70,6 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 	err = target.SetImage("nginx:latest")
 	require.NoError(t, err, "error setting image")
 
-	err = target.SetCommand("nginx", "-g", "daemon off;")
-	require.NoError(t, err, "error setting command")
-
 	require.NoError(t, target.Commit(), "error committing instance")
 
 	t.Cleanup(func() {
