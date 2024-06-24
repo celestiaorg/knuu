@@ -49,6 +49,10 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
+	if err := validateOptions(opts); err != nil {
+		return nil, err
+	}
+
 	if err := loadEnvVariables(); err != nil {
 		return nil, err
 	}
@@ -63,12 +67,6 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
 		timeout: opts.Timeout,
-	}
-
-	// When Minio is set, K8sClient must be set too
-	// to make sure that there is only one source of truth for the k8s client
-	if k.MinioClient != nil && k.K8sClient == nil {
-		return nil, ErrK8sClientNotSet
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
@@ -166,6 +164,19 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
+func validateOptions(opts Options) error {
+	// When Minio is set, K8sClient must be set too
+	// to make sure that there is only one source of truth for the k8s client
+	if opts.MinioClient != nil && opts.K8sClient == nil {
+		return ErrK8sClientNotSet
+	}
+
+	if opts.TestScope == "" && opts.K8sClient == nil {
+		return ErrTestScopeNotSet
+	}
+	return nil
+}
+
 func loadEnvVariables() error {
 	err := godotenv.Load()
 	if err != nil && !os.IsNotExist(err) {
@@ -182,10 +193,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		k.Logger = log.DefaultLogger()
 	}
 
-	if k.TestScope == "" {
-		if k.K8sClient == nil {
-			return ErrTestScopeNotSet
-		}
+	if k.TestScope == "" && k.K8sClient != nil {
 		k.TestScope = k.K8sClient.Namespace()
 	}
 	k.TestScope = k8s.SanitizeName(k.TestScope)

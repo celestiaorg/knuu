@@ -161,3 +161,51 @@ func TestNew(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		options Options
+		wantErr bool
+	}{
+		{
+			name: "MinioClient set without K8sClient",
+			options: Options{
+				MinioClient: &minio.Minio{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Both MinioClient and K8sClient set",
+			options: Options{
+				MinioClient: &minio.Minio{},
+				K8sClient:   &mockK8s{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "TestScope and K8sClient not set",
+			options: Options{
+				TestScope: "",
+				K8sClient: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Valid options",
+			options: Options{
+				TestScope: "test",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOptions(tt.options)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOptions() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
