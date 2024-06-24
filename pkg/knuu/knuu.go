@@ -188,6 +188,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		}
 		k.TestScope = k.K8sClient.Namespace()
 	}
+	k.TestScope = k8s.SanitizeName(k.TestScope)
 
 	if k.timeout == 0 {
 		k.timeout = defaultTimeout
