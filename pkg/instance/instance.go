@@ -15,6 +15,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/celestiaorg/bittwister/sdk"
@@ -1422,7 +1423,7 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 
 // CreateCustomResource creates a custom resource for the instance
 // The names and namespace are set and overridden by knuu
-func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVersionResource, obj *map[string]interface{}) error {
+func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVersionResource, obj *unstructured.Unstructured) error {
 	crdExists, err := i.CustomResourceDefinitionExists(ctx, gvr)
 	if err != nil {
 		return err
@@ -1432,6 +1433,10 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 	}
 
 	return i.K8sClient.CreateCustomResource(ctx, i.k8sName, gvr, obj)
+}
+
+func (i *Instance) GetCustomResource(ctx context.Context, gvr *schema.GroupVersionResource) (*unstructured.Unstructured, error) {
+	return i.K8sClient.GetCustomResource(ctx, i.k8sName, gvr)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists

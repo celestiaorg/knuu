@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 
@@ -118,16 +119,82 @@ func (i *Instance) setNetworkChaos(ctx context.Context, action v1alpha1.NetworkC
 		},
 	}
 
-	netChaosObject := map[string]interface{}{
-		"metadata": netChaos.ObjectMeta,
-		"spec":     netChaos.Spec,
+	netChaosObject := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"metadata": netChaos.ObjectMeta,
+			"spec":     netChaos.Spec,
+		},
 	}
 
-	if err := i.CreateCustomResource(ctx, &i.gvr, &netChaosObject); err != nil {
+	if err := i.CreateCustomResource(ctx, &i.gvr, netChaosObject); err != nil {
 		return ErrFailedToAddNetworkChaos.WithParams(action, i.Name()).Wrap(err)
 	}
 
+	injected, err := i.WaitForChaosInjection(ctx)
+	if err != nil {
+		return err
+	}
+	if !injected {
+		return ErrFailedToInjectNetworkChaos.WithParams(action, i.Name())
+	}
+
 	return nil
+}
+
+// WaitForChaosInjection checks if the specified chaos actions are successfully applied
+func (i *Instance) WaitForChaosInjection(ctx context.Context) (bool, error) {
+	if i.gvr == (schema.GroupVersionResource{}) {
+		return false, ErrChaosMeshNotEnabledInInstance.WithParams(i.k8sName)
+	}
+
+	for {
+		injected, err := i.isChaosInjected(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		if injected {
+			return true, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return false, fmt.Errorf("timeout waiting for NetworkChaos %s to be fully injected: %w", i.k8sName, ctx.Err())
+		case <-time.After(1 * time.Second):
+			// Continue loop
+		}
+	}
+}
+
+// isChaosInjected checks if the chaos has been injected by examining the conditions
+func (i *Instance) isChaosInjected(ctx context.Context) (bool, error) {
+	netChaos, err := i.GetCustomResource(ctx, &i.gvr)
+	if err != nil {
+		return false, err
+	}
+
+	status, ok := netChaos.Object["status"].(map[string]interface{})
+	if !ok {
+		return false, fmt.Errorf("failed to parse status of NetworkChaos %s", i.k8sName)
+	}
+
+	conditions, ok := status["conditions"].([]interface{})
+	if !ok {
+		return false, nil // Conditions not yet available, not an error, continue checking
+	}
+
+	for _, condition := range conditions {
+		cond, ok := condition.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if cond["type"] == "AllInjected" && cond["status"] == "True" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // IsChaosMeshAPIAvailable checks if the Chaos Mesh API is available on the cluster

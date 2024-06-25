@@ -8,7 +8,7 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -20,7 +20,7 @@ type KubeManager interface {
 	CreateClusterRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateClusterRoleBinding(ctx context.Context, name string, labels map[string]string, clusterRole, serviceAccount string) error
 	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
-	CreateCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource, obj *map[string]interface{}) error
+	CreateCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource, obj *unstructured.Unstructured) error
 	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	CreateNamespace(ctx context.Context, name string) error
 	CreateNetworkPolicy(ctx context.Context, name string, selectorMap, ingressSelectorMap, egressSelectorMap map[string]string) error
@@ -49,7 +49,7 @@ type KubeManager interface {
 	DiscoveryClient() discovery.DiscoveryInterface
 	DynamicClient() dynamic.Interface
 	GetConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error)
-	GetCustomResource(ctx context.Context, gvr *schema.GroupVersionResource) (*metav1.APIResourceList, error)
+	GetCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource) (*unstructured.Unstructured, error)
 	GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error)
 	GetFirstPodFromReplicaSet(ctx context.Context, name string) (*corev1.Pod, error)
 	GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error)

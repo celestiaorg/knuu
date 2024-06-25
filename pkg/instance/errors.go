@@ -211,4 +211,5 @@ var (
 	ErrResourceMissing                           = errors.New("ResourceMissing", "resource missing")
 	ErrChaosMeshNotEnabledInKnuu                 = errors.New("ChaosMeshNotEnabledInKnuu", "chaos mesh not enabled in knuu")
 	ErrFailedToAddNetworkChaos                   = errors.New("FailedToAddNetworkChaos", "failed to add %s to network for instance '%s'")
+	ErrFailedToInjectNetworkChaos                = errors.New("FailedToInjectNetworkChaos", "failed to inject %s to network for instance '%s'")
 )

@@ -14,6 +14,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -343,7 +344,10 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) CreateCustomResource(gvr *schema.GroupVersionResource, obj *map[string]interface{}) error {
-	return i.Instance.CreateCustomResource(context.Background(), gvr, obj)
+	u := &unstructured.Unstructured{
+		Object: *obj,
+	}
+	return i.Instance.CreateCustomResource(context.Background(), gvr, u)
 }
 
 // Deprecated: Use the new package knuu instead.

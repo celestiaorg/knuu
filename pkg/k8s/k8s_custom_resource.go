@@ -16,7 +16,7 @@ func (c *Client) CreateCustomResource(
 	ctx context.Context,
 	name string,
 	gvr *schema.GroupVersionResource,
-	obj *map[string]interface{},
+	obj *unstructured.Unstructured,
 ) error {
 
 	resourceUnstructured := &unstructured.Unstructured{
@@ -27,7 +27,7 @@ func (c *Client) CreateCustomResource(
 				"name":      name,
 				"namespace": c.namespace,
 			},
-			"spec": (*obj)["spec"],
+			"spec": obj.Object["spec"],
 		},
 	}
 
@@ -40,7 +40,7 @@ func (c *Client) CreateCustomResource(
 }
 
 func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	resourceList, err := c.GetCustomResource(ctx, gvr)
+	resourceList, err := c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
@@ -59,6 +59,6 @@ func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema
 	return resourceExists, nil
 }
 
-func (c *Client) GetCustomResource(ctx context.Context, gvr *schema.GroupVersionResource) (*metav1.APIResourceList, error) {
-	return c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+func (c *Client) GetCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource) (*unstructured.Unstructured, error) {
+	return c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }

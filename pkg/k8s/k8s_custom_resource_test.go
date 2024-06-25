@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	discfake "k8s.io/client-go/discovery/fake"
@@ -19,7 +20,7 @@ func (s *TestSuite) TestCreateCustomResource() {
 	tests := []struct {
 		name        string
 		resource    *schema.GroupVersionResource
-		obj         *map[string]interface{}
+		obj         *unstructured.Unstructured
 		setupMock   func(*dynfake.FakeDynamicClient)
 		expectedErr error
 	}{
@@ -30,9 +31,11 @@ func (s *TestSuite) TestCreateCustomResource() {
 				Version:  "v1",
 				Resource: "examples",
 			},
-			obj: &map[string]interface{}{
-				"spec": map[string]interface{}{
-					"key": "value",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"spec": map[string]interface{}{
+						"key": "value",
+					},
 				},
 			},
 			setupMock:   func(dynamicClient *dynfake.FakeDynamicClient) {},
@@ -45,9 +48,11 @@ func (s *TestSuite) TestCreateCustomResource() {
 				Version:  "v1",
 				Resource: "examples",
 			},
-			obj: &map[string]interface{}{
-				"spec": map[string]interface{}{
-					"key": "value",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"spec": map[string]interface{}{
+						"key": "value",
+					},
 				},
 			},
 			setupMock: func(dynamicClient *dynfake.FakeDynamicClient) {
@@ -85,18 +90,6 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 		groupVersion = "example.com/v1"
 		kind         = "example-kind"
 	)
-
-	// type FakeDiscovery struct {
-	// 	*discfake.FakeDiscovery
-	// 	ServerResourcesForGroupVersionFunc func(groupVersion string) (*metav1.APIResourceList, error)
-	// }
-
-	// func (f *FakeDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
-	// 	if f.ServerResourcesForGroupVersionFunc != nil {
-	// 		return f.ServerResourcesForGroupVersionFunc(groupVersion)
-	// 	}
-	// 	return nil, errors.New("method not implemented")
-	// }
 
 	tests := []struct {
 		name           string
