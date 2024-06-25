@@ -28,7 +28,6 @@ const (
 	StorageClassName = "standard" // standard | gp2 | default
 	VolumeClaimName  = "minio-data"
 	VolumeMountPath  = "/data"
-	PVCStorageSize   = "1Gi"
 
 	// The minio service is used internally, so not sure if it is ok to use constant key/secret
 	rootUser     = "minioUser"     // Previously accessKey
@@ -39,6 +38,10 @@ const (
 	pvHostPath           = "/tmp/minio-pv"
 	deploymentAppLabel   = "app"
 	deploymentMinioLabel = "minio"
+)
+
+var (
+	PVCStorageSize = resource.MustParse("1Gi")
 )
 
 type Minio struct {
@@ -130,7 +133,7 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 			// Deployment does not exist, create it
 			err := m.createPVC(ctx,
 				VolumeClaimName,
-				resource.MustParse(PVCStorageSize),
+				PVCStorageSize,
 				metav1.CreateOptions{},
 			)
 			if err != nil {
