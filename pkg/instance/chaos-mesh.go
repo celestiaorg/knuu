@@ -20,10 +20,6 @@ const (
 	chaosMeshNetworkResource = "networkchaos"
 )
 
-type ChaosInstance struct {
-	gvr schema.GroupVersionResource
-}
-
 func (i *Instance) EnableChaosMesh() error {
 	if !i.IsChaosMeshEnabled() {
 		return ErrChaosMeshNotEnabledInKnuu
