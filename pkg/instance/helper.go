@@ -330,15 +330,15 @@ func (i *Instance) destroyResources(ctx context.Context) error {
 		// enable network when network is disabled
 		disableNetwork, err := i.NetworkIsDisabled(ctx)
 		if err != nil {
-			i.Logger.Debugf("error checking network status for instance")
+			i.Logger.Errorf("error checking network status for instance")
 			return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		if disableNetwork {
-			err := i.EnableNetwork(ctx)
-			if err != nil {
-				i.Logger.Debugf("error enabling network for instance")
-				return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
-			}
+		if !disableNetwork {
+			return nil
+		}
+		if err := i.EnableNetwork(ctx); err != nil {
+			i.Logger.Errorf("error enabling network for instance")
+			return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
