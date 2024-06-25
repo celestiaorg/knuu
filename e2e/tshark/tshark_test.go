@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
@@ -18,6 +19,10 @@ import (
 const (
 	s3BucketName = "tshark-test-bucket"
 	s3Location   = "eu-east-1"
+)
+
+var (
+	tsharkVolumeSize = resource.MustParse("4Gi")
 )
 
 func TestTshark(t *testing.T) {
@@ -63,7 +68,7 @@ func TestTshark(t *testing.T) {
 
 	err = target.EnableTsharkCollector(
 		instance.TsharkCollectorConfig{
-			VolumeSize:     "4Gi",
+			VolumeSize:     tsharkVolumeSize,
 			S3AccessKey:    minioConf.AccessKeyID,
 			S3SecretKey:    minioConf.SecretAccessKey,
 			S3Region:       s3Location,

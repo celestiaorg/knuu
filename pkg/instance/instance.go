@@ -72,7 +72,7 @@ type ObsyConfig struct {
 // TsharkCollectorConfig represents the configuration for the tshark collector
 type TsharkCollectorConfig struct {
 	// VolumeSize is the size of the volume to use for the tshark collector
-	VolumeSize string
+	VolumeSize resource.Quantity
 	// S3AccessKey is the access key to use for the s3 server
 	S3AccessKey string
 	// S3SecretKey is the secret key to use for the s3 server
@@ -1023,10 +1023,6 @@ func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
 // validateTsharkCollectorConfig checks the configuration fields for proper formatting
 func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
 	// Regex patterns for validation
-	volumeSizePattern, err := regexp.Compile(`^\d+[KMGT]?i$`) // Example: "10Gi", "500Mi"
-	if err != nil {
-		return ErrRegexpCompile.WithParams("volumeSizePattern")
-	}
 	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
 	if err != nil {
 		return ErrRegexpCompile.WithParams("awsKeyPattern")
@@ -1036,9 +1032,6 @@ func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
 		return ErrRegexpCompile.WithParams("awsSecretPattern")
 	}
 
-	if !volumeSizePattern.MatchString(conf.VolumeSize) {
-		return ErrTsharkCollectorInvalidVolumeSize.WithParams(conf.VolumeSize)
-	}
 	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
 		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
 	}

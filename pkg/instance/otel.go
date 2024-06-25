@@ -8,6 +8,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+const (
+	// %s is the image tag, e.g. version
+	otelAgentImage = "otel/opentelemetry-collector-contrib:%s"
+)
+
+var (
+	otelMemoryRequest = resource.MustParse("100M")
+	otelMemoryLimit   = resource.MustParse("200Mi")
+	otelCpuLimit      = resource.MustParse("100Mi")
+)
+
 type OTelConfig struct {
 	Extensions Extensions `yaml:"extensions,omitempty"`
 	Receivers  Receivers  `yaml:"receivers,omitempty"`
@@ -183,7 +194,7 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 		return nil, ErrCreatingOtelAgentInstance.Wrap(err)
 	}
 
-	if err := otelAgent.SetImage(ctx, fmt.Sprintf("otel/opentelemetry-collector-contrib:%s", i.obsyConfig.otelCollectorVersion)); err != nil {
+	if err := otelAgent.SetImage(ctx, fmt.Sprintf(otelAgentImage, i.obsyConfig.otelCollectorVersion)); err != nil {
 		return nil, ErrSettingOtelAgentImage.Wrap(err)
 	}
 	if err := otelAgent.AddPortTCP(8888); err != nil {
@@ -192,10 +203,10 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 	if err := otelAgent.AddPortTCP(9090); err != nil {
 		return nil, ErrAddingOtelAgentPort.Wrap(err)
 	}
-	if err := otelAgent.SetCPU(resource.MustParse("100m")); err != nil {
+	if err := otelAgent.SetCPU(otelCpuLimit); err != nil {
 		return nil, ErrSettingOtelAgentCPU.Wrap(err)
 	}
-	if err := otelAgent.SetMemory(resource.MustParse("100Mi"), resource.MustParse("200Mi")); err != nil {
+	if err := otelAgent.SetMemory(otelMemoryRequest, otelMemoryLimit); err != nil {
 		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
 	if err := otelAgent.Commit(); err != nil {

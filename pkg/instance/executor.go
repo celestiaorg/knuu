@@ -13,8 +13,11 @@ const (
 	executorName         = "executor"
 	sleepCommand         = "sleep"
 	infinityArg          = "infinity"
-	memoryLimit          = "100M"
-	cpuLimit             = "100m"
+)
+
+var (
+	executorMemoryLimit = resource.MustParse("100M")
+	executorCpuLimit    = resource.MustParse("100m")
 )
 
 type Executor struct {
@@ -39,11 +42,11 @@ func NewExecutor(ctx context.Context, sysDeps system.SystemDependencies) (*Execu
 		return nil, ErrSettingArgs.Wrap(err)
 	}
 
-	if err := i.SetMemory(resource.MustParse(memoryLimit), resource.MustParse(memoryLimit)); err != nil {
+	if err := i.SetMemory(executorMemoryLimit, executorMemoryLimit); err != nil {
 		return nil, ErrSettingMemory.Wrap(err)
 	}
 
-	if err := i.SetCPU(resource.MustParse(cpuLimit)); err != nil {
+	if err := i.SetCPU(executorCpuLimit); err != nil {
 		return nil, ErrSettingCPU.Wrap(err)
 	}
 	i.instanceType = ExecutorInstance
