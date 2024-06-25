@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -22,7 +21,6 @@ func (s *Suite) SetupSuite() {
 	var err error
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
 		ProxyEnabled: true,
-		TestScope:    e2e.DefaultTestScope(),
 	})
 	s.Require().NoError(err)
 	s.T().Logf("Scope: %s", s.Knuu.Scope())

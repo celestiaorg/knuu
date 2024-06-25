@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
@@ -29,7 +28,7 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, e2e.DefaultTestScope())
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
 	require.NoError(t, err, "error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient)

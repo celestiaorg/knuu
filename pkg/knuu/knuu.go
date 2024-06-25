@@ -40,9 +40,9 @@ type Knuu struct {
 
 type Options struct {
 	K8sClient    k8s.KubeManager
-	TestScope    string
-	ImageBuilder builder.Builder
 	MinioClient  *minio.Minio
+	ImageBuilder builder.Builder
+	TestScope    string
 	ProxyEnabled bool
 	Timeout      time.Duration
 	Logger       *logrus.Logger
@@ -164,6 +164,11 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
+func DefaultTestScope() string {
+	t := time.Now()
+	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+}
+
 func validateOptions(opts Options) error {
 	// When Minio is set, K8sClient must be set too
 	// to make sure that there is only one source of truth for the k8s client
@@ -172,7 +177,7 @@ func validateOptions(opts Options) error {
 	}
 
 	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
-		return ErrTestScopeMistMatch
+		return ErrTestScopeMistMatch.WithParams(opts.TestScope, opts.K8sClient.Namespace())
 	}
 	return nil
 }
@@ -193,8 +198,12 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		k.Logger = log.DefaultLogger()
 	}
 
-	if k.TestScope == "" && k.K8sClient != nil {
-		k.TestScope = k.K8sClient.Namespace()
+	if k.TestScope == "" {
+		if k.K8sClient != nil {
+			k.TestScope = k.K8sClient.Namespace()
+		} else {
+			k.TestScope = DefaultTestScope()
+		}
 	}
 	k.TestScope = k8s.SanitizeName(k.TestScope)
 

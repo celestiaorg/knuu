@@ -59,35 +59,36 @@ func TestNew(t *testing.T) {
 	defer cancel()
 
 	tt := []struct {
-		name         string
-		options      Options
-		expectError  bool
-		validateFunc func(*testing.T, *Knuu)
+		name          string
+		options       Options
+		expectedError error
+		validateFunc  func(*testing.T, *Knuu)
 	}{
 		{
-			name:        "Default initialization",
-			options:     Options{TestScope: "test"},
-			expectError: false,
+			name:          "Default initialization",
+			options:       Options{},
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
 				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
+				assert.NotEmpty(t, k.TestScope)
 				assert.Equal(t, defaultTimeout, k.timeout)
 			},
 		},
 		{
-			name:        "With custom Minio client without setting k8sClient",
-			options:     Options{MinioClient: &minio.Minio{}},
-			expectError: true,
+			name:          "With Minio client without setting k8sClient",
+			options:       Options{MinioClient: &minio.Minio{}},
+			expectedError: ErrK8sClientNotSet,
 		},
 		{
-			name: "With custom Minio client and K8sClient",
+			name: "With Minio client and K8sClient",
 			options: Options{
 				MinioClient: &minio.Minio{},
 				K8sClient:   &mockK8s{},
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.MinioClient)
@@ -100,7 +101,7 @@ func TestNew(t *testing.T) {
 				TestScope: "test",
 				Logger:    &logrus.Logger{},
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
@@ -112,7 +113,7 @@ func TestNew(t *testing.T) {
 				TestScope: "test",
 				Timeout:   30 * time.Minute,
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.Equal(t, 30*time.Minute, k.timeout)
@@ -124,23 +125,18 @@ func TestNew(t *testing.T) {
 				TestScope:    "test",
 				ImageBuilder: &kaniko.Kaniko{},
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.ImageBuilder)
 			},
 		},
 		{
-			name:        "Without TestScope and K8sClient",
-			options:     Options{},
-			expectError: true,
-		},
-		{
 			name: "With K8sClient but without TestScope",
 			options: Options{
 				K8sClient: &mockK8s{},
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.Equal(t, "test", k.TestScope)
@@ -151,8 +147,9 @@ func TestNew(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			k, err := New(ctx, tc.options)
-			if tc.expectError {
+			if tc.expectedError != nil {
 				assert.Error(t, err)
+				assert.ErrorIs(t, err, tc.expectedError)
 				return
 			}
 
@@ -164,16 +161,16 @@ func TestNew(t *testing.T) {
 
 func TestValidateOptions(t *testing.T) {
 	tests := []struct {
-		name    string
-		options Options
-		wantErr bool
+		name        string
+		options     Options
+		expectedErr error
 	}{
 		{
 			name: "MinioClient set without K8sClient",
 			options: Options{
 				MinioClient: &minio.Minio{},
 			},
-			wantErr: true,
+			expectedErr: ErrK8sClientNotSet,
 		},
 		{
 			name: "Both MinioClient and K8sClient set",
@@ -181,7 +178,7 @@ func TestValidateOptions(t *testing.T) {
 				MinioClient: &minio.Minio{},
 				K8sClient:   &mockK8s{},
 			},
-			wantErr: false,
+			expectedErr: nil,
 		},
 		{
 			name: "TestScope and K8sClient not set",
@@ -189,23 +186,31 @@ func TestValidateOptions(t *testing.T) {
 				TestScope: "",
 				K8sClient: nil,
 			},
-			wantErr: true,
+			expectedErr: nil,
 		},
 		{
-			name: "Valid options",
+			name: "TestScope does not match K8sClient namespace",
 			options: Options{
-				TestScope: "test",
+				TestScope: "another_scope",
+				K8sClient: &mockK8s{},
 			},
-			wantErr: false,
+			expectedErr: ErrTestScopeMistMatch.WithParams("another_scope", "test"),
+		},
+		{
+			name:        "No options set",
+			options:     Options{},
+			expectedErr: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateOptions(tt.options)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateOptions() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.expectedErr != nil {
+				assert.ErrorIs(t, err, tt.expectedErr)
+				return
 			}
+			assert.NoError(t, err)
 		})
 	}
 }

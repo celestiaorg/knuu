@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -23,7 +22,7 @@ func TestBuildFromGit(t *testing.T) {
 	ctx := context.Background()
 
 	// The default image builder is kaniko here
-	kn, err := knuu.New(ctx, knuu.Options{TestScope: e2e.DefaultTestScope()})
+	kn, err := knuu.New(ctx, knuu.Options{})
 	require.NoError(t, err, "Error creating knuu")
 
 	target, err := kn.NewInstance("git-builder")
@@ -70,7 +69,7 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	// Setup
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, e2e.DefaultTestScope())
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
 	require.NoError(t, err, "Error creating k8s client")
 
 	// Since we are modifying the git repo,
