@@ -171,8 +171,8 @@ func validateOptions(opts Options) error {
 		return ErrK8sClientNotSet
 	}
 
-	if opts.TestScope == "" && opts.K8sClient == nil {
-		return ErrTestScopeNotSet
+	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
+		return ErrTestScopeMistMatch
 	}
 	return nil
 }
