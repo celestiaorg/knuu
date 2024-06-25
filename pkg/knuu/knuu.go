@@ -49,6 +49,10 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
+	if err := loadEnvVariables(); err != nil {
+		return nil, err
+	}
+
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
 			K8sClient:    opts.K8s,
@@ -62,10 +66,6 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
-		return nil, err
-	}
-
-	if err := k.loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
@@ -160,13 +160,16 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
-func (k *Knuu) loadEnvVariables() error {
+// TODO: we might remove this function in the future
+// as it the new version knuu is configured through
+// its options via the New function
+func loadEnvVariables() error {
 	err := godotenv.Load()
 	if err != nil && !os.IsNotExist(err) {
 		return ErrCannotLoadEnv.Wrap(err)
 	}
 	if os.IsNotExist(err) {
-		k.Logger.Info("The .env file does not exist, continuing without loading environment variables.")
+		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
 	}
 	return nil
 }
