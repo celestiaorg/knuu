@@ -202,17 +202,17 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		k.timeout = defaultTimeout
 	}
 
-	if k.ImageBuilder == nil {
-		k.ImageBuilder = &kaniko.Kaniko{
-			SystemDependencies: k.SystemDependencies,
-		}
-	}
-
 	if k.K8sClient == nil {
 		var err error
 		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
+		}
+	}
+
+	if k.ImageBuilder == nil {
+		k.ImageBuilder = &kaniko.Kaniko{
+			SystemDependencies: k.SystemDependencies,
 		}
 	}
 
