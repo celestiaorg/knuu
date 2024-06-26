@@ -59,7 +59,7 @@ type PodConfig struct {
 
 type Volume struct {
 	Path  string
-	Size  string
+	Size  resource.Quantity
 	Owner int64
 }
 
@@ -82,7 +82,7 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	return createdPod, nil
 }
 
-func (c *Client) NewVolume(path, size string, owner int64) *Volume {
+func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {
 	return &Volume{
 		Path:  path,
 		Size:  size,
