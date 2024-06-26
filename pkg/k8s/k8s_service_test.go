@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -48,7 +49,7 @@ func (s *TestSuite) TestGetService() {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrGettingService.Wrap(errInternalServerError),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -87,7 +88,9 @@ func (s *TestSuite) TestCreateService() {
 			selectorMap: map[string]string{"app": "test"},
 			portsTCP:    []int{80},
 			portsUDP:    []int{53},
-			setupMock:   func() {},
+			setupMock: func() {
+				// no mock needed
+			},
 			expectedErr: nil,
 		},
 		{
@@ -234,6 +237,9 @@ func (s *TestSuite) TestDeleteService() {
 }
 
 func (s *TestSuite) TestGetServiceIP() {
+	const (
+		testClusterIP = "10.0.0.1"
+	)
 	tests := []struct {
 		name        string
 		svcName     string
@@ -254,12 +260,12 @@ func (s *TestSuite) TestGetServiceIP() {
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
-									ClusterIP: "10.0.0.1",
+									ClusterIP: testClusterIP,
 								},
 							}, nil
 						})
 			},
-			expectedIP:  "10.0.0.1",
+			expectedIP:  testClusterIP,
 			expectedErr: nil,
 		},
 		{
@@ -295,6 +301,11 @@ func (s *TestSuite) TestGetServiceIP() {
 }
 
 func (s *TestSuite) TestWaitForService() {
+	const (
+		testNodeIP               = "127.0.0.1"
+		testNodePort             = 8172
+		testNodeLoadBalancerPort = 8171
+	)
 	tests := []struct {
 		name            string
 		svcName         string
@@ -305,7 +316,7 @@ func (s *TestSuite) TestWaitForService() {
 		{
 			name:            "successful wait load balancer",
 			svcName:         "test-service",
-			serviceEndpoint: "127.0.0.1:8171",
+			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodeLoadBalancerPort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
@@ -319,7 +330,7 @@ func (s *TestSuite) TestWaitForService() {
 									Type: v1.ServiceTypeLoadBalancer,
 									Ports: []v1.ServicePort{
 										{
-											Port: 8171,
+											Port: testNodeLoadBalancerPort,
 										},
 									},
 								},
@@ -327,7 +338,7 @@ func (s *TestSuite) TestWaitForService() {
 									LoadBalancer: v1.LoadBalancerStatus{
 										Ingress: []v1.LoadBalancerIngress{
 											{
-												IP: "127.0.0.1",
+												IP: testNodeIP,
 											},
 										},
 									},
@@ -340,7 +351,7 @@ func (s *TestSuite) TestWaitForService() {
 		{
 			name:            "successful wait node port",
 			svcName:         "test-service",
-			serviceEndpoint: "127.0.0.1:8172",
+			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodePort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
@@ -354,7 +365,7 @@ func (s *TestSuite) TestWaitForService() {
 									Type: v1.ServiceTypeNodePort,
 									Ports: []v1.ServicePort{
 										{
-											NodePort: 8172,
+											NodePort: testNodePort,
 										},
 									},
 								},
@@ -372,7 +383,7 @@ func (s *TestSuite) TestWaitForService() {
 										Status: v1.NodeStatus{
 											Addresses: []v1.NodeAddress{
 												{
-													Address: "127.0.0.1",
+													Address: testNodeIP,
 													Type:    v1.NodeExternalIP,
 												},
 											},
@@ -387,7 +398,7 @@ func (s *TestSuite) TestWaitForService() {
 		{
 			name:            "successful wait cluster IP",
 			svcName:         "test-service",
-			serviceEndpoint: "127.0.0.1:8173",
+			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodePort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
@@ -398,11 +409,11 @@ func (s *TestSuite) TestWaitForService() {
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
-									ExternalIPs: []string{"127.0.0.1"},
-									ClusterIP:   "127.0.0.1",
+									ExternalIPs: []string{testNodeIP},
+									ClusterIP:   testNodeIP,
 									Ports: []v1.ServicePort{
 										{
-											Port: 8173,
+											Port: testNodePort,
 										},
 									},
 								},
@@ -469,6 +480,10 @@ func (s *TestSuite) TestWaitForService() {
 }
 
 func (s *TestSuite) TestGetServiceEndpoint() {
+	const (
+		testNodeIP   = "127.0.0.1"
+		testNodePort = 80
+	)
 	tests := []struct {
 		name        string
 		svcName     string
@@ -489,10 +504,10 @@ func (s *TestSuite) TestGetServiceEndpoint() {
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
-									ClusterIP: "10.0.0.1",
+									ClusterIP: testNodeIP,
 									Ports: []v1.ServicePort{
 										{
-											Port: 80,
+											Port: testNodePort,
 										},
 									},
 									Type: v1.ServiceTypeClusterIP,
@@ -500,7 +515,7 @@ func (s *TestSuite) TestGetServiceEndpoint() {
 							}, nil
 						})
 			},
-			expectedEP:  "10.0.0.1:80",
+			expectedEP:  fmt.Sprintf("%s:%d", testNodeIP, testNodePort),
 			expectedErr: nil,
 		},
 		{

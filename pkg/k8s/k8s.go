@@ -25,6 +25,9 @@ const (
 
 	// CustomBurst is the Burst to use for the Kubernetes client, DefaultBurst: 10.
 	CustomBurst = 200
+
+	// retryInterval is the interval to wait between retries
+	retryInterval = 100 * time.Millisecond
 )
 
 type Client struct {

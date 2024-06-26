@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -96,13 +95,9 @@ func (s *TestSuite) TestDeletePersistentVolumeClaim() {
 			name:    "pvc not found",
 			pvcName: "missing-pvc",
 			setupMock: func() {
-				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("get", "persistentvolumeclaims",
-						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("not found")
-						})
+				// no mock needed, the function should skip deletion if pvc not found
 			},
-			expectedErr: nil, // it should skip deletion if pvc not found
+			expectedErr: nil,
 		},
 		{
 			name:    "client error on delete",

@@ -98,4 +98,5 @@ var (
 	ErrUpdateEndpoint                  = errors.New("UpdateEndpoint", "failed to update endpoint for service %s")
 	ErrCheckingServiceReady            = errors.New("CheckingServiceReady", "failed to check if service %s is ready")
 	ErrWaitingForPodDeletion           = errors.New("WaitingForPodDeletion", "waiting for pod %s to be deleted")
+	ErrWaitingForReplicaSetDeletion    = errors.New("WaitingForReplicaSetDeletion", "waiting for ReplicaSet %s to be deleted")
 )

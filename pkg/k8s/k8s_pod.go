@@ -18,15 +18,21 @@ import (
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
+	"k8s.io/utils/ptr"
 )
 
 // the loops that keep checking something and wait for it to be done
 const (
-	// retryInterval is the interval to wait between retries
-	retryInterval = 100 * time.Millisecond
-
 	// knuuPath is the path where the knuu volume is mounted
 	knuuPath = "/knuu"
+
+	// 0777 is used so that the files are usable by any user in the container without needing to change permissions
+	defaultFileModeForVolume = 0777
+
+	podFilesConfigmapNameSuffix = "-config"
+
+	initContainerNameSuffix = "-init"
+	defaultContainerUser    = 0
 )
 
 type ContainerConfig struct {
@@ -70,10 +76,7 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
-	pod, err := preparePod(podConfig, init)
-	if err != nil {
-		return nil, ErrPreparingPod.Wrap(err)
-	}
+	pod := preparePod(podConfig, init)
 	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingPod.Wrap(err)
@@ -324,11 +327,6 @@ func buildEnv(envMap map[string]string) []v1.EnvVar {
 // buildPodVolumes generates a volume configuration for a pod based on the given name.
 // If the volumes amount is zero, returns an empty slice.
 func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
-	// return empty slice if no volumes or files are specified
-	if volumesAmount == 0 && filesAmount == 0 {
-		return []v1.Volume{}
-	}
-
 	var podVolumes []v1.Volume
 
 	if volumesAmount != 0 {
@@ -344,18 +342,15 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 		podVolumes = append(podVolumes, podVolume)
 	}
 
-	// 0777 is used so that the files are usable by any user in the container without needing to change permissions
-	defaultMode := int32(0777)
-
 	if filesAmount != 0 {
 		podFiles := v1.Volume{
-			Name: name + "-config",
+			Name: name + podFilesConfigmapNameSuffix,
 			VolumeSource: v1.VolumeSource{
 				ConfigMap: &v1.ConfigMapVolumeSource{
 					LocalObjectReference: v1.LocalObjectReference{
 						Name: name,
 					},
-					DefaultMode: &defaultMode,
+					DefaultMode: ptr.To[int32](defaultFileModeForVolume),
 				},
 			},
 		}
@@ -369,19 +364,15 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
 func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
 	var containerVolumes []v1.VolumeMount
-
-	// return empty slice if no volumes or files are specified
-	if len(volumes) == 0 {
-		return containerVolumes
-	}
-
-	// iterate over the volumes map, add each volume to the containerVolumes
 	for _, volume := range volumes {
-		containerVolumes = append(containerVolumes, v1.VolumeMount{
-			Name:      name,
-			MountPath: volume.Path,
-			SubPath:   strings.TrimLeft(volume.Path, "/"),
-		})
+		containerVolumes = append(
+			containerVolumes,
+			v1.VolumeMount{
+				Name:      name,
+				MountPath: volume.Path,
+				SubPath:   strings.TrimLeft(volume.Path, "/"),
+			},
+		)
 	}
 
 	return containerVolumes
@@ -393,8 +384,6 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 		return []v1.VolumeMount{} // return empty slice if no volumes are specified
 	}
 
-	var containerFiles []v1.VolumeMount
-
 	containerVolumes := []v1.VolumeMount{
 		{
 			Name:      name,
@@ -402,17 +391,13 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 		},
 	}
 
-	if len(files) != 0 {
-		// iterate over the files map, add each file to the containerFiles
-		n := 0
-		for _, file := range files {
-			containerFiles = append(containerFiles, v1.VolumeMount{
-				Name:      name + "-config",
-				MountPath: file.Dest,
-				SubPath:   fmt.Sprintf("%d", n),
-			})
-			n++
-		}
+	var containerFiles []v1.VolumeMount
+	for n, file := range files {
+		containerFiles = append(containerFiles, v1.VolumeMount{
+			Name:      name + podFilesConfigmapNameSuffix,
+			MountPath: file.Dest,
+			SubPath:   fmt.Sprintf("%d", n),
+		})
 	}
 
 	return append(containerVolumes, containerFiles...)
@@ -420,19 +405,23 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
 func buildInitContainerCommand(volumes []*Volume, files []*File) []string {
-	var commands = []string{"sh", "-c"}
-	dirsProcessed := make(map[string]bool)
-	baseCmd := "set -xe && "
-	createKnuuPath := fmt.Sprintf("mkdir -p %s && ", knuuPath)
-	cmds := []string{baseCmd, createKnuuPath}
+	var (
+		commands       = []string{"sh", "-c"}
+		dirsProcessed  = make(map[string]bool)
+		baseCmd        = "set -xe && "
+		createKnuuPath = fmt.Sprintf("mkdir -p %s && ", knuuPath)
+		cmds           = []string{baseCmd, createKnuuPath}
+	)
 
 	// for each file, get the directory and create the parent directory if it doesn't exist
 	for _, file := range files {
 		// get the directory of the file
 		folder := filepath.Dir(file.Dest)
 		if _, processed := dirsProcessed[folder]; !processed {
-			knuuFolder := fmt.Sprintf("%s%s", knuuPath, folder)
-			parentDirCmd := fmt.Sprintf("mkdir -p %s && ", knuuFolder)
+			var (
+				knuuFolder   = fmt.Sprintf("%s%s", knuuPath, folder)
+				parentDirCmd = fmt.Sprintf("mkdir -p %s && ", knuuFolder)
+			)
 			cmds = append(cmds, parentDirCmd)
 			dirsProcessed[folder] = true
 		}
@@ -443,7 +432,9 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) []string {
 	// for each volume, copy the contents of the volume to the knuu volume
 	for i, volume := range volumes {
 		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
-		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then mkdir -p %s && cp -r %s/* %s && chown -R %d:%d %s", volume.Path, volume.Path, knuuVolumePath, volume.Path, knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
+		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then mkdir -p %s && cp -r %s/* %s && chown -R %d:%d %s",
+			volume.Path, volume.Path, knuuVolumePath, volume.Path,
+			knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
 		if i < len(volumes)-1 {
 			cmd += " ;fi && "
 		} else {
@@ -474,144 +465,76 @@ func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) v1
 
 // prepareContainer creates a v1.Container from a given ContainerConfig.
 func prepareContainer(config ContainerConfig) v1.Container {
-	// Build environment variables from the given map
-	podEnv := buildEnv(config.Env)
-
-	// Build container volumes from the given map
-	containerVolumes := buildContainerVolumes(config.Name, config.Volumes)
-	resources := buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest)
-
 	return v1.Container{
 		Name:            config.Name,
 		Image:           config.Image,
 		Command:         config.Command,
 		Args:            config.Args,
-		Env:             podEnv,
-		VolumeMounts:    containerVolumes,
-		Resources:       resources,
+		Env:             buildEnv(config.Env),
+		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes),
+		Resources:       buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest),
 		LivenessProbe:   config.LivenessProbe,
 		ReadinessProbe:  config.ReadinessProbe,
 		StartupProbe:    config.StartupProbe,
 		SecurityContext: config.SecurityContext,
-	}, nil
+	}
 }
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
-func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, error) {
+func prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
 	if !init || len(config.Volumes) == 0 {
-		return nil, nil
+		return nil
 	}
-
-	initContainerVolumes, err := buildInitContainerVolumes(config.Name, config.Volumes, config.Files)
-	if err != nil {
-		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
-	}
-	initContainerCommand, err := buildInitContainerCommand(config.Volumes, config.Files)
-	if err != nil {
-		return nil, ErrBuildingInitContainerCommand.Wrap(err)
-	}
-
-	user := int64(0)
 
 	return []v1.Container{
 		{
-			Name:  config.Name + "-init",
+			Name:  config.Name + initContainerNameSuffix,
 			Image: config.Image,
 			SecurityContext: &v1.SecurityContext{
-				RunAsUser: &user,
+				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
-			Command:      initContainerCommand,
-			VolumeMounts: initContainerVolumes,
+			Command:      buildInitContainerCommand(config.Volumes, config.Files),
+			VolumeMounts: buildInitContainerVolumes(config.Name, config.Volumes, config.Files),
 		},
-	}, nil
+	}
 }
 
 // preparePodVolumes prepares pod volumes
-func preparePodVolumes(config ContainerConfig) ([]v1.Volume, error) {
-	podVolumes, err := buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
-	if err != nil {
-		return nil, ErrBuildingPodVolumes.Wrap(err)
-	}
-
-	return podVolumes, nil
+func preparePodVolumes(config ContainerConfig) []v1.Volume {
+	return buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
 }
 
-func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
-	var err error
-
-	// Prepare security context
-	securityContext := v1.PodSecurityContext{
-		FSGroup: &spec.FsGroup,
-	}
-
-	// Prepare main container
-	mainContainer, err := prepareContainer(spec.ContainerConfig)
-	if err != nil {
-		return v1.PodSpec{}, ErrPreparingMainContainer.Wrap(err)
-	}
-
-	// Prepare init containers
-	initContainers, err := prepareInitContainers(spec.ContainerConfig, init)
-	if err != nil {
-		return v1.PodSpec{}, ErrPreparingInitContainer.Wrap(err)
-	}
-
-	// Prepare volumes
-	podVolumes, err := preparePodVolumes(spec.ContainerConfig)
-	if err != nil {
-		return v1.PodSpec{}, ErrPreparingPodVolumes.Wrap(err)
-	}
-
+func preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 	podSpec := v1.PodSpec{
 		ServiceAccountName: spec.ServiceAccountName,
-		SecurityContext:    &securityContext,
-		InitContainers:     initContainers,
-		Containers:         []v1.Container{mainContainer},
-		Volumes:            podVolumes,
+		SecurityContext:    &v1.PodSecurityContext{FSGroup: &spec.FsGroup},
+		InitContainers:     prepareInitContainers(spec.ContainerConfig, init),
+		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
+		Volumes:            preparePodVolumes(spec.ContainerConfig),
 	}
 
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
-		sidecar, err := prepareContainer(sidecarConfig)
-		if err != nil {
-			return v1.PodSpec{}, ErrPreparingSidecarContainer.Wrap(err)
-		}
+		sidecarVolumes := preparePodVolumes(sidecarConfig)
 
-		sidecarVolumes, err := preparePodVolumes(sidecarConfig)
-		if err != nil {
-			return v1.PodSpec{}, ErrPreparingSidecarVolumes.Wrap(err)
-		}
-
-		podSpec.Containers = append(podSpec.Containers, sidecar)
+		podSpec.Containers = append(podSpec.Containers, prepareContainer(sidecarConfig))
 		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}
 
-	return podSpec, nil
+	return podSpec
 }
 
-// preparePod prepares a pod configuration.
-func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
-	namespace := spec.Namespace
-	name := spec.Name
-	labels := spec.Labels
-
-	podSpec, err := preparePodSpec(spec, init)
-	if err != nil {
-		return nil, ErrCreatingPodSpec.Wrap(err)
-	}
-
-	// Construct the Pod object using the above data
+func preparePod(spec PodConfig, init bool) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   namespace,
-			Name:        name,
-			Labels:      labels,
+			Namespace:   spec.Namespace,
+			Name:        spec.Name,
+			Labels:      spec.Labels,
 			Annotations: spec.Annotations,
 		},
-		Spec: podSpec,
+		Spec: preparePodSpec(spec, init),
 	}
 
-	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)
-
-	return pod, nil
+	logrus.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
+	return pod
 }
