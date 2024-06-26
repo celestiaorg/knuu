@@ -7,7 +7,7 @@ import (
 
 const (
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-11"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-17"
 	tsharkCollectorCPU         = "100m"
 	tsharkCollectorMemory      = "250Mi"
 	tsharkCollectorVolumePath  = "/tshark"
@@ -23,6 +23,8 @@ const (
 	envStorageEndpoint        = "STORAGE_ENDPOINT"
 	envCaptureFileName        = "CAPTURE_FILE_NAME"
 	envUploadInterval         = "UPLOAD_INTERVAL"
+	envCompressFiles          = "COMPRESS_FILES"
+	envIpFilter               = "IP_FILTER"
 )
 
 func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance, error) {
@@ -60,6 +62,8 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		envStorageEndpoint:        i.tsharkCollectorConfig.S3Endpoint,
 		envUploadInterval:         fmt.Sprintf("%d", int64(i.tsharkCollectorConfig.UploadInterval.Seconds())),
 		envCreateBucket:           fmt.Sprintf("%t", i.tsharkCollectorConfig.CreateBucket),
+		envCompressFiles:          fmt.Sprintf("%t", i.tsharkCollectorConfig.CompressFiles),
+		envIpFilter:               i.tsharkCollectorConfig.IpFilter,
 	}
 
 	for key, value := range envVars {

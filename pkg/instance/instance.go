@@ -90,6 +90,14 @@ type TsharkCollectorConfig struct {
 
 	// UploadInterval is the interval at which the tshark collector will upload the pcap file to the s3 server
 	UploadInterval time.Duration
+
+	// IpFilter is the ip filter to use for the tshark collector
+	// it trace the incoming/outgoing traffic from/to the specific ip
+	// If not set, it will trace all the traffic
+	IpFilter string
+
+	// CompressFiles is the flag to compress the pcap files before pushing them to s3
+	CompressFiles bool
 }
 
 // SecurityContext represents the security settings for a container
