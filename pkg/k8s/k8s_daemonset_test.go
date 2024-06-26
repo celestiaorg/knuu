@@ -46,7 +46,7 @@ func (s *TestSuite) TestDaemonSetExists() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedExists: false,
@@ -107,10 +107,10 @@ func (s *TestSuite) TestGetDaemonSet() {
 				s.Require().NoError(s.createDaemonSet("error-daemonset"))
 				s.client.Clientset().(*fake.Clientset).PrependReactor("get", "daemonsets",
 					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New("internal server error")
+						return true, nil, errInternalServerError
 					})
 			},
-			expectedErr: k8s.ErrGettingDaemonset.WithParams("error-daemonset").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingDaemonset.WithParams("error-daemonset").Wrap(errInternalServerError),
 			expectedDS:  nil,
 		},
 	}
@@ -199,10 +199,10 @@ func (s *TestSuite) TestCreateDaemonSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingDaemonset.WithParams("error-daemonset").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingDaemonset.WithParams("error-daemonset").Wrap(errInternalServerError),
 			expectedDS:  nil,
 		},
 	}
@@ -321,10 +321,10 @@ func (s *TestSuite) TestUpdateDaemonSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("update", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrUpdatingDaemonset.WithParams("error-daemonset").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrUpdatingDaemonset.WithParams("error-daemonset").Wrap(errInternalServerError),
 			expectedDS:  nil,
 		},
 	}
@@ -375,10 +375,10 @@ func (s *TestSuite) TestDeleteDaemonSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "daemonsets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingDaemonset.WithParams("error-daemonset").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingDaemonset.WithParams("error-daemonset").Wrap(errInternalServerError),
 		},
 	}
 

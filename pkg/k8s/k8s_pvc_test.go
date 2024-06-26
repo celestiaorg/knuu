@@ -40,10 +40,10 @@ func (s *TestSuite) TestCreatePersistentVolumeClaim() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "persistentvolumeclaims",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingPersistentVolumeClaim.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingPersistentVolumeClaim.Wrap(errInternalServerError),
 		},
 	}
 
@@ -121,10 +121,10 @@ func (s *TestSuite) TestDeletePersistentVolumeClaim() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "persistentvolumeclaims",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingPersistentVolumeClaim.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingPersistentVolumeClaim.Wrap(errInternalServerError),
 		},
 	}
 

@@ -1445,7 +1445,7 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr)
 }
 
 func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {

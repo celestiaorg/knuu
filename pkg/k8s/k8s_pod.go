@@ -36,9 +36,9 @@ type ContainerConfig struct {
 	Args            []string            // Arguments to pass to the command in the container
 	Env             map[string]string   // Environment variables to set in the container
 	Volumes         []*Volume           // Volumes to mount in the Pod
-	MemoryRequest   string              // Memory request for the container
-	MemoryLimit     string              // Memory limit for the container
-	CPURequest      string              // CPU request for the container
+	MemoryRequest   resource.Quantity   // Memory request for the container
+	MemoryLimit     resource.Quantity   // Memory limit for the container
+	CPURequest      resource.Quantity   // CPU request for the container
 	LivenessProbe   *v1.Probe           // Liveness probe for the container
 	ReadinessProbe  *v1.Probe           // Readiness probe for the container
 	StartupProbe    *v1.Probe           // Startup probe for the container
@@ -104,33 +104,33 @@ func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodCon
 		return nil, ErrDeletingPod.Wrap(err)
 	}
 
-	// Wait for the pod to be fully deleted
-PodCheckLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			logrus.Errorf("Context cancelled while waiting for pod %s to delete", podConfig.Name)
-			return nil, ctx.Err()
-		case <-time.After(retryInterval):
-			_, err := c.getPod(ctx, podConfig.Name)
-			if err != nil {
-				if apierrs.IsNotFound(err) {
-					logrus.Debugf("Pod %s successfully deleted", podConfig.Name)
-					goto DeployPod
-				}
-				break PodCheckLoop
-			}
-		}
+	if err := c.waitForPodDeletion(ctx, podConfig.Name); err != nil {
+		return nil, ErrWaitingForPodDeletion.WithParams(podConfig.Name).Wrap(err)
 	}
 
-DeployPod:
-	// Deploy the new pod
 	pod, err := c.DeployPod(ctx, podConfig, false)
 	if err != nil {
 		return nil, ErrDeployingPod.Wrap(err)
 	}
 
 	return pod, nil
+}
+
+func (c *Client) waitForPodDeletion(ctx context.Context, name string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			logrus.Errorf("Context cancelled while waiting for pod %s to delete", name)
+			return ctx.Err()
+		case <-time.After(retryInterval):
+			if _, err := c.getPod(ctx, name); err != nil {
+				if apierrs.IsNotFound(err) {
+					logrus.Debugf("Pod %s successfully deleted", name)
+					return nil
+				}
+			}
+		}
+	}
 }
 
 // ReplacePod replaces a pod and returns the new Pod object.
@@ -186,7 +186,7 @@ func (c *Client) RunCommandInPod(
 	if err != nil {
 		return "", ErrGettingK8sConfig.Wrap(err)
 	}
-	exec, err := remotecommand.NewSPDYExecutor(k8sConfig, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(k8sConfig, http.MethodPost, req.URL())
 	if err != nil {
 		return "", ErrCreatingExecutor.Wrap(err)
 	}
@@ -212,10 +212,12 @@ func (c *Client) RunCommandInPod(
 }
 
 func (c *Client) DeletePodWithGracePeriod(ctx context.Context, name string, gracePeriodSeconds *int64) error {
-	_, err := c.getPod(ctx, name)
-	if err != nil {
+	if _, err := c.getPod(ctx, name); err != nil {
 		// If the pod does not exist, skip and return without error
-		return nil
+		if apierrs.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 
 	deleteOptions := metav1.DeleteOptions{
@@ -239,8 +241,7 @@ func (c *Client) PortForwardPod(
 	localPort,
 	remotePort int,
 ) error {
-	_, err := c.getPod(ctx, podName)
-	if err != nil {
+	if _, err := c.getPod(ctx, podName); err != nil {
 		return ErrGettingPod.WithParams(podName).Wrap(err)
 	}
 
@@ -286,9 +287,9 @@ func (c *Client) PortForwardPod(
 	go func() {
 		if err := pf.ForwardPorts(); err != nil {
 			errChan <- err
-		} else {
-			close(errChan) // if there's no error, close the channel
+			return
 		}
+		close(errChan) // if there's no error, close the channel
 	}()
 
 	// Wait for the port forwarding to be ready or error to occur
@@ -307,12 +308,7 @@ func (c *Client) PortForwardPod(
 }
 
 func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
-	pod, err := c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, ErrGettingPod.WithParams(name).Wrap(err)
-	}
-
-	return pod, nil
+	return c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
@@ -327,10 +323,10 @@ func buildEnv(envMap map[string]string) []v1.EnvVar {
 
 // buildPodVolumes generates a volume configuration for a pod based on the given name.
 // If the volumes amount is zero, returns an empty slice.
-func buildPodVolumes(name string, volumesAmount, filesAmount int) ([]v1.Volume, error) {
+func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 	// return empty slice if no volumes or files are specified
 	if volumesAmount == 0 && filesAmount == 0 {
-		return []v1.Volume{}, nil
+		return []v1.Volume{}
 	}
 
 	var podVolumes []v1.Volume
@@ -367,36 +363,34 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) ([]v1.Volume, 
 		podVolumes = append(podVolumes, podFiles)
 	}
 
-	return podVolumes, nil
+	return podVolumes
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume) ([]v1.VolumeMount, error) {
+func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
 	var containerVolumes []v1.VolumeMount
 
 	// return empty slice if no volumes or files are specified
 	if len(volumes) == 0 {
-		return containerVolumes, nil
+		return containerVolumes
 	}
 
-	if len(volumes) != 0 {
-		// iterate over the volumes map, add each volume to the containerVolumes
-		for _, volume := range volumes {
-			containerVolumes = append(containerVolumes, v1.VolumeMount{
-				Name:      name,
-				MountPath: volume.Path,
-				SubPath:   strings.TrimLeft(volume.Path, "/"),
-			})
-		}
+	// iterate over the volumes map, add each volume to the containerVolumes
+	for _, volume := range volumes {
+		containerVolumes = append(containerVolumes, v1.VolumeMount{
+			Name:      name,
+			MountPath: volume.Path,
+			SubPath:   strings.TrimLeft(volume.Path, "/"),
+		})
 	}
 
-	return containerVolumes, nil
+	return containerVolumes
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
-func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) ([]v1.VolumeMount, error) {
+func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
 	if len(volumes) == 0 && len(files) == 0 {
-		return []v1.VolumeMount{}, nil // return empty slice if no volumes are specified
+		return []v1.VolumeMount{} // return empty slice if no volumes are specified
 	}
 
 	var containerFiles []v1.VolumeMount
@@ -421,11 +415,11 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) ([
 		}
 	}
 
-	return append(containerVolumes, containerFiles...), nil
+	return append(containerVolumes, containerFiles...)
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
+func buildInitContainerCommand(volumes []*Volume, files []*File) []string {
 	var commands = []string{"sh", "-c"}
 	dirsProcessed := make(map[string]bool)
 	baseCmd := "set -xe && "
@@ -462,61 +456,30 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 	commands = append(commands, fullCommand)
 
 	logrus.Debugf("Init container command: %s", fullCommand)
-	return commands, nil
+	return commands
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
-func buildResources(memoryRequest string, memoryLimit string, cpuRequest string) (v1.ResourceRequirements, error) {
-	resources := v1.ResourceRequirements{}
-
-	memoryRequestQuantity, err := resource.ParseQuantity(memoryRequest)
-	if err != nil {
-		if memoryRequest != "" {
-			return resources, ErrParsingMemoryRequest.WithParams(memoryRequest).Wrap(err)
-		}
-	}
-	memoryLimitQuantity, err := resource.ParseQuantity(memoryLimit)
-	if err != nil {
-		if memoryLimit != "" {
-			return resources, ErrParsingMemoryLimit.WithParams(memoryLimit).Wrap(err)
-		}
-	}
-	cpuRequestQuantity, err := resource.ParseQuantity(cpuRequest)
-	if err != nil {
-		if cpuRequest != "" {
-			return resources, ErrParsingCPURequest.WithParams(cpuRequest).Wrap(err)
-		}
-	}
-
-	// If a resource is not set it will use the default value of 0 which is the same as not setting it at all.
-	resources = v1.ResourceRequirements{
+func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) v1.ResourceRequirements {
+	return v1.ResourceRequirements{
 		Requests: v1.ResourceList{
-			v1.ResourceMemory: memoryRequestQuantity,
-			v1.ResourceCPU:    cpuRequestQuantity,
+			v1.ResourceMemory: memoryRequest,
+			v1.ResourceCPU:    cpuRequest,
 		},
 		Limits: v1.ResourceList{
-			v1.ResourceMemory: memoryLimitQuantity,
+			v1.ResourceMemory: memoryLimit,
 		},
 	}
-
-	return resources, nil
 }
 
 // prepareContainer creates a v1.Container from a given ContainerConfig.
-func prepareContainer(config ContainerConfig) (v1.Container, error) {
+func prepareContainer(config ContainerConfig) v1.Container {
 	// Build environment variables from the given map
 	podEnv := buildEnv(config.Env)
 
 	// Build container volumes from the given map
-	containerVolumes, err := buildContainerVolumes(config.Name, config.Volumes)
-	if err != nil {
-		return v1.Container{}, ErrBuildingContainerVolumes.Wrap(err)
-	}
-
-	resources, err := buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest)
-	if err != nil {
-		return v1.Container{}, ErrBuildingResources.Wrap(err)
-	}
+	containerVolumes := buildContainerVolumes(config.Name, config.Volumes)
+	resources := buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest)
 
 	return v1.Container{
 		Name:            config.Name,

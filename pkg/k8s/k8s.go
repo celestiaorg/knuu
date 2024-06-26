@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -75,11 +74,6 @@ func NewClientCustom(
 	}
 	namespace = SanitizeName(namespace)
 	kc.namespace = namespace
-	if kc.NamespaceExists(ctx, namespace) {
-		logrus.Debugf("Namespace %s already exists, continuing.\n", namespace)
-		return kc, nil
-	}
-
 	if err := kc.CreateNamespace(ctx, namespace); err != nil {
 		return nil, ErrCreatingNamespace.WithParams(namespace).Wrap(err)
 	}

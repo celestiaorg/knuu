@@ -5,7 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -18,7 +19,7 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 
 	_, err := c.clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
+		if !apierrs.IsAlreadyExists(err) {
 			return ErrCreatingNamespace.WithParams(name).Wrap(err)
 		}
 		logrus.Debugf("Namespace %s already exists, continuing.\n", name)
@@ -37,18 +38,17 @@ func (c *Client) DeleteNamespace(ctx context.Context, name string) error {
 }
 
 func (c *Client) GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error) {
-	namespace, err := c.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, ErrGettingNamespace.WithParams(name).Wrap(err)
-	}
-	return namespace, nil
+	return c.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 }
 
-func (c *Client) NamespaceExists(ctx context.Context, name string) bool {
+func (c *Client) NamespaceExists(ctx context.Context, name string) (bool, error) {
 	_, err := c.GetNamespace(ctx, name)
 	if err != nil {
-		logrus.Debugf("Namespace %s does not exist, err: %v", name, err)
-		return false
+		if apierrs.IsNotFound(err) {
+			logrus.Debugf("Namespace %s does not exist, err: %v", name, err)
+			return false, nil
+		}
+		return false, ErrGettingNamespace.WithParams(name).Wrap(err)
 	}
-	return true
+	return true, nil
 }

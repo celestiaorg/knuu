@@ -29,7 +29,7 @@ type KubeManager interface {
 	CreateRoleBinding(ctx context.Context, name string, labels map[string]string, role, serviceAccount string) error
 	CreateService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
 	CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error
-	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool
+	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error)
 	DaemonSetExists(ctx context.Context, name string) (bool, error)
 	DeleteConfigMap(ctx context.Context, name string) error
 	DeleteDaemonSet(ctx context.Context, name string) error
@@ -58,7 +58,7 @@ type KubeManager interface {
 	IsPodRunning(ctx context.Context, name string) (bool, error)
 	IsReplicaSetRunning(ctx context.Context, name string) (bool, error)
 	Namespace() string
-	NamespaceExists(ctx context.Context, name string) bool
+	NamespaceExists(ctx context.Context, name string) (bool, error)
 	NetworkPolicyExists(ctx context.Context, name string) bool
 	NewFile(source, dest string) *File
 	NewVolume(path, size string, owner int64) *Volume

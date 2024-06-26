@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -23,6 +24,10 @@ type TestSuite struct {
 	client    *k8s.Client
 	namespace string
 }
+
+var (
+	errInternalServerError = errors.New("internal server error")
+)
 
 func TestKubeManagerTestSuite(t *testing.T) {
 	suite.Run(t, new(TestSuite))

@@ -56,11 +56,11 @@ func (s *TestSuite) TestWaitForDeployment() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "deployments",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrWaitingForDeployment.WithParams("error-deployment").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 		{
 			name:           "context timeout",

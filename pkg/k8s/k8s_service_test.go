@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 	"net"
 	"time"
 
@@ -46,10 +45,10 @@ func (s *TestSuite) TestGetService() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrGettingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingService.Wrap(errInternalServerError),
 		},
 	}
 
@@ -102,10 +101,10 @@ func (s *TestSuite) TestCreateService() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingService.Wrap(errInternalServerError),
 		},
 	}
 
@@ -161,10 +160,10 @@ func (s *TestSuite) TestPatchService() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("update", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrPatchingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrPatchingService.Wrap(errInternalServerError),
 		},
 	}
 
@@ -211,10 +210,10 @@ func (s *TestSuite) TestDeleteService() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingService.Wrap(errInternalServerError),
 		},
 	}
 
@@ -270,11 +269,11 @@ func (s *TestSuite) TestGetServiceIP() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedIP:  "",
-			expectedErr: k8s.ErrGettingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingService.Wrap(errInternalServerError),
 		},
 	}
 
@@ -436,10 +435,10 @@ func (s *TestSuite) TestWaitForService() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCheckingServiceReady.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCheckingServiceReady.Wrap(errInternalServerError),
 		},
 	}
 
@@ -511,11 +510,11 @@ func (s *TestSuite) TestGetServiceEndpoint() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "services",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedEP:  "",
-			expectedErr: k8s.ErrGettingService.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingService.Wrap(errInternalServerError),
 		},
 	}
 

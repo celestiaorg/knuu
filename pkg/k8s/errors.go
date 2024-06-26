@@ -97,4 +97,5 @@ var (
 	ErrGetEndpoint                     = errors.New("GetEndpoint", "failed to get endpoint for service %s")
 	ErrUpdateEndpoint                  = errors.New("UpdateEndpoint", "failed to update endpoint for service %s")
 	ErrCheckingServiceReady            = errors.New("CheckingServiceReady", "failed to check if service %s is ready")
+	ErrWaitingForPodDeletion           = errors.New("WaitingForPodDeletion", "waiting for pod %s to be deleted")
 )
