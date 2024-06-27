@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 type ReplicaSetConfig struct {
@@ -71,6 +72,9 @@ func (c *Client) DeleteReplicaSetWithGracePeriod(ctx context.Context, name strin
 	}
 	if !exists {
 		return nil
+	}
+	if gracePeriodSeconds == nil {
+		gracePeriodSeconds = ptr.To[int64](0)
 	}
 
 	delOpts := metav1.DeleteOptions{

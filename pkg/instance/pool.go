@@ -14,7 +14,7 @@ type InstancePool struct {
 // NewPool creates a pool of instances
 // This function can only be called in the state 'Committed'
 func (i *Instance) NewPool(amount int) (*InstancePool, error) {
-	if !i.IsInState(Committed) {
+	if !i.IsInState(StateCommitted) {
 		return nil, ErrCreatingPoolNotAllowed.WithParams(i.state.String())
 	}
 	instances := make([]*Instance, amount)
@@ -22,7 +22,7 @@ func (i *Instance) NewPool(amount int) (*InstancePool, error) {
 		instances[j] = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
 	}
 
-	i.state = Destroyed
+	i.state = StateDestroyed
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return &InstancePool{

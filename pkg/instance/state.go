@@ -5,12 +5,12 @@ type InstanceState int
 
 // Possible states of the instance
 const (
-	None InstanceState = iota
-	Preparing
-	Committed
-	Started
-	Stopped
-	Destroyed
+	StateNone InstanceState = iota
+	StatePreparing
+	StateCommitted
+	StateStarted
+	StateStopped
+	StateDestroyed
 )
 
 // String returns the string representation of the state

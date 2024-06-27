@@ -16,6 +16,17 @@ import (
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
+const (
+	labelAppKey         = "app"
+	labelManagedByKey   = "k8s.kubernetes.io/managed-by"
+	labelScopeKey       = "knuu.sh/scope"
+	labelTestStartedKey = "knuu.sh/test-started"
+	labelNameKey        = "knuu.sh/name"
+	labelK8sNameKey     = "knuu.sh/k8s-name"
+	labelTypeKey        = "knuu.sh/type"
+	labelKnuuValue      = "knuu"
+)
+
 // getImageRegistry returns the name of the temporary image registry
 func (i *Instance) getImageRegistry() (string, error) {
 	if i.imageName != "" {
@@ -63,14 +74,15 @@ func (i *Instance) isUDPPortRegistered(port int) bool {
 // getLabels returns the labels for the instance
 func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
-		"app":                          i.k8sName,
-		"k8s.kubernetes.io/managed-by": "knuu",
-		"knuu.sh/scope":                i.TestScope,
-		"knuu.sh/test-started":         i.StartTime,
-		"knuu.sh/name":                 i.name,
-		"knuu.sh/k8s-name":             i.k8sName,
-		"knuu.sh/type":                 i.instanceType.String(),
+		labelAppKey:         i.k8sName,
+		labelManagedByKey:   labelKnuuValue,
+		labelScopeKey:       i.TestScope,
+		labelTestStartedKey: i.StartTime,
+		labelNameKey:        i.name,
+		labelK8sNameKey:     i.k8sName,
+		labelTypeKey:        i.instanceType.String(),
 	}
+
 }
 
 // Labels returns the labels for the instance
@@ -85,15 +97,17 @@ func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) 
 		return ErrDeployingServiceForSidecar.WithParams(i.k8sName)
 	}
 
-	serviceName := i.k8sName
-	labels := i.getLabels()
-	labelSelectors := labels
+	var (
+		serviceName    = i.k8sName
+		labels         = i.getLabels()
+		labelSelectors = labels
+	)
 
-	service, err := i.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := i.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
-	i.kubernetesService = service
+	i.kubernetesService = srv
 	i.Logger.Debugf("Started service '%s'", i.k8sName)
 	return nil
 }
@@ -105,15 +119,17 @@ func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) e
 		return ErrPatchingServiceForSidecar.WithParams(i.k8sName)
 	}
 
-	serviceName := i.k8sName
-	labels := i.getLabels()
-	labelSelectors := labels
+	var (
+		serviceName    = i.k8sName
+		labels         = i.getLabels()
+		labelSelectors = labels
+	)
 
-	service, err := i.K8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := i.K8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}
-	i.kubernetesService = service
+	i.kubernetesService = srv
 	i.Logger.Debugf("Patched service '%s'", serviceName)
 	return nil
 }
@@ -143,10 +159,8 @@ func (i *Instance) deployPod(ctx context.Context) error {
 		}
 	}
 
-	replicaSetSetConfig := i.prepareReplicaSetConfig()
-
 	// Deploy the statefulSet
-	replicaSet, err := i.K8sClient.CreateReplicaSet(ctx, replicaSetSetConfig, true)
+	replicaSet, err := i.K8sClient.CreateReplicaSet(ctx, i.prepareReplicaSetConfig(), true)
 	if err != nil {
 		return ErrFailedToDeployPod.Wrap(err)
 	}
@@ -164,8 +178,7 @@ func (i *Instance) deployPod(ctx context.Context) error {
 // destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod(ctx context.Context) error {
-	grace := int64(0)
-	err := i.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, i.k8sName, &grace)
+	err := i.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, i.k8sName, nil)
 	if err != nil {
 		return ErrFailedToDeletePod.Wrap(err)
 	}
@@ -174,14 +187,17 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 	if err := i.K8sClient.DeleteServiceAccount(ctx, i.k8sName); err != nil {
 		return ErrFailedToDeleteServiceAccount.Wrap(err)
 	}
+
 	// Delete the role and role binding for the pod if there are policy rules
-	if len(i.policyRules) > 0 {
-		if err := i.K8sClient.DeleteRole(ctx, i.k8sName); err != nil {
-			return ErrFailedToDeleteRole.Wrap(err)
-		}
-		if err := i.K8sClient.DeleteRoleBinding(ctx, i.k8sName); err != nil {
-			return ErrFailedToDeleteRoleBinding.Wrap(err)
-		}
+	if len(i.policyRules) == 0 {
+		return nil
+	}
+
+	if err := i.K8sClient.DeleteRole(ctx, i.k8sName); err != nil {
+		return ErrFailedToDeleteRole.Wrap(err)
+	}
+	if err := i.K8sClient.DeleteRoleBinding(ctx, i.k8sName); err != nil {
+		return ErrFailedToDeleteRoleBinding.Wrap(err)
 	}
 
 	return nil
@@ -546,9 +562,9 @@ func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string
 }
 
 // applyFunctionToInstances applies a function to all instances
-func applyFunctionToInstances(instances []*Instance, function func(sidecar Instance) error) error {
+func applyFunctionToInstances(instances []*Instance, function func(sidecar *Instance) error) error {
 	for _, i := range instances {
-		if err := function(*i); err != nil {
+		if err := function(i); err != nil {
 			return ErrApplyingFunctionToInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
@@ -556,14 +572,10 @@ func applyFunctionToInstances(instances []*Instance, function func(sidecar Insta
 }
 
 func setStateForSidecars(sidecars []*Instance, state InstanceState) {
-	// We don't handle errors here, as the function can't return an error
-	err := applyFunctionToInstances(sidecars, func(sidecar Instance) error {
+	_ = applyFunctionToInstances(sidecars, func(sidecar *Instance) error {
 		sidecar.state = state
 		return nil
 	})
-	if err != nil {
-		return
-	}
 }
 
 // isObservabilityEnabled returns true if observability is enabled
@@ -576,7 +588,7 @@ func (i *Instance) isObservabilityEnabled() bool {
 }
 
 func (i *Instance) validateStateForObsy(endpoint string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingNotAllowed.WithParams(endpoint, i.state.String())
 	}
 	return nil
