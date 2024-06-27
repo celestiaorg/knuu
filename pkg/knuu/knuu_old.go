@@ -20,6 +20,7 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/log"
 	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
@@ -73,7 +74,8 @@ func InitializeWithScope(testScope string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	k8sClient, err := k8s.NewClient(ctx, testScope)
+	logger := log.DefaultLogger()
+	k8sClient, err := k8s.NewClient(ctx, testScope, logger)
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
@@ -89,6 +91,7 @@ func InitializeWithScope(testScope string) error {
 		Timeout:      timeout,
 		ProxyEnabled: true,
 		MinioClient:  minioClient,
+		Logger:       logger,
 	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)

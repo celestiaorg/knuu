@@ -387,9 +387,8 @@ func (m *Minio) waitForMinio(ctx context.Context) error {
 	return nil
 }
 
-
 func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resource.Quantity, createOptions metav1.CreateOptions) error {
-	pvcClient := m.K8s.Clientset().CoreV1().PersistentVolumeClaims(m.K8s.Namespace())
+	pvcClient := m.k8sClient.Clientset().CoreV1().PersistentVolumeClaims(m.k8sClient.Namespace())
 
 	// Check if PVC already exists
 	_, err := pvcClient.Get(ctx, pvcName, metav1.GetOptions{})

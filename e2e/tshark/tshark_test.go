@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -33,7 +34,7 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
 	require.NoError(t, err, "error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient)
