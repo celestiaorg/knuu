@@ -16,7 +16,7 @@ const (
 )
 
 var (
-	executorMemoryLimit = resource.MustParse("100M")
+	executorMemoryLimit = resource.MustParse("100Mi")
 	executorCpuLimit    = resource.MustParse("100m")
 )
 
