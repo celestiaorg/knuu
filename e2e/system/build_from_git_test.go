@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -69,7 +70,7 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	// Setup
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
 	require.NoError(t, err, "Error creating k8s client")
 
 	// Since we are modifying the git repo,

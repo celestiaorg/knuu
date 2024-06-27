@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -22,13 +24,17 @@ const (
 	s3Location   = "eu-east-1"
 )
 
+var (
+	tsharkVolumeSize = resource.MustParse("4Gi")
+)
+
 func TestTshark(t *testing.T) {
 	t.Parallel()
 	// Setup
 
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope())
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
 	require.NoError(t, err, "error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient)
@@ -67,7 +73,7 @@ func TestTshark(t *testing.T) {
 
 	err = target.EnableTsharkCollector(
 		instance.TsharkCollectorConfig{
-			VolumeSize:     "4Gi",
+			VolumeSize:     tsharkVolumeSize,
 			S3AccessKey:    minioConf.AccessKeyID,
 			S3SecretKey:    minioConf.SecretAccessKey,
 			S3Region:       s3Location,

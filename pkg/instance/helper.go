@@ -209,11 +209,11 @@ func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP 
 
 // deployVolume deploys the volume for the instance
 func (i *Instance) deployVolume(ctx context.Context) error {
-	size := resource.Quantity{}
+	totalSize := resource.Quantity{}
 	for _, volume := range i.volumes {
-		size.Add(resource.MustParse(volume.Size))
+		totalSize.Add(volume.Size)
 	}
-	i.K8sClient.CreatePersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), size)
+	i.K8sClient.CreatePersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), totalSize)
 	i.Logger.Debugf("Deployed persistent volume '%s'", i.k8sName)
 
 	return nil
