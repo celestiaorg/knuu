@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +33,7 @@ func (c *Client) CreateService(
 	if err != nil {
 		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("Service %s created in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s created in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
@@ -56,7 +55,7 @@ func (c *Client) PatchService(
 		return nil, ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s patched in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s patched in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
@@ -74,7 +73,7 @@ func (c *Client) DeleteService(ctx context.Context, name string) error {
 		return ErrDeletingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s deleted in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 

@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -92,7 +91,7 @@ func (c *Client) GetNetworkPolicy(ctx context.Context, name string) (*v1.Network
 func (c *Client) NetworkPolicyExists(ctx context.Context, name string) bool {
 	_, err := c.GetNetworkPolicy(ctx, name)
 	if err != nil {
-		logrus.Debug("NetworkPolicy does not exist, err: ", err)
+		c.logger.Debug("NetworkPolicy does not exist, err: ", err)
 		return false
 	}
 

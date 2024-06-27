@@ -101,7 +101,7 @@ func (c *Client) NewFile(source, dest string) *File {
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	logrus.Debugf("Replacing pod %s", podConfig.Name)
+	c.logger.Debugf("Replacing pod %s", podConfig.Name)
 
 	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
@@ -283,8 +283,8 @@ func (c *Client) PortForwardPod(
 	if stderr.Len() > 0 {
 		return ErrPortForwarding.WithParams(stderr.String())
 	}
-	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	logrus.Debugf("Port forwarding stdout: %v", stdout)
+	c.logger.Debugf("Port forwarding from %d to %d", localPort, remotePort)
+	c.logger.Debugf("Port forwarding stdout: %v", stdout)
 
 	// Start the port forwarding
 	go func() {
@@ -299,7 +299,7 @@ func (c *Client) PortForwardPod(
 	select {
 	case <-readyChan:
 		// Ready to forward
-		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+		c.logger.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)

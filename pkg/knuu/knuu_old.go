@@ -19,7 +19,12 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/docker"
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/log"
+	"github.com/celestiaorg/knuu/pkg/minio"
 )
+
+const minioBucketName = "knuu"
 
 // This is a temporary variable to hold the knuu instance until we refactor knuu pkg
 // TODO: remove this temporary variable
@@ -68,11 +73,25 @@ func InitializeWithScope(testScope string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	var err error
+
+	logger := log.DefaultLogger()
+	k8sClient, err := k8s.NewClient(ctx, testScope, logger)
+	if err != nil {
+		return ErrCannotInitializeKnuu.Wrap(err)
+	}
+
+	minioClient, err := minio.New(ctx, k8sClient)
+	if err != nil {
+		return ErrCannotInitializeKnuu.Wrap(err)
+	}
+
 	tmpKnuu, err = New(ctx, Options{
+		K8sClient:    k8sClient,
 		TestScope:    testScope,
 		Timeout:      timeout,
 		ProxyEnabled: true,
+		MinioClient:  minioClient,
+		Logger:       logger,
 	})
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
@@ -82,8 +101,7 @@ func InitializeWithScope(testScope string) error {
 	switch builderType {
 	case "kubernetes":
 		tmpKnuu.ImageBuilder = &kaniko.Kaniko{
-			K8s:   tmpKnuu.K8sClient,
-			Minio: tmpKnuu.MinioClient,
+			SystemDependencies: tmpKnuu.SystemDependencies,
 		}
 	case "docker", "":
 		tmpKnuu.ImageBuilder = &docker.Docker{
@@ -135,10 +153,10 @@ func CleanUp() error {
 
 // Deprecated: Use the new package knuu instead.
 func PushFileToMinio(ctx context.Context, contentName string, reader io.Reader) error {
-	return tmpKnuu.PushFileToMinio(ctx, contentName, reader)
+	return tmpKnuu.MinioClient.Push(ctx, reader, contentName, minioBucketName)
 }
 
 // Deprecated: Use the new package knuu instead.
 func GetMinioURL(ctx context.Context, contentName string) (string, error) {
-	return tmpKnuu.GetMinioURL(ctx, contentName)
+	return tmpKnuu.MinioClient.GetURL(ctx, contentName, minioBucketName)
 }

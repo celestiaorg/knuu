@@ -4,12 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/sirupsen/logrus"
 )
 
 type ReplicaSetConfig struct {
@@ -34,7 +33,7 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
-	logrus.Debugf("Replacing ReplicaSet %s", ReplicaSetConfig.Name)
+	c.logger.Debugf("Replacing ReplicaSet %s", ReplicaSetConfig.Name)
 
 	if err := c.DeleteReplicaSetWithGracePeriod(ctx, ReplicaSetConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingReplicaSet.Wrap(err)

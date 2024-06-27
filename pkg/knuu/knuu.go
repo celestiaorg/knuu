@@ -39,24 +39,28 @@ type Knuu struct {
 }
 
 type Options struct {
-	K8s          k8s.KubeManager
-	TestScope    string
+	K8sClient    k8s.KubeManager
+	MinioClient  *minio.Minio
 	ImageBuilder builder.Builder
-	Minio        *minio.Minio
-	Timeout      time.Duration
+	TestScope    string
 	ProxyEnabled bool
+	Timeout      time.Duration
 	Logger       *logrus.Logger
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
+	if err := validateOptions(opts); err != nil {
+		return nil, err
+	}
+
 	if err := loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
 	k := &Knuu{
 		SystemDependencies: system.SystemDependencies{
-			K8sClient:    opts.K8s,
-			MinioClient:  opts.Minio,
+			K8sClient:    opts.K8sClient,
+			MinioClient:  opts.MinioClient,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
 			TestScope:    opts.TestScope,
@@ -95,9 +99,9 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
-		logrus.Info("Received signal to stop, cleaning up resources...")
+		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			logrus.Errorf("Error deleting namespace: %v", err)
+			k.Logger.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
 }
@@ -160,6 +164,24 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
+func DefaultTestScope() string {
+	t := time.Now()
+	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+}
+
+func validateOptions(opts Options) error {
+	// When Minio is set, K8sClient must be set too
+	// to make sure that there is only one source of truth for the k8s client
+	if opts.MinioClient != nil && opts.K8sClient == nil {
+		return ErrK8sClientNotSet
+	}
+
+	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
+		return ErrTestScopeMistMatch.WithParams(opts.TestScope, opts.K8sClient.Namespace())
+	}
+	return nil
+}
+
 func loadEnvVariables() error {
 	err := godotenv.Load()
 	if err != nil && !os.IsNotExist(err) {
@@ -177,8 +199,11 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 	}
 
 	if k.TestScope == "" {
-		t := time.Now()
-		k.TestScope = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+		if k.K8sClient != nil {
+			k.TestScope = k.K8sClient.Namespace()
+		} else {
+			k.TestScope = DefaultTestScope()
+		}
 	}
 	k.TestScope = k8s.SanitizeName(k.TestScope)
 
@@ -188,22 +213,15 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.K8sClient == nil {
 		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope, k.Logger)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}
 	}
 
-	if k.MinioClient == nil {
-		k.MinioClient = &minio.Minio{
-			K8s: k.K8sClient,
-		}
-	}
-
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
-			K8s:   k.K8sClient,
-			Minio: k.MinioClient,
+			SystemDependencies: k.SystemDependencies,
 		}
 	}
 
@@ -214,6 +232,10 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 	k.Proxy = &traefik.Traefik{
 		K8s: k.K8sClient,
 	}
+	if !k.Proxy.IsTraefikAPIAvailable(ctx) {
+		return ErrTraefikAPINotAvailable
+	}
+
 	if err := k.Proxy.Deploy(ctx); err != nil {
 		return ErrCannotDeployTraefik.Wrap(err)
 	}

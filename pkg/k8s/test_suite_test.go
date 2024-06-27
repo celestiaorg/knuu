@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,6 +43,7 @@ func (s *TestSuite) SetupTest() {
 		&discfake.FakeDiscovery{Fake: &k8stesting.Fake{}},
 		dynfake.NewSimpleDynamicClient(runtime.NewScheme()),
 		s.namespace,
+		logrus.New(),
 	)
 	s.Require().NoError(err)
 }

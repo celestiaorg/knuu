@@ -26,7 +26,7 @@ func (i *Instance) Destroy(ctx context.Context) error {
 	}
 
 	err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
+		i.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
 		return sidecar.destroyResources(ctx)
 	})
 	if err != nil {
@@ -35,7 +35,7 @@ func (i *Instance) Destroy(ctx context.Context) error {
 
 	i.state = Destroyed
 	setStateForSidecars(i.sidecars, Destroyed)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
