@@ -25,6 +25,8 @@ const (
 	labelK8sNameKey     = "knuu.sh/k8s-name"
 	labelTypeKey        = "knuu.sh/type"
 	labelKnuuValue      = "knuu"
+
+	buildDirBase = "/tmp/knuu"
 )
 
 // getImageRegistry returns the name of the temporary image registry
@@ -205,20 +207,21 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 
 // deployService deploys the service for the instance
 func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP []int) error {
-	if len(portsTCP) != 0 || len(portsUDP) != 0 {
-		i.Logger.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-		svc, _ := i.K8sClient.GetService(ctx, i.k8sName)
-		if svc == nil {
-			err := i.deployService(ctx, portsTCP, portsUDP)
-			if err != nil {
-				return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
-			}
-		} else if svc != nil {
-			err := i.patchService(ctx, portsTCP, portsUDP)
-			if err != nil {
-				return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
-			}
+	if len(portsTCP) == 0 && len(portsUDP) == 0 {
+		return nil
+	}
+
+	i.Logger.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+	svc, _ := i.K8sClient.GetService(ctx, i.k8sName)
+	if svc == nil {
+		if err := i.deployService(ctx, portsTCP, portsUDP); err != nil {
+			return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
+		return nil
+	}
+
+	if err := i.patchService(ctx, portsTCP, portsUDP); err != nil {
+		return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 	return nil
 }
@@ -237,9 +240,11 @@ func (i *Instance) deployVolume(ctx context.Context) error {
 
 // destroyVolume destroys the volume for the instance
 func (i *Instance) destroyVolume(ctx context.Context) error {
-	i.K8sClient.DeletePersistentVolumeClaim(ctx, i.k8sName)
+	err := i.K8sClient.DeletePersistentVolumeClaim(ctx, i.k8sName)
+	if err != nil {
+		return ErrFailedToDeletePersistentVolumeClaim.Wrap(err)
+	}
 	i.Logger.Debugf("Destroyed persistent volume '%s'", i.k8sName)
-
 	return nil
 }
 
@@ -247,26 +252,25 @@ func (i *Instance) destroyVolume(ctx context.Context) error {
 func (i *Instance) deployFiles(ctx context.Context) error {
 	data := map[string]string{}
 
-	n := 0
-
-	for _, file := range i.files {
+	for i, file := range i.files {
 		// read out file content and assign to variable
 		srcFile, err := os.Open(file.Source)
 		if err != nil {
 			return ErrFailedToOpenFile.Wrap(err)
 		}
+		defer srcFile.Close()
+
 		fileContentBytes, err := io.ReadAll(srcFile)
 		if err != nil {
 			return ErrFailedToReadFile.Wrap(err)
 		}
-		srcFile.Close()
-		fileContent := string(fileContentBytes)
 
-		keyName := fmt.Sprintf("%d", n)
+		var (
+			fileContent = string(fileContentBytes)
+			keyName     = fmt.Sprintf("%d", i)
+		)
 
 		data[keyName] = fileContent
-
-		n++
 	}
 
 	// create configmap
@@ -286,7 +290,6 @@ func (i *Instance) destroyFiles(ctx context.Context) error {
 	}
 
 	i.Logger.Debugf("Destroyed configmap '%s'", i.k8sName)
-
 	return nil
 }
 
@@ -311,20 +314,20 @@ func (i *Instance) deployResources(ctx context.Context) error {
 			return ErrDeployingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
-	if len(i.files) != 0 {
-		if err := i.deployFiles(ctx); err != nil {
-			return ErrDeployingFilesForInstance.WithParams(i.k8sName).Wrap(err)
-		}
+	if len(i.files) == 0 {
+		return nil
 	}
 
+	if err := i.deployFiles(ctx); err != nil {
+		return ErrDeployingFilesForInstance.WithParams(i.k8sName).Wrap(err)
+	}
 	return nil
 }
 
 // destroyResources destroys the resources for the instance
 func (i *Instance) destroyResources(ctx context.Context) error {
 	if len(i.volumes) != 0 {
-		err := i.destroyVolume(ctx)
-		if err != nil {
+		if err := i.destroyVolume(ctx); err != nil {
 			return ErrDestroyingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
@@ -344,20 +347,27 @@ func (i *Instance) destroyResources(ctx context.Context) error {
 	// disable network only for non-sidecar instances
 	if !i.isSidecar {
 		// enable network when network is disabled
-		disableNetwork, err := i.NetworkIsDisabled(ctx)
-		if err != nil {
-			i.Logger.Errorf("error checking network status for instance")
-			return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
-		}
-		if !disableNetwork {
-			return nil
-		}
-		if err := i.EnableNetwork(ctx); err != nil {
-			i.Logger.Errorf("error enabling network for instance")
+		if err := i.enableNetworkIfDisabled(ctx); err != nil {
 			return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
+	return nil
+}
+
+func (i *Instance) enableNetworkIfDisabled(ctx context.Context) error {
+	disableNetwork, err := i.NetworkIsDisabled(ctx)
+	if err != nil {
+		i.Logger.Errorf("error checking network status for instance")
+		return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
+	}
+	if !disableNetwork {
+		return nil
+	}
+	if err := i.EnableNetwork(ctx); err != nil {
+		i.Logger.Errorf("error enabling network for instance")
+		return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
+	}
 	return nil
 }
 
@@ -418,39 +428,36 @@ func getFreePortTCP() (int, error) {
 
 	// Get the port from the listener
 	port := listener.Addr().(*net.TCPAddr).Port
-
 	return port, nil
 }
 
 // getBuildDir returns the build directory for the instance
 func (i *Instance) getBuildDir() string {
-	return filepath.Join("/tmp", "knuu", i.k8sName)
+	return filepath.Join(buildDirBase, i.k8sName)
 }
 
 // validateFileArgs validates the file arguments
 func (i *Instance) validateFileArgs(src, dest, chown string) error {
-	// check src
 	if src == "" {
 		return ErrSrcMustBeSet
 	}
-	// check dest
 	if dest == "" {
 		return ErrDestMustBeSet
 	}
-	// check chown
 	if chown == "" {
 		return ErrChownMustBeSet
 	}
+
 	// validate chown format
 	if !strings.Contains(chown, ":") || len(strings.Split(chown, ":")) != 2 {
 		return ErrChownMustBeInFormatUserGroup
 	}
-
 	return nil
 }
 
 // addFileToBuilder adds a file to the builder
 func (i *Instance) addFileToBuilder(src, dest, chown string) error {
+	_ = src
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
 	err := i.builderFactory.AddToBuilder(dest, dest, chown)
 	if err != nil {
@@ -462,20 +469,24 @@ func (i *Instance) addFileToBuilder(src, dest, chown string) error {
 // prepareSecurityContext creates a v1.SecurityContext from a given SecurityContext.
 func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
 	securityContext := &v1.SecurityContext{}
+	if config == nil {
+		return securityContext
+	}
 
-	if config != nil {
-		if config.privileged {
-			securityContext.Privileged = &config.privileged
-		}
-		if len(config.capabilitiesAdd) > 0 {
-			capabilities := make([]v1.Capability, len(config.capabilitiesAdd))
-			for i, cap := range config.capabilitiesAdd {
-				capabilities[i] = v1.Capability(cap)
-			}
-			securityContext.Capabilities = &v1.Capabilities{
-				Add: capabilities,
-			}
-		}
+	if config.privileged {
+		securityContext.Privileged = &config.privileged
+	}
+
+	if len(config.capabilitiesAdd) == 0 {
+		return securityContext
+	}
+
+	capabilities := make([]v1.Capability, len(config.capabilitiesAdd))
+	for i, cap := range config.capabilitiesAdd {
+		capabilities[i] = v1.Capability(cap)
+	}
+	securityContext.Capabilities = &v1.Capabilities{
+		Add: capabilities,
 	}
 
 	return securityContext
@@ -483,8 +494,6 @@ func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
 
 // prepareConfig prepares the config for the instance
 func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
-
-	// Generate the container configuration
 	containerConfig := k8s.ContainerConfig{
 		Name:            i.k8sName,
 		Image:           i.imageName,
@@ -501,7 +510,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		Files:           i.files,
 		SecurityContext: prepareSecurityContext(i.securityContext),
 	}
-	// Generate the sidecar configurations
+
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
@@ -521,7 +530,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 			SecurityContext: prepareSecurityContext(sidecar.securityContext),
 		})
 	}
-	// Generate the pod configuration
+
 	podConfig := k8s.PodConfig{
 		Namespace:          i.K8sClient.Namespace(),
 		Name:               i.k8sName,
@@ -531,29 +540,25 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 	}
-	// Generate the ReplicaSet configuration
-	statefulSetConfig := k8s.ReplicaSetConfig{
+
+	return k8s.ReplicaSetConfig{
 		Namespace: i.K8sClient.Namespace(),
 		Name:      i.k8sName,
 		Labels:    i.getLabels(),
 		Replicas:  1,
 		PodConfig: podConfig,
 	}
-
-	return statefulSetConfig
 }
 
 // setImageWithGracePeriod sets the image of the instance with a grace period
 func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod *int64) error {
 	i.imageName = imageName
 
-	replicaSetConfig := i.prepareReplicaSetConfig()
-
-	// Replace the pod with a new one, using the given image
-	_, err := i.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, replicaSetConfig, gracePeriod)
+	_, err := i.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, i.prepareReplicaSetConfig(), gracePeriod)
 	if err != nil {
 		return ErrReplacingPod.Wrap(err)
 	}
+
 	if err := i.WaitInstanceIsRunning(ctx); err != nil {
 		return ErrWaitingInstanceIsRunning.Wrap(err)
 	}

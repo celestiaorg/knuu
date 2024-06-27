@@ -236,28 +236,29 @@ func (i *Instance) SetImage(ctx context.Context, image string) error {
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
 	}
 
-	if i.state == StateNone {
-		// Use the builder to build a new image
-		factory, err := container.NewBuilderFactory(image, i.getBuildDir(), i.ImageBuilder)
-		if err != nil {
-			return ErrCreatingBuilder.Wrap(err)
-		}
-		i.builderFactory = factory
-		i.state = StatePreparing
-
-		return nil
-	}
-
 	if i.isSidecar {
 		return ErrSettingImageNotAllowedForSidecarsStarted
 	}
-	return i.setImageWithGracePeriod(ctx, image, nil)
+
+	if i.state == StateStarted {
+		return i.setImageWithGracePeriod(ctx, image, nil)
+	}
+
+	// Use the builder to build a new image
+	factory, err := container.NewBuilderFactory(image, i.getBuildDir(), i.ImageBuilder)
+	if err != nil {
+		return ErrCreatingBuilder.Wrap(err)
+	}
+	i.builderFactory = factory
+	i.state = StatePreparing
+
+	return nil
 }
 
 // SetGitRepo builds the image from the given git repo, pushes it
 // to the registry under the given name and sets the image of the instance.
 func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
-	if !i.IsInState(StateNone) {
+	if i.state != StateNone {
 		return ErrSettingGitRepo.WithParams(i.state.String())
 	}
 
@@ -284,7 +285,7 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 // Instant means that the pod is replaced without a grace period of 1 second.
 // It is only allowed in the 'Running' state.
 func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
-	if !i.IsInState(StateStarted) {
+	if i.state != StateStarted {
 		return ErrSettingImageNotAllowedForSidecarsStarted.WithParams(i.state.String())
 	}
 
@@ -292,8 +293,7 @@ func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
 		return ErrSettingImageNotAllowedForSidecars
 	}
 
-	gracePeriod := int64(0)
-	return i.setImageWithGracePeriod(ctx, image, &gracePeriod)
+	return i.setImageWithGracePeriod(ctx, image, nil)
 }
 
 // SetCommand sets the command to run in the instance
@@ -1095,12 +1095,13 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 	if !i.IsInState(StateCommitted, StateStopped) {
 		return ErrStartingNotAllowed.WithParams(i.state.String())
 	}
-	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
+	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 		if !sidecar.IsInState(StateCommitted, StateStopped) {
 			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.name, sidecar.state.String())
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	if i.isSidecar {
@@ -1138,8 +1139,7 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 		}
 	}
 
-	err := i.deployPod(ctx)
-	if err != nil {
+	if err := i.deployPod(ctx); err != nil {
 		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 	i.state = StateStarted
