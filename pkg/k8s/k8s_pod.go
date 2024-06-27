@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -76,7 +75,7 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
-	pod := preparePod(podConfig, init)
+	pod := c.preparePod(podConfig, init)
 	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingPod.Wrap(err)
@@ -123,14 +122,16 @@ func (c *Client) waitForPodDeletion(ctx context.Context, name string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Errorf("Context cancelled while waiting for pod %s to delete", name)
+			c.logger.Errorf("Context cancelled while waiting for pod %s to delete", name)
 			return ctx.Err()
 		case <-time.After(retryInterval):
-			if _, err := c.getPod(ctx, name); err != nil {
+			_, err := c.getPod(ctx, name)
+			if err != nil {
 				if apierrs.IsNotFound(err) {
-					logrus.Debugf("Pod %s successfully deleted", name)
+					c.logger.Debugf("Pod %s successfully deleted", name)
 					return nil
 				}
+				return ErrWaitingForPodDeletion.WithParams(name).Wrap(err)
 			}
 		}
 	}
@@ -404,7 +405,7 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(volumes []*Volume, files []*File) []string {
+func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []string {
 	var (
 		commands       = []string{"sh", "-c"}
 		dirsProcessed  = make(map[string]bool)
@@ -446,7 +447,7 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) []string {
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
 
-	logrus.Debugf("Init container command: %s", fullCommand)
+	c.logger.Debugf("Init container command: %s", fullCommand)
 	return commands
 }
 
@@ -481,7 +482,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 }
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
-func prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
+func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
 	if !init || len(config.Volumes) == 0 {
 		return nil
 	}
@@ -493,7 +494,7 @@ func prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
 			SecurityContext: &v1.SecurityContext{
 				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
-			Command:      buildInitContainerCommand(config.Volumes, config.Files),
+			Command:      c.buildInitContainerCommand(config.Volumes, config.Files),
 			VolumeMounts: buildInitContainerVolumes(config.Name, config.Volumes, config.Files),
 		},
 	}
@@ -504,11 +505,11 @@ func preparePodVolumes(config ContainerConfig) []v1.Volume {
 	return buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
 }
 
-func preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
+func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 	podSpec := v1.PodSpec{
 		ServiceAccountName: spec.ServiceAccountName,
 		SecurityContext:    &v1.PodSecurityContext{FSGroup: &spec.FsGroup},
-		InitContainers:     prepareInitContainers(spec.ContainerConfig, init),
+		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
 		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
 	}
@@ -524,7 +525,7 @@ func preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 	return podSpec
 }
 
-func preparePod(spec PodConfig, init bool) *v1.Pod {
+func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   spec.Namespace,
@@ -532,9 +533,9 @@ func preparePod(spec PodConfig, init bool) *v1.Pod {
 			Labels:      spec.Labels,
 			Annotations: spec.Annotations,
 		},
-		Spec: preparePodSpec(spec, init),
+		Spec: c.preparePodSpec(spec, init),
 	}
 
-	logrus.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
+	c.logger.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
 	return pod
 }

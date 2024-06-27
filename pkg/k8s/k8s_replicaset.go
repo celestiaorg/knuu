@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,7 +21,7 @@ type ReplicaSetConfig struct {
 // CreateReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
 func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
 	rsConfig.Namespace = c.namespace
-	rs := prepareReplicaSet(rsConfig, init)
+	rs := c.prepareReplicaSet(rsConfig, init)
 
 	createdRs, err := c.clientset.AppsV1().ReplicaSets(c.namespace).Create(ctx, rs, metav1.CreateOptions{})
 	if err != nil {
@@ -146,7 +145,7 @@ func (c *Client) waitForReplicaSetDeletion(ctx context.Context, name string) err
 }
 
 // preparePod prepares a pod configuration.
-func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *appv1.ReplicaSet {
+func (c *Client) prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *appv1.ReplicaSet {
 	rs := &appv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: rsConf.Namespace,
@@ -163,11 +162,11 @@ func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *appv1.ReplicaSet {
 					Labels:      rsConf.Labels,
 					Annotations: rsConf.PodConfig.Annotations,
 				},
-				Spec: preparePodSpec(rsConf.PodConfig, init),
+				Spec: c.preparePodSpec(rsConf.PodConfig, init),
 			},
 		},
 	}
 
-	logrus.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
+	c.logger.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
 	return rs
 }

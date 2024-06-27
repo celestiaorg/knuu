@@ -79,10 +79,9 @@ func NewClientCustom(
 		namespace:       namespace,
 		logger:          logger,
 	}
-	namespace = SanitizeName(namespace)
-	kc.namespace = namespace
-	if err := kc.CreateNamespace(ctx, namespace); err != nil {
-		return nil, ErrCreatingNamespace.WithParams(namespace).Wrap(err)
+	kc.namespace = SanitizeName(namespace)
+	if err := kc.CreateNamespace(ctx, kc.namespace); err != nil {
+		return nil, ErrCreatingNamespace.WithParams(kc.namespace).Wrap(err)
 	}
 	return kc, nil
 }
