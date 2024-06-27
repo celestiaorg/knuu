@@ -232,6 +232,10 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 	k.Proxy = &traefik.Traefik{
 		K8s: k.K8sClient,
 	}
+	if !k.Proxy.IsTraefikAPIAvailable(ctx) {
+		return ErrTraefikAPINotAvailable
+	}
+
 	if err := k.Proxy.Deploy(ctx); err != nil {
 		return ErrCannotDeployTraefik.Wrap(err)
 	}
