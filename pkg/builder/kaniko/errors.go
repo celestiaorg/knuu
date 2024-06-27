@@ -30,4 +30,5 @@ var (
 	ErrMinioDeploymentFailed            = errors.New("MinioDeploymentFailed", "Minio deployment failed")
 	ErrDeletingMinioContent             = errors.New("DeletingMinioContent", "error deleting Minio content")
 	ErrParsingQuantity                  = errors.New("ParsingQuantity", "error parsing quantity")
+	ErrMinioFailedToGetDeployment       = errors.New("MinioFailedToGetDeployment", "Minio failed to get deployment")
 )

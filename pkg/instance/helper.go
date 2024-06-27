@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
 )
@@ -96,7 +94,7 @@ func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) 
 		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
 	}
 	i.kubernetesService = service
-	logrus.Debugf("Started service '%s'", i.k8sName)
+	i.Logger.Debugf("Started service '%s'", i.k8sName)
 	return nil
 }
 
@@ -116,7 +114,7 @@ func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) e
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}
 	i.kubernetesService = service
-	logrus.Debugf("Patched service '%s'", serviceName)
+	i.Logger.Debugf("Patched service '%s'", serviceName)
 	return nil
 }
 
@@ -157,8 +155,8 @@ func (i *Instance) deployPod(ctx context.Context) error {
 	i.kubernetesReplicaSet = replicaSet
 
 	// Log the deployment of the pod
-	logrus.Debugf("Started statefulSet '%s'", i.k8sName)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Started statefulSet '%s'", i.k8sName)
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
@@ -192,7 +190,7 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 // deployService deploys the service for the instance
 func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP []int) error {
 	if len(portsTCP) != 0 || len(portsUDP) != 0 {
-		logrus.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
+		i.Logger.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
 		svc, _ := i.K8sClient.GetService(ctx, i.k8sName)
 		if svc == nil {
 			err := i.deployService(ctx, portsTCP, portsUDP)
@@ -224,7 +222,7 @@ func (i *Instance) deployVolume(ctx context.Context) error {
 // destroyVolume destroys the volume for the instance
 func (i *Instance) destroyVolume(ctx context.Context) error {
 	i.K8sClient.DeletePersistentVolumeClaim(ctx, i.k8sName)
-	logrus.Debugf("Destroyed persistent volume '%s'", i.k8sName)
+	i.Logger.Debugf("Destroyed persistent volume '%s'", i.k8sName)
 
 	return nil
 }
@@ -260,7 +258,7 @@ func (i *Instance) deployFiles(ctx context.Context) error {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
-	logrus.Debugf("Deployed configmap '%s'", i.k8sName)
+	i.Logger.Debugf("Deployed configmap '%s'", i.k8sName)
 
 	return nil
 }
@@ -271,7 +269,7 @@ func (i *Instance) destroyFiles(ctx context.Context) error {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 
-	logrus.Debugf("Destroyed configmap '%s'", i.k8sName)
+	i.Logger.Debugf("Destroyed configmap '%s'", i.k8sName)
 
 	return nil
 }
@@ -332,15 +330,15 @@ func (i *Instance) destroyResources(ctx context.Context) error {
 		// enable network when network is disabled
 		disableNetwork, err := i.NetworkIsDisabled(ctx)
 		if err != nil {
-			logrus.Debugf("error checking network status for instance")
+			i.Logger.Errorf("error checking network status for instance")
 			return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		if disableNetwork {
-			err := i.EnableNetwork(ctx)
-			if err != nil {
-				logrus.Debugf("error enabling network for instance")
-				return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
-			}
+		if !disableNetwork {
+			return nil
+		}
+		if err := i.EnableNetwork(ctx); err != nil {
+			i.Logger.Errorf("error enabling network for instance")
+			return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
@@ -625,7 +623,7 @@ func (i *Instance) createBitTwisterInstance(ctx context.Context) (*Instance, err
 	if err != nil {
 		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
 	}
-	logrus.Debugf("BitTwister URL: %s", btURL)
+	i.Logger.Debugf("BitTwister URL: %s", btURL)
 
 	i.BitTwister.SetNewClientByURL(btURL)
 

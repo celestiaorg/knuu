@@ -331,7 +331,7 @@ func (i *Instance) AddPortTCP(port int) error {
 		return ErrPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsTCP = append(i.portsTCP, port)
-	logrus.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
+	i.Logger.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
 	return nil
 }
 
@@ -368,7 +368,7 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 		if attempt == maxRetries {
 			return -1, ErrForwardingPort.WithParams(maxRetries)
 		}
-		logrus.Debugf("Forwarding port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, retryInterval, attempt, maxRetries)
+		i.Logger.Debugf("Forwarding port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, retryInterval, attempt, maxRetries)
 		time.Sleep(retryInterval)
 	}
 	return localPort, nil
@@ -388,7 +388,7 @@ func (i *Instance) AddPortUDP(port int) error {
 		return ErrUDPPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsUDP = append(i.portsUDP, port)
-	logrus.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
+	i.Logger.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
 	return nil
 }
 
@@ -528,7 +528,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		i.files = append(i.files, file)
 	}
 
-	logrus.Debugf("Added file '%s' to instance '%s'", dest, i.name)
+	i.Logger.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
 }
 
@@ -572,7 +572,7 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, i.name).Wrap(err)
 	}
 
-	logrus.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
+	i.Logger.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
 	return nil
 }
 
@@ -612,7 +612,7 @@ func (i *Instance) SetUser(user string) error {
 	if err != nil {
 		return ErrSettingUser.WithParams(user, i.name).Wrap(err)
 	}
-	logrus.Debugf("Set user '%s' for instance '%s'", user, i.name)
+	i.Logger.Debugf("Set user '%s' for instance '%s'", user, i.name)
 	return nil
 }
 
@@ -653,23 +653,23 @@ func (i *Instance) Commit() error {
 		cachedImageName, exists := checkImageHashInCache(imageHash)
 		if exists {
 			i.imageName = cachedImageName
-			logrus.Debugf("Using cached image for instance '%s'", i.name)
+			i.Logger.Debugf("Using cached image for instance '%s'", i.name)
 		} else {
-			logrus.Debugf("Cannot use any cached image for instance '%s'", i.name)
+			i.Logger.Debugf("Cannot use any cached image for instance '%s'", i.name)
 			err = i.builderFactory.PushBuilderImage(imageName)
 			if err != nil {
 				return ErrPushingImage.WithParams(i.name).Wrap(err)
 			}
 			updateImageCacheWithHash(imageHash, imageName)
 			i.imageName = imageName
-			logrus.Debugf("Pushed new image for instance '%s'", i.name)
+			i.Logger.Debugf("Pushed new image for instance '%s'", i.name)
 		}
 	} else {
 		i.imageName = i.builderFactory.ImageNameFrom()
-		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
+		i.Logger.Debugf("No need to build and push image for instance '%s'", i.name)
 	}
 	i.state = Committed
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
 }
@@ -680,7 +680,7 @@ func (i *Instance) Commit() error {
 func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
-		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		i.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
 	i.AddVolumeWithOwner(path, size, 0)
@@ -695,7 +695,7 @@ func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
-		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		i.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
 	volume := i.K8sClient.NewVolume(path, size, owner)
@@ -741,7 +741,7 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
-	logrus.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
+	i.Logger.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
 	return nil
 }
 
@@ -842,7 +842,7 @@ func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 		return err
 	}
 	i.livenessProbe = livenessProbe
-	logrus.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
+	i.Logger.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
 	return nil
 }
 
@@ -855,7 +855,7 @@ func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 		return err
 	}
 	i.readinessProbe = readinessProbe
-	logrus.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
+	i.Logger.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
 	return nil
 }
 
@@ -868,7 +868,7 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 		return err
 	}
 	i.startupProbe = startupProbe
-	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
+	i.Logger.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
 	return nil
 }
 
@@ -898,7 +898,7 @@ func (i *Instance) AddSidecar(sidecar *Instance) error {
 	i.sidecars = append(i.sidecars, sidecar)
 	sidecar.isSidecar = true
 	sidecar.parentInstance = i
-	logrus.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
+	i.Logger.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
 	return nil
 }
 
@@ -909,7 +909,7 @@ func (i *Instance) SetOtelCollectorVersion(version string) error {
 		return err
 	}
 	i.obsyConfig.otelCollectorVersion = version
-	logrus.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
+	i.Logger.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
 	return nil
 }
 
@@ -920,7 +920,7 @@ func (i *Instance) SetOtelEndpoint(port int) error {
 		return err
 	}
 	i.obsyConfig.otlpPort = port
-	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
+	i.Logger.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
 
@@ -933,7 +933,7 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	i.obsyConfig.prometheusEndpointPort = port
 	i.obsyConfig.prometheusEndpointJobName = jobName
 	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
-	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
+	i.Logger.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
 
@@ -946,7 +946,7 @@ func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort
 	i.obsyConfig.jaegerGrpcPort = grpcPort
 	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
 	i.obsyConfig.jaegerThriftHttpPort = thriftHttpPort
-	logrus.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
+	i.Logger.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
 	return nil
 }
 
@@ -959,7 +959,7 @@ func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
 	i.obsyConfig.otlpEndpoint = endpoint
 	i.obsyConfig.otlpUsername = username
 	i.obsyConfig.otlpPassword = password
-	logrus.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -970,7 +970,7 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
-	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -981,7 +981,7 @@ func (i *Instance) SetPrometheusExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.prometheusExporterEndpoint = endpoint
-	logrus.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -992,7 +992,7 @@ func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
-	logrus.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -1016,7 +1016,7 @@ func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
 	}
 
 	i.tsharkCollectorConfig = &conf
-	logrus.Debugf("Enabled Tshark collector for instance '%s'", i.name)
+	i.Logger.Debugf("Enabled Tshark collector for instance '%s'", i.name)
 	return nil
 }
 
@@ -1052,7 +1052,7 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
-	logrus.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
+	i.Logger.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
 	return nil
 }
 
@@ -1063,7 +1063,7 @@ func (i *Instance) AddCapability(capability string) error {
 		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
-	logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+	i.Logger.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
 	return nil
 }
 
@@ -1075,7 +1075,7 @@ func (i *Instance) AddCapabilities(capabilities []string) error {
 	}
 	for _, capability := range capabilities {
 		i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
-		logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+		i.Logger.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
 	}
 	return nil
 }
@@ -1145,7 +1145,7 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 	}
 	i.state = Started
 	setStateForSidecars(i.sidecars, Started)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
@@ -1248,7 +1248,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		return ErrSettingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
+	i.Logger.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
 	return nil
 }
 
@@ -1283,7 +1283,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		return ErrSettingLatencyJitter.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
+	i.Logger.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
 	return nil
 }
 
@@ -1316,7 +1316,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		return ErrSettingPacketLoss.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
+	i.Logger.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
 	return nil
 }
 
@@ -1377,7 +1377,7 @@ func (i *Instance) Stop(ctx context.Context) error {
 	}
 	i.state = Stopped
 	setStateForSidecars(i.sidecars, Stopped)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }

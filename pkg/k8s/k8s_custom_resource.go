@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,7 +33,7 @@ func (c *Client) CreateCustomResource(
 		return ErrCreatingCustomResource.WithParams(gvr.Resource).Wrap(err)
 	}
 
-	logrus.Debugf("CustomResource %s created", name)
+	c.logger.Debugf("CustomResource %s created", name)
 	return nil
 }
 

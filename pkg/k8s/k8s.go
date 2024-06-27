@@ -33,11 +33,12 @@ type Client struct {
 	discoveryClient discovery.DiscoveryInterface
 	dynamicClient   dynamic.Interface
 	namespace       string
+	logger          *logrus.Logger
 }
 
 var _ KubeManager = &Client{}
 
-func NewClient(ctx context.Context, namespace string) (*Client, error) {
+func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*Client, error) {
 	config, err := getClusterConfig()
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
@@ -57,7 +58,7 @@ func NewClient(ctx context.Context, namespace string) (*Client, error) {
 	if err != nil {
 		return nil, ErrCreatingDynamicClient.Wrap(err)
 	}
-	return NewClientCustom(ctx, cs, dc, dC, namespace)
+	return NewClientCustom(ctx, cs, dc, dC, namespace, logger)
 }
 
 func NewClientCustom(
@@ -66,17 +67,19 @@ func NewClientCustom(
 	dc discovery.DiscoveryInterface,
 	dC dynamic.Interface,
 	namespace string,
+	logger *logrus.Logger,
 ) (*Client, error) {
 	kc := &Client{
 		clientset:       cs,
 		discoveryClient: dc,
 		dynamicClient:   dC,
 		namespace:       namespace,
+		logger:          logger,
 	}
 	namespace = SanitizeName(namespace)
 	kc.namespace = namespace
 	if kc.NamespaceExists(ctx, namespace) {
-		logrus.Debugf("Namespace %s already exists, continuing.\n", namespace)
+		logger.Debugf("Namespace %s already exists, continuing.\n", namespace)
 		return kc, nil
 	}
 

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -70,7 +69,7 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
-	pod, err := preparePod(podConfig, init)
+	pod, err := c.preparePod(podConfig, init)
 	if err != nil {
 		return nil, ErrPreparingPod.Wrap(err)
 	}
@@ -98,7 +97,7 @@ func (c *Client) NewFile(source, dest string) *File {
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	logrus.Debugf("Replacing pod %s", podConfig.Name)
+	c.logger.Debugf("Replacing pod %s", podConfig.Name)
 
 	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
@@ -109,13 +108,13 @@ PodCheckLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Errorf("Context cancelled while waiting for pod %s to delete", podConfig.Name)
+			c.logger.Errorf("Context cancelled while waiting for pod %s to delete", podConfig.Name)
 			return nil, ctx.Err()
 		case <-time.After(retryInterval):
 			_, err := c.getPod(ctx, podConfig.Name)
 			if err != nil {
 				if apierrs.IsNotFound(err) {
-					logrus.Debugf("Pod %s successfully deleted", podConfig.Name)
+					c.logger.Debugf("Pod %s successfully deleted", podConfig.Name)
 					goto DeployPod
 				}
 				break PodCheckLoop
@@ -279,8 +278,8 @@ func (c *Client) PortForwardPod(
 	if stderr.Len() > 0 {
 		return ErrPortForwarding.WithParams(stderr.String())
 	}
-	logrus.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	logrus.Debugf("Port forwarding stdout: %v", stdout)
+	c.logger.Debugf("Port forwarding from %d to %d", localPort, remotePort)
+	c.logger.Debugf("Port forwarding stdout: %v", stdout)
 
 	// Start the port forwarding
 	go func() {
@@ -295,7 +294,7 @@ func (c *Client) PortForwardPod(
 	select {
 	case <-readyChan:
 		// Ready to forward
-		logrus.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+		c.logger.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)
@@ -425,7 +424,7 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) ([
 }
 
 // buildInitContainerCommand generates a command for an init container based on the given name and volumes.
-func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
+func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, error) {
 	var commands = []string{"sh", "-c"}
 	dirsProcessed := make(map[string]bool)
 	baseCmd := "set -xe && "
@@ -461,7 +460,7 @@ func buildInitContainerCommand(volumes []*Volume, files []*File) ([]string, erro
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
 
-	logrus.Debugf("Init container command: %s", fullCommand)
+	c.logger.Debugf("Init container command: %s", fullCommand)
 	return commands, nil
 }
 
@@ -513,7 +512,7 @@ func prepareContainer(config ContainerConfig) (v1.Container, error) {
 }
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
-func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, error) {
+func (c *Client) prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, error) {
 	if !init || len(config.Volumes) == 0 {
 		return nil, nil
 	}
@@ -522,7 +521,7 @@ func prepareInitContainers(config ContainerConfig, init bool) ([]v1.Container, e
 	if err != nil {
 		return nil, ErrBuildingInitContainerVolumes.Wrap(err)
 	}
-	initContainerCommand, err := buildInitContainerCommand(config.Volumes, config.Files)
+	initContainerCommand, err := c.buildInitContainerCommand(config.Volumes, config.Files)
 	if err != nil {
 		return nil, ErrBuildingInitContainerCommand.Wrap(err)
 	}
@@ -552,7 +551,7 @@ func preparePodVolumes(config ContainerConfig) ([]v1.Volume, error) {
 	return podVolumes, nil
 }
 
-func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
+func (c *Client) preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	var err error
 
 	// Prepare security context
@@ -567,7 +566,7 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 	}
 
 	// Prepare init containers
-	initContainers, err := prepareInitContainers(spec.ContainerConfig, init)
+	initContainers, err := c.prepareInitContainers(spec.ContainerConfig, init)
 	if err != nil {
 		return v1.PodSpec{}, ErrPreparingInitContainer.Wrap(err)
 	}
@@ -606,12 +605,12 @@ func preparePodSpec(spec PodConfig, init bool) (v1.PodSpec, error) {
 }
 
 // preparePod prepares a pod configuration.
-func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
+func (c *Client) preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 	namespace := spec.Namespace
 	name := spec.Name
 	labels := spec.Labels
 
-	podSpec, err := preparePodSpec(spec, init)
+	podSpec, err := c.preparePodSpec(spec, init)
 	if err != nil {
 		return nil, ErrCreatingPodSpec.Wrap(err)
 	}
@@ -627,7 +626,7 @@ func preparePod(spec PodConfig, init bool) (*v1.Pod, error) {
 		Spec: podSpec,
 	}
 
-	logrus.Debugf("Prepared pod %s in namespace %s", name, namespace)
+	c.logger.Debugf("Prepared pod %s in namespace %s", name, namespace)
 
 	return pod, nil
 }
