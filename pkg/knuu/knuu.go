@@ -99,9 +99,9 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
-		logrus.Info("Received signal to stop, cleaning up resources...")
+		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			logrus.Errorf("Error deleting namespace: %v", err)
+			k.Logger.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
 }
@@ -213,7 +213,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.K8sClient == nil {
 		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope)
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope, k.Logger)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}

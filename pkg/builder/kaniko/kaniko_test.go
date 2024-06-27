@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
@@ -26,7 +27,7 @@ const (
 
 func TestKanikoBuilder(t *testing.T) {
 	k8sCS := fake.NewSimpleClientset()
-	k8sClient, err := k8s.NewClientCustom(context.Background(), k8sCS, k8sCS.Discovery(), nil, k8sNamespace)
+	k8sClient, err := k8s.NewClientCustom(context.Background(), k8sCS, k8sCS.Discovery(), nil, k8sNamespace, logrus.New())
 	require.NoError(t, err)
 	kb := &Kaniko{
 		SystemDependencies: system.SystemDependencies{
