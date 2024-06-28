@@ -85,6 +85,8 @@ func InitializeWithScope(testScope string) error {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
 
+	testScope = k8s.SanitizeName(testScope)
+
 	tmpKnuu, err = New(ctx, Options{
 		K8sClient:    k8sClient,
 		TestScope:    testScope,
