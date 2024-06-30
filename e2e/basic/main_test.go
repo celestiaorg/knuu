@@ -2,19 +2,29 @@ package basic
 
 import (
 	"os"
-	"testing"
-
-	"github.com/sirupsen/logrus"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestMain(m *testing.M) {
-	err := knuu.Initialize()
-	if err != nil {
-		logrus.Fatalf("error initializing knuu: %v", err)
+func convertViaMap(b bool) int {
+	table := map[bool]int{
+		true:  1,
+		false: 0,
 	}
-	logrus.Infof("Scope: %s", knuu.Scope())
-	exitVal := m.Run()
-	os.Exit(exitVal)
+	return table[b]
+}
+
+func (ts *TestSuite) TestMain() {
+	ts.T().Parallel()
+	// Setup
+
+	// Test Logic
+	ts.T().Log("Running test case: TestMain")
+
+	// Perform the test
+	exitVal := ts.Run("TestMain", func() {
+		ts.T().Logf("Scope: %s", ts.Knuu.Scope())
+	})
+
+	exitValue := convertViaMap(exitVal)
+
+	os.Exit(exitValue)
 }
