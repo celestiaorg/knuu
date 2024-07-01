@@ -5,12 +5,12 @@ type InstanceState int
 
 // Possible states of the instance
 const (
-	None InstanceState = iota
-	Preparing
-	Committed
-	Started
-	Stopped
-	Destroyed
+	StateNone InstanceState = iota
+	StatePreparing
+	StateCommitted
+	StateStarted
+	StateStopped
+	StateDestroyed
 )
 
 // String returns the string representation of the state
@@ -29,4 +29,13 @@ func (i *Instance) IsInState(states ...InstanceState) bool {
 		}
 	}
 	return false
+}
+
+func (i *Instance) SetState(state InstanceState) {
+	i.state = state
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+}
+
+func (i *Instance) IsState(state InstanceState) bool {
+	return i.state == state
 }

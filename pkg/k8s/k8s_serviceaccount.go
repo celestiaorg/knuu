@@ -8,7 +8,7 @@ import (
 )
 
 func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error {
-	serviceAccount := &v1.ServiceAccount{
+	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: c.namespace,
@@ -16,7 +16,7 @@ func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels m
 		},
 	}
 
-	_, err := c.clientset.CoreV1().ServiceAccounts(c.namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+	_, err := c.clientset.CoreV1().ServiceAccounts(c.namespace).Create(ctx, sa, metav1.CreateOptions{})
 	return err
 }
 

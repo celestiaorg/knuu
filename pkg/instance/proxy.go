@@ -33,9 +33,6 @@ func (i *Instance) AddHostWithReadyCheck(ctx context.Context, port int,
 		return "", err
 	}
 
-	ticker := time.NewTicker(proxyWaitCheckInterval)
-	defer ticker.Stop()
-
 	for {
 		ok, err := checkFunc(host)
 		if err != nil {
@@ -48,7 +45,8 @@ func (i *Instance) AddHostWithReadyCheck(ctx context.Context, port int,
 		select {
 		case <-ctx.Done():
 			return "", ErrContextCanceled.Wrap(ctx.Err())
-		case <-ticker.C:
+		case <-time.After(proxyWaitCheckInterval):
+			// continue
 		}
 	}
 

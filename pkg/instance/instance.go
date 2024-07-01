@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -27,8 +26,10 @@ import (
 
 // We need to retry here because the port forwarding might fail as getFreePortTCP() might not free the port fast enough
 const (
-	maxRetries    = 5
-	retryInterval = 5 * time.Second
+	maxRetries           = 5
+	retryInterval        = 5 * time.Second
+	waitForInstanceRetry = 1 * time.Second
+	labelType            = "knuu.sh/type"
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -175,7 +176,7 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		name:                  name,
 		k8sName:               k8sName,
 		imageName:             "",
-		state:                 None,
+		state:                 StateNone,
 		instanceType:          BasicInstance,
 		portsTCP:              make([]int, 0),
 		portsUDP:              make([]int, 0),
@@ -203,7 +204,7 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 }
 
 func (i *Instance) EnableBitTwister() error {
-	if i.IsInState(Started) {
+	if i.IsInState(StateStarted) {
 		return ErrEnablingBitTwister
 	}
 	i.BitTwister.enable()
@@ -232,32 +233,33 @@ func (i *Instance) SetInstanceType(instanceType InstanceType) {
 // When calling in state 'Started', make sure to call AddVolume() before.
 // It is only allowed in the 'None' and 'Started' states.
 func (i *Instance) SetImage(ctx context.Context, image string) error {
-	if !i.IsInState(None, Started) {
+	if !i.IsInState(StateNone, StateStarted) {
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
-	}
-
-	if i.state == None {
-		// Use the builder to build a new image
-		factory, err := container.NewBuilderFactory(image, i.getBuildDir(), i.ImageBuilder)
-		if err != nil {
-			return ErrCreatingBuilder.Wrap(err)
-		}
-		i.builderFactory = factory
-		i.state = Preparing
-
-		return nil
 	}
 
 	if i.isSidecar {
 		return ErrSettingImageNotAllowedForSidecarsStarted
 	}
-	return i.setImageWithGracePeriod(ctx, image, nil)
+
+	if i.state == StateStarted {
+		return i.setImageWithGracePeriod(ctx, image, nil)
+	}
+
+	// Use the builder to build a new image
+	factory, err := container.NewBuilderFactory(image, i.getBuildDir(), i.ImageBuilder)
+	if err != nil {
+		return ErrCreatingBuilder.Wrap(err)
+	}
+	i.builderFactory = factory
+
+	i.SetState(StatePreparing)
+	return nil
 }
 
 // SetGitRepo builds the image from the given git repo, pushes it
 // to the registry under the given name and sets the image of the instance.
 func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
-	if !i.IsInState(None) {
+	if !i.IsState(StateNone) {
 		return ErrSettingGitRepo.WithParams(i.state.String())
 	}
 
@@ -275,7 +277,7 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 		return ErrCreatingBuilder.Wrap(err)
 	}
 	i.builderFactory = factory
-	i.state = Preparing
+	i.SetState(StatePreparing)
 
 	return i.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
 }
@@ -284,7 +286,7 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 // Instant means that the pod is replaced without a grace period of 1 second.
 // It is only allowed in the 'Running' state.
 func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
-	if !i.IsInState(Started) {
+	if !i.IsState(StateStarted) {
 		return ErrSettingImageNotAllowedForSidecarsStarted.WithParams(i.state.String())
 	}
 
@@ -292,14 +294,13 @@ func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
 		return ErrSettingImageNotAllowedForSidecars
 	}
 
-	gracePeriod := int64(0)
-	return i.setImageWithGracePeriod(ctx, image, &gracePeriod)
+	return i.setImageWithGracePeriod(ctx, image, nil)
 }
 
 // SetCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (i *Instance) SetCommand(command ...string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingCommand.WithParams(i.state.String())
 	}
 	i.command = command
@@ -309,7 +310,7 @@ func (i *Instance) SetCommand(command ...string) error {
 // SetArgs sets the arguments passed to the instance
 // This function can only be called in the states 'Preparing' or 'Committed'
 func (i *Instance) SetArgs(args ...string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingArgsNotAllowed.WithParams(i.state.String())
 	}
 	i.args = args
@@ -319,16 +320,17 @@ func (i *Instance) SetArgs(args ...string) error {
 // AddPortTCP adds a TCP port to the instance
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortTCP(port int) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
-	err := validatePort(port)
-	if err != nil {
+
+	if err := validatePort(port); err != nil {
 		return err
 	}
 	if i.isTCPPortRegistered(port) {
 		return ErrPortAlreadyRegistered.WithParams(port)
 	}
+
 	i.portsTCP = append(i.portsTCP, port)
 	i.Logger.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
 	return nil
@@ -337,12 +339,12 @@ func (i *Instance) AddPortTCP(port int) error {
 // PortForwardTCP forwards the given port to a random port on the host
 // This function can only be called in the state 'Started'
 func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
-	if !i.IsInState(Started) {
+	if !i.IsState(StateStarted) {
 		return -1, ErrRandomPortForwardingNotAllowed.WithParams(i.state.String())
 	}
-	err := validatePort(port)
-	if err != nil {
-		return 0, err
+
+	if err := validatePort(port); err != nil {
+		return -1, err
 	}
 	if !i.isTCPPortRegistered(port) {
 		return -1, ErrPortNotRegistered.WithParams(port)
@@ -364,11 +366,18 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 		if err == nil {
 			break
 		}
+
+		select {
+		case <-ctx.Done():
+			return -1, ErrForwardingPort.WithParams(maxRetries)
+		case <-time.After(retryInterval):
+			// continue
+		}
+
 		if attempt == maxRetries {
 			return -1, ErrForwardingPort.WithParams(maxRetries)
 		}
 		i.Logger.Debugf("Forwarding port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, retryInterval, attempt, maxRetries)
-		time.Sleep(retryInterval)
 	}
 	return localPort, nil
 }
@@ -376,17 +385,18 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 // AddPortUDP adds a UDP port to the instance
 // This function can be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPortUDP(port int) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
-	err := validatePort(port)
-	if err != nil {
+
+	if err := validatePort(port); err != nil {
 		return err
 	}
 	if i.isUDPPortRegistered(port) {
 		return ErrUDPPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsUDP = append(i.portsUDP, port)
+
 	i.Logger.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
 	return nil
 }
@@ -395,11 +405,11 @@ func (i *Instance) AddPortUDP(port int) error {
 // This function can only be called in the states 'Preparing' and 'Started'
 // The context can be used to cancel the command and it is only possible in start state
 func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (string, error) {
-	if !i.IsInState(Preparing, Started) {
+	if !i.IsInState(StatePreparing, StateStarted) {
 		return "", ErrExecutingCommandNotAllowed.WithParams(i.state.String())
 	}
 
-	if i.IsInState(Preparing) {
+	if i.state == StatePreparing {
 		output, err := i.builderFactory.ExecuteCmdInBuilder(command)
 		if err != nil {
 			return "", ErrExecutingCommandInInstance.WithParams(command, i.name).Wrap(err)
@@ -436,105 +446,107 @@ func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (strin
 
 // checkStateForAddingFile checks if the current state allows adding a file
 func (i *Instance) checkStateForAddingFile() error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingFileNotAllowed.WithParams(i.state.String())
 	}
 	return nil
 }
 
-// AddFile adds a file to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddFile(src string, dest string, chown string) error {
 	if err := i.checkStateForAddingFile(); err != nil {
 		return err
 	}
 
-	err := i.validateFileArgs(src, dest, chown)
+	if err := i.validateFileArgs(src, dest, chown); err != nil {
+		return err
+	}
+
+	if err := i.checkSrcExists(src); err != nil {
+		return err
+	}
+
+	dstPath, err := i.copyFileToBuildDir(src, dest)
 	if err != nil {
 		return err
 	}
 
-	// check if src exists (either as file or as folder)
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return ErrSrcDoesNotExist.WithParams(src).Wrap(err)
-	}
-
-	// copy file to build dir
-	dstPath := filepath.Join(i.getBuildDir(), dest)
-
-	// make sure dir exists
-	err = os.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
-	if err != nil {
-		return ErrCreatingDirectory.Wrap(err)
-	}
-	// Create destination file making sure the path is writeable.
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
-	}
-	defer dst.Close()
-
-	// Open source file for reading.
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return ErrFailedToOpenSrcFile.WithParams(src).Wrap(err)
-	}
-	defer srcFile.Close()
-
-	// Copy the contents from source file to destination file
-	_, err = io.Copy(dst, srcFile)
-	if err != nil {
-		return ErrFailedToCopyFile.WithParams(src, dstPath).Wrap(err)
-	}
-
 	switch i.state {
-	case Preparing:
-		err := i.addFileToBuilder(src, dest, chown)
-		if err != nil {
-			return err
-		}
-	case Committed:
-		// check if the dest is a sub folder of added volumes and print a warning if not
-		if !i.isSubFolderOfVolumes(dest) {
-			return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
-		}
-
-		// only allow files, not folders
-		srcInfo, err := os.Stat(src)
-		if os.IsNotExist(err) || srcInfo.IsDir() {
-			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
-		}
-		file := i.K8sClient.NewFile(dstPath, dest)
-
-		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
-		parts := strings.Split(chown, ":")
-		if len(parts) != 2 {
-			return ErrInvalidFormat
-		}
-
-		// second part of array, base of number is 10, and we want a 64-bit integer
-		group, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			return ErrFailedToConvertToInt64.Wrap(err)
-		}
-
-		if i.fsGroup != 0 && i.fsGroup != group {
-			return ErrAllFilesMustHaveSameGroup
-		} else {
-			i.fsGroup = group
-		}
-
-		i.files = append(i.files, file)
+	case StatePreparing:
+		return i.addFileToBuilder(src, dest, chown)
+	case StateCommitted:
+		return i.addFileToInstance(dstPath, dest, chown)
 	}
 
 	i.Logger.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
 }
 
+func (i *Instance) checkSrcExists(src string) error {
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return ErrSrcDoesNotExist.WithParams(src).Wrap(err)
+	}
+	return nil
+}
+
+func (i *Instance) copyFileToBuildDir(src, dest string) (string, error) {
+	dstPath := filepath.Join(i.getBuildDir(), dest)
+	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
+		return "", ErrCreatingDirectory.Wrap(err)
+	}
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return "", ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
+	}
+	defer dst.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return "", ErrFailedToOpenSrcFile.WithParams(src).Wrap(err)
+	}
+	defer srcFile.Close()
+
+	if _, err := io.Copy(dst, srcFile); err != nil {
+		return "", ErrFailedToCopyFile.WithParams(src, dstPath).Wrap(err)
+	}
+
+	return dstPath, nil
+}
+
+func (i *Instance) addFileToInstance(dstPath, dest, chown string) error {
+	if !i.isSubFolderOfVolumes(dest) {
+		return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
+	}
+
+	srcInfo, err := os.Stat(dstPath)
+	if os.IsNotExist(err) || srcInfo.IsDir() {
+		return ErrSrcDoesNotExistOrIsDirectory.WithParams(dstPath).Wrap(err)
+	}
+
+	file := i.K8sClient.NewFile(dstPath, dest)
+	parts := strings.Split(chown, ":")
+	if len(parts) != 2 {
+		return ErrInvalidFormat
+	}
+
+	group, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return ErrFailedToConvertToInt64.Wrap(err)
+	}
+
+	if i.fsGroup != 0 && i.fsGroup != group {
+		return ErrAllFilesMustHaveSameGroup
+	}
+	i.fsGroup = group
+	i.files = append(i.files, file)
+	return nil
+}
+
 // AddFolder adds a folder to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddFolder(src string, dest string, chown string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingFolderNotAllowed.WithParams(i.state.String())
 	}
 
@@ -547,25 +559,26 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 	}
 
 	// iterate over the files/directories in the src
-	err = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	err = filepath.Walk(src,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
 
-		// create the destination path
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		dstPath := filepath.Join(i.getBuildDir(), dest, relPath)
+			// create the destination path
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+			dstPath := filepath.Join(i.getBuildDir(), dest, relPath)
 
-		if info.IsDir() {
-			// create directory at destination path
-			return os.MkdirAll(dstPath, os.ModePerm)
-		}
-		// copy file to destination path
-		return i.AddFile(path, filepath.Join(dest, relPath), chown)
-	})
+			if info.IsDir() {
+				// create directory at destination path
+				return os.MkdirAll(dstPath, os.ModePerm)
+			}
+			// copy file to destination path
+			return i.AddFile(path, filepath.Join(dest, relPath), chown)
+		})
 
 	if err != nil {
 		return ErrCopyingFolderToInstance.WithParams(src, i.name).Wrap(err)
@@ -582,14 +595,12 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 		return err
 	}
 
-	// create a temporary file
 	tmpfile, err := os.CreateTemp("", "temp")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpfile.Name()) // clean up
+	defer os.Remove(tmpfile.Name())
 
-	// write bytes to the temporary file
 	if _, err := tmpfile.Write(bytes); err != nil {
 		return err
 	}
@@ -604,11 +615,11 @@ func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
 // SetUser sets the user for the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) SetUser(user string) error {
-	if !i.IsInState(Preparing) {
+	if !i.IsState(StatePreparing) {
 		return ErrSettingUserNotAllowed.WithParams(i.state.String())
 	}
-	err := i.builderFactory.SetUser(user)
-	if err != nil {
+
+	if err := i.builderFactory.SetUser(user); err != nil {
 		return ErrSettingUser.WithParams(user, i.name).Wrap(err)
 	}
 	i.Logger.Debugf("Set user '%s' for instance '%s'", user, i.name)
@@ -632,44 +643,47 @@ func updateImageCacheWithHash(imageHash, imageName string) {
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) Commit() error {
-	if !i.IsInState(Preparing) {
+	if !i.IsState(StatePreparing) {
 		return ErrCommittingNotAllowed.WithParams(i.state.String())
 	}
-	if i.builderFactory.Changed() {
-		// TODO: To speed up the process, the image name could be dependent on the hash of the image
-		imageName, err := i.getImageRegistry()
-		if err != nil {
-			return ErrGettingImageRegistry.Wrap(err)
-		}
 
-		// Generate a hash for the current image
-		imageHash, err := i.builderFactory.GenerateImageHash()
-		if err != nil {
-			return ErrGeneratingImageHash.Wrap(err)
-		}
-
-		// Check if the generated image hash already exists in the cache, otherwise, we build it.
-		cachedImageName, exists := checkImageHashInCache(imageHash)
-		if exists {
-			i.imageName = cachedImageName
-			i.Logger.Debugf("Using cached image for instance '%s'", i.name)
-		} else {
-			i.Logger.Debugf("Cannot use any cached image for instance '%s'", i.name)
-			err = i.builderFactory.PushBuilderImage(imageName)
-			if err != nil {
-				return ErrPushingImage.WithParams(i.name).Wrap(err)
-			}
-			updateImageCacheWithHash(imageHash, imageName)
-			i.imageName = imageName
-			i.Logger.Debugf("Pushed new image for instance '%s'", i.name)
-		}
-	} else {
+	if !i.builderFactory.Changed() {
 		i.imageName = i.builderFactory.ImageNameFrom()
 		i.Logger.Debugf("No need to build and push image for instance '%s'", i.name)
-	}
-	i.state = Committed
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
+		i.SetState(StateCommitted)
+		return nil
+	}
+
+	// TODO: To speed up the process, the image name could be dependent on the hash of the image
+	imageName, err := i.getImageRegistry()
+	if err != nil {
+		return ErrGettingImageRegistry.Wrap(err)
+	}
+
+	// Generate a hash for the current image
+	imageHash, err := i.builderFactory.GenerateImageHash()
+	if err != nil {
+		return ErrGeneratingImageHash.Wrap(err)
+	}
+
+	// Check if the generated image hash already exists in the cache, otherwise, we build it.
+	cachedImageName, exists := checkImageHashInCache(imageHash)
+	if exists {
+		i.imageName = cachedImageName
+		i.Logger.Debugf("Using cached image for instance '%s'", i.name)
+	} else {
+		i.Logger.Debugf("Cannot use any cached image for instance '%s'", i.name)
+		err = i.builderFactory.PushBuilderImage(imageName)
+		if err != nil {
+			return ErrPushingImage.WithParams(i.name).Wrap(err)
+		}
+		updateImageCacheWithHash(imageHash, imageName)
+		i.imageName = imageName
+		i.Logger.Debugf("Pushed new image for instance '%s'", i.name)
+	}
+
+	i.SetState(StateCommitted)
 	return nil
 }
 
@@ -682,14 +696,13 @@ func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 		i.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
-	i.AddVolumeWithOwner(path, size, 0)
-	return nil
+	return i.AddVolumeWithOwner(path, size, 0)
 }
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
@@ -699,45 +712,45 @@ func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner
 	}
 	volume := i.K8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
-	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, i.name)
+	i.Logger.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, i.name)
 	return nil
 }
 
 // SetMemory sets the memory of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetMemory(request, limit resource.Quantity) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
 	i.memoryLimit = limit
-	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request.String(), limit.String(), i.name)
+	i.Logger.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request.String(), limit.String(), i.name)
 	return nil
 }
 
 // SetCPU sets the CPU of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetCPU(request resource.Quantity) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
-	logrus.Debugf("Set cpu to '%s' in instance '%s'", request.String(), i.name)
+	i.Logger.Debugf("Set cpu to '%s' in instance '%s'", request.String(), i.name)
 	return nil
 }
 
 // SetEnvironmentVariable sets the given environment variable in the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetEnvironmentVariable(key, value string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingEnvNotAllowed.WithParams(i.state.String())
 	}
-	if i.state == Preparing {
+	if i.state == StatePreparing {
 		err := i.builderFactory.SetEnvVar(key, value)
 		if err != nil {
 			return err
 		}
-	} else if i.state == Committed {
+	} else if i.state == StateCommitted {
 		i.env[key] = value
 	}
 	i.Logger.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
@@ -772,18 +785,17 @@ func (i *Instance) GetIP(ctx context.Context) (string, error) {
 
 	// Update i.kubernetesService for future reference
 	i.kubernetesService = svc
-
 	return ip, nil
 }
 
 // GetFileBytes returns the content of the given file
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) GetFileBytes(ctx context.Context, file string) ([]byte, error) {
-	if !i.IsInState(Preparing, Committed, Started) {
+	if !i.IsInState(StatePreparing, StateCommitted, StateStarted) {
 		return nil, ErrGettingFileNotAllowed.WithParams(i.state.String())
 	}
 
-	if i.state != Started {
+	if i.state != StateStarted {
 		bytes, err := i.builderFactory.ReadFileFromBuilder(file)
 		if err != nil {
 			return nil, ErrGettingFile.WithParams(file, i.name).Wrap(err)
@@ -801,7 +813,7 @@ func (i *Instance) GetFileBytes(ctx context.Context, file string) ([]byte, error
 }
 
 func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath string) (io.ReadCloser, error) {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return nil, ErrReadingFileNotAllowed.WithParams(i.state.String())
 	}
 
@@ -817,7 +829,7 @@ func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath str
 // AddPolicyRule adds a policy rule to the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingPolicyRuleNotAllowed.WithParams(i.state.String())
 	}
 	i.policyRules = append(i.policyRules, rule)
@@ -826,7 +838,7 @@ func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 
 // checkStateForProbe checks if the current state is allowed for setting a probe
 func (i *Instance) checkStateForProbe() error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingProbeNotAllowed.WithParams(i.state.String())
 	}
 	return nil
@@ -875,7 +887,7 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddSidecar(sidecar *Instance) error {
 
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingSidecarNotAllowed.WithParams(i.state.String())
 	}
 	if sidecar == nil {
@@ -884,7 +896,7 @@ func (i *Instance) AddSidecar(sidecar *Instance) error {
 	if sidecar == i {
 		return ErrSidecarCannotBeSameInstance
 	}
-	if sidecar.state != Committed {
+	if sidecar.state != StateCommitted {
 		return ErrSidecarNotCommitted.WithParams(sidecar.name)
 	}
 	if i.isSidecar {
@@ -1047,7 +1059,7 @@ func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) SetPrivileged(privileged bool) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
@@ -1058,7 +1070,7 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 // AddCapability adds a capability to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddCapability(capability string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
@@ -1069,7 +1081,7 @@ func (i *Instance) AddCapability(capability string) error {
 // AddCapabilities adds multiple capabilities to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
 func (i *Instance) AddCapabilities(capabilities []string) error {
-	if !i.IsInState(Preparing, Committed) {
+	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(i.state.String())
 	}
 	for _, capability := range capabilities {
@@ -1092,22 +1104,23 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait(ctx context.Context) error {
-	if !i.IsInState(Committed, Stopped) {
+	if !i.IsInState(StateCommitted, StateStopped) {
 		return ErrStartingNotAllowed.WithParams(i.state.String())
 	}
-	if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
-		if !sidecar.IsInState(Committed, Stopped) {
+	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
+		if !sidecar.IsInState(StateCommitted, StateStopped) {
 			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.name, sidecar.state.String())
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	if i.isSidecar {
 		return ErrStartingSidecarNotAllowed
 	}
 
-	if i.state == Committed {
+	if i.state == StateCommitted {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
 			if err := i.addOtelCollectorSidecar(ctx); err != nil {
@@ -1131,19 +1144,18 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 		if err := i.deployResources(ctx); err != nil {
 			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		if err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
+		if err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 			return sidecar.deployResources(ctx)
 		}); err != nil {
 			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
-	err := i.deployPod(ctx)
-	if err != nil {
+	if err := i.deployPod(ctx); err != nil {
 		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
 	}
-	i.state = Started
-	setStateForSidecars(i.sidecars, Started)
+	i.state = StateStarted
+	setStateForSidecars(i.sidecars, StateStarted)
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -1156,18 +1168,16 @@ func (i *Instance) Start(ctx context.Context) error {
 		return err
 	}
 
-	err := i.WaitInstanceIsRunning(ctx)
-	if err != nil {
+	if err := i.WaitInstanceIsRunning(ctx); err != nil {
 		return ErrWaitingForInstanceRunning.WithParams(i.k8sName).Wrap(err)
 	}
-
 	return nil
 }
 
 // IsRunning returns true if the instance is running
 // This function can only be called in the state 'Started'
 func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
-	if !i.IsInState(Started, Stopped) {
+	if !i.IsInState(StateStarted, StateStopped) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
 
@@ -1177,10 +1187,9 @@ func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
 // WaitInstanceIsRunning waits until the instance is running
 // This function can only be called in the state 'Started'
 func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrWaitingForInstanceNotAllowed.WithParams(i.state.String())
 	}
-	tick := time.NewTicker(1 * time.Second)
 
 	for {
 		running, err := i.IsRunning(ctx)
@@ -1193,8 +1202,9 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 
 		select {
 		case <-ctx.Done():
-			return ErrWaitingForInstanceTimeout.WithParams(i.k8sName).Wrap(ctx.Err())
-		case <-tick.C:
+			return ErrWaitingForInstanceTimeout.
+				WithParams(i.k8sName).Wrap(ctx.Err())
+		case <-time.After(waitForInstanceRetry):
 			continue
 		}
 	}
@@ -1204,11 +1214,11 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 // This does not apply to executor instances
 // This function can only be called in the state 'Started'
 func (i *Instance) DisableNetwork(ctx context.Context) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrDisablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 	executorSelectorMap := map[string]string{
-		"knuu.sh/type": ExecutorInstance.String(),
+		labelType: ExecutorInstance.String(),
 	}
 
 	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
@@ -1223,7 +1233,7 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetBandwidthLimit(limit int64) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrSettingBandwidthLimitNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
@@ -1257,7 +1267,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrSettingLatencyJitterNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
@@ -1291,7 +1301,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
 func (i *Instance) SetPacketLoss(packetLoss int32) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrSettingPacketLossNotAllowed.WithParams(i.state.String())
 	}
 	if !i.BitTwister.Enabled() {
@@ -1322,7 +1332,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 // EnableNetwork enables the network of the instance
 // This function can only be called in the state 'Started'
 func (i *Instance) EnableNetwork(ctx context.Context) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
@@ -1336,7 +1346,7 @@ func (i *Instance) EnableNetwork(ctx context.Context) error {
 // NetworkIsDisabled returns true if the network of the instance is disabled
 // This function can only be called in the state 'Started'
 func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 
@@ -1346,7 +1356,7 @@ func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
 // WaitInstanceIsStopped waits until the instance is not running anymore
 // This function can only be called in the state 'Stopped'
 func (i *Instance) WaitInstanceIsStopped(ctx context.Context) error {
-	if !i.IsInState(Stopped) {
+	if !i.IsInState(StateStopped) {
 		return ErrWaitingForInstanceStoppedNotAllowed.WithParams(i.state.String())
 	}
 	for {
@@ -1366,7 +1376,7 @@ func (i *Instance) WaitInstanceIsStopped(ctx context.Context) error {
 // CAUTION: In order to keep data of the instance, you need to use AddVolume() before.
 // This function can only be called in the state 'Started'
 func (i *Instance) Stop(ctx context.Context) error {
-	if !i.IsInState(Started) {
+	if !i.IsInState(StateStarted) {
 		return ErrStoppingNotAllowed.WithParams(i.state.String())
 
 	}
@@ -1374,8 +1384,8 @@ func (i *Instance) Stop(ctx context.Context) error {
 	if err := i.destroyPod(ctx); err != nil {
 		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
 	}
-	i.state = Stopped
-	setStateForSidecars(i.sidecars, Stopped)
+	i.state = StateStopped
+	setStateForSidecars(i.sidecars, StateStopped)
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
@@ -1386,7 +1396,7 @@ func (i *Instance) Stop(ctx context.Context) error {
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) Clone() (*Instance, error) {
-	if !i.IsInState(Committed) {
+	if !i.IsInState(StateCommitted) {
 		return nil, ErrCloningNotAllowed.WithParams(i.state.String())
 	}
 
@@ -1405,7 +1415,7 @@ func (i *Instance) Clone() (*Instance, error) {
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
-	if !i.IsInState(Committed) {
+	if !i.IsInState(StateCommitted) {
 		return nil, ErrCloningNotAllowedForSidecar.WithParams(i.state.String())
 	}
 
@@ -1436,5 +1446,5 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr)
 }

@@ -53,11 +53,11 @@ func (s *TestSuite) TestGetConfigMap() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrGettingConfigmap.WithParams("error-configmap").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 			expectedCM: nil,
 		},
 	}
@@ -111,12 +111,12 @@ func (s *TestSuite) TestConfigMapExists() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedExist: false,
 			expectedErr: k8s.ErrGettingConfigmap.WithParams("error-configmap").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 	}
 
@@ -183,11 +183,11 @@ func (s *TestSuite) TestCreateConfigMap() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrCreatingConfigmap.WithParams("error-configmap").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 	}
 
@@ -243,11 +243,11 @@ func (s *TestSuite) TestDeleteConfigMap() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "configmaps",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrDeletingConfigmap.WithParams("error-configmap").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 	}
 

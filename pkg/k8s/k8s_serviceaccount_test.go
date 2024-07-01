@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -32,10 +31,10 @@ func (s *TestSuite) TestCreateServiceAccount() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "serviceaccounts",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: errors.New("internal server error"),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -81,10 +80,10 @@ func (s *TestSuite) TestDeleteServiceAccount() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "serviceaccounts",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: errors.New("internal server error"),
+			expectedErr: errInternalServerError,
 		},
 	}
 

@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,10 +49,10 @@ func (s *TestSuite) TestCreateRole() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "roles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: errors.New("internal server error"),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -99,10 +98,10 @@ func (s *TestSuite) TestDeleteRole() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "roles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: errors.New("internal server error"),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -165,10 +164,10 @@ func (s *TestSuite) TestCreateClusterRole() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrClusterRoleAlreadyExists.WithParams("error-cluster-role").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrClusterRoleAlreadyExists.WithParams("error-cluster-role").Wrap(errInternalServerError),
 		},
 	}
 
@@ -214,10 +213,10 @@ func (s *TestSuite) TestDeleteClusterRole() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: errors.New("internal server error"),
+			expectedErr: errInternalServerError,
 		},
 	}
 

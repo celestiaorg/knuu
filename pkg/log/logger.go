@@ -9,14 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const envLogLevel = "LOG_LEVEL"
+
 func DefaultLogger() *logrus.Logger {
 	logger := logrus.New()
 
 	logger.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := path.Base(f.File)
-			directory := path.Base(path.Dir(f.File))
+			var (
+				filename  = path.Base(f.File)
+				directory = path.Base(path.Dir(f.File))
+			)
 			return "", directory + "/" + filename + ":" + strconv.Itoa(f.Line)
 		},
 	})
@@ -24,14 +28,13 @@ func DefaultLogger() *logrus.Logger {
 	// Enable reporting the file and line
 	logger.SetReportCaller(true)
 
-	customLevel := os.Getenv("LOG_LEVEL")
-	if customLevel != "" {
+	if customLevel := os.Getenv(envLogLevel); customLevel != "" {
 		err := logger.Level.UnmarshalText([]byte(customLevel))
 		if err != nil {
-			logger.Warnf("Failed to parse LOG_LEVEL: %v, defaulting to INFO", err)
+			logger.Warnf("Failed to parse %s: %v, defaulting to INFO", envLogLevel, err)
 		}
 	}
-	logger.Info("LOG_LEVEL: ", logger.GetLevel())
+	logger.Infof("%s: %s", envLogLevel, logger.GetLevel())
 
 	return logger
 }

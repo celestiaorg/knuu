@@ -210,4 +210,5 @@ var (
 	ErrTsharkCollectorInvalidS3SecretKey         = errors.New("TsharkCollectorInvalidS3SecretKey", "invalid S3 secret key format for tshark collector: %s")
 	ErrTsharkCollectorS3RegionOrBucketEmpty      = errors.New("TsharkCollectorS3RegionOrBucketEmpty", "S3 region or bucket cannot be empty for tshark collector: %s, %s")
 	ErrRegexpCompile                             = errors.New("RegexpCompile", "error compiling regexp for %s")
+	ErrFailedToDeletePersistentVolumeClaim       = errors.New("FailedToDeletePersistentVolumeClaim", "failed to delete persistent volume claim")
 )
