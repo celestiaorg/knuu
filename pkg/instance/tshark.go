@@ -3,13 +3,13 @@ package instance
 import (
 	"context"
 	"fmt"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-17"
-	tsharkCollectorCPU         = "100m"
-	tsharkCollectorMemory      = "250Mi"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-20"
 	tsharkCollectorVolumePath  = "/tshark"
 	netAdminCapability         = "NET_ADMIN"
 	TsharkCaptureFileExtension = ".pcapng"
@@ -25,6 +25,11 @@ const (
 	envUploadInterval         = "UPLOAD_INTERVAL"
 	envCompressFiles          = "COMPRESS_FILES"
 	envIpFilter               = "IP_FILTER"
+)
+
+var (
+	tsharkCollectorCPU    = resource.MustParse("100m")
+	tsharkCollectorMemory = resource.MustParse("250Mi")
 )
 
 func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance, error) {
@@ -45,10 +50,18 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 	if err := tsc.SetCPU(tsharkCollectorCPU); err != nil {
 		return nil, err
 	}
-	if err := tsc.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
+	err = tsc.SetMemory(
+		tsharkCollectorMemory,
+		tsharkCollectorMemory,
+	)
+	if err != nil {
 		return nil, err
 	}
-	if err := tsc.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.VolumeSize); err != nil {
+	err = tsc.AddVolume(
+		tsharkCollectorVolumePath,
+		i.tsharkCollectorConfig.VolumeSize,
+	)
+	if err != nil {
 		return nil, err
 	}
 
