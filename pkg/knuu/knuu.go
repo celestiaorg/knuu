@@ -49,6 +49,8 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
+	opts.TestScope = k8s.SanitizeName(opts.TestScope)
+
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
