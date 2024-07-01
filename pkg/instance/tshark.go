@@ -9,7 +9,7 @@ import (
 
 const (
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-17"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-20"
 	tsharkCollectorVolumePath  = "/tshark"
 	netAdminCapability         = "NET_ADMIN"
 	TsharkCaptureFileExtension = ".pcapng"
