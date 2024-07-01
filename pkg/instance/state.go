@@ -30,3 +30,12 @@ func (i *Instance) IsInState(states ...InstanceState) bool {
 	}
 	return false
 }
+
+func (i *Instance) SetState(state InstanceState) {
+	i.state = state
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+}
+
+func (i *Instance) IsState(state InstanceState) bool {
+	return i.state == state
+}
