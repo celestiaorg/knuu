@@ -36,22 +36,20 @@ func (c *Client) DeleteNamespace(ctx context.Context, name string) error {
 }
 
 func (c *Client) GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error) {
-	namespace, err := c.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, ErrGettingNamespace.WithParams(name).Wrap(err)
-	}
-	return namespace, nil
+	return c.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 }
 
 func (c *Client) NamespaceExists(ctx context.Context, name string) bool {
 	_, err := c.GetNamespace(ctx, name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
-			return false
-		}
-		c.logger.Errorf("Error getting namespace %s, err: %v", name, err)
+	if err == nil {
+		return true
+	}
+
+	if errors.IsNotFound(err) {
+		c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
 		return false
 	}
-	return true
+
+	c.logger.Errorf("Error getting namespace %s, err: %v", name, err)
+	return false
 }
