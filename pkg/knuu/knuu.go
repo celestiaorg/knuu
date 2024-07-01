@@ -39,13 +39,14 @@ type Knuu struct {
 }
 
 type Options struct {
-	K8sClient    k8s.KubeManager
-	MinioClient  *minio.Minio
-	ImageBuilder builder.Builder
-	TestScope    string
-	ProxyEnabled bool
-	Timeout      time.Duration
-	Logger       *logrus.Logger
+	K8sClient       k8s.KubeManager
+	MinioClient     *minio.Minio
+	ImageBuilder    builder.Builder
+	TestScope       string
+	ProxyEnabled    bool
+	Timeout         time.Duration
+	Logger          *logrus.Logger
+	EnableChaosMesh bool
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
@@ -68,9 +69,16 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 		},
 		timeout: opts.Timeout,
 	}
+	k.SetChaosMeshEnabled(opts.EnableChaosMesh)
 
 	if err := setDefaults(ctx, k); err != nil {
 		return nil, err
+	}
+
+	if k.IsChaosMeshEnabled() {
+		if err := checkChaosMeshAvailability(ctx, k); err != nil {
+			return nil, err
+		}
 	}
 
 	if opts.ProxyEnabled {
@@ -244,5 +252,16 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 		return ErrCannotGetTraefikEndpoint.Wrap(err)
 	}
 	k.Logger.Debugf("Proxy endpoint: %s", endpoint)
+	return nil
+}
+
+func checkChaosMeshAvailability(ctx context.Context, k *Knuu) error {
+	isAvailable, err := instance.IsChaosMeshAPIAvailable(ctx, k.K8sClient)
+	if err != nil {
+		return err
+	}
+	if !isAvailable {
+		return ErrChaosMeshAPINotAvailable
+	}
 	return nil
 }

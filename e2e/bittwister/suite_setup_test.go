@@ -16,12 +16,11 @@ type Suite struct {
 }
 
 func (s *Suite) SetupSuite() {
-	ctx := context.Background()
-
-	var err error
-	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		ProxyEnabled: true,
-	})
+	var (
+		err error
+		ctx = context.Background()
+	)
+	s.Knuu, err = knuu.New(ctx, knuu.Options{ProxyEnabled: true})
 	s.Require().NoError(err)
 	s.T().Logf("Scope: %s", s.Knuu.Scope())
 	s.Knuu.HandleStopSignal(ctx)
