@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	DefaultOtelCollectorVersion = "0.83.0"
 	DefaultOtelOtlpPort         = 8888
 	DefaultOtelMetricsPort      = 9090
+	DefaultImage                = "otel/opentelemetry-collector-contrib:%s"
+	DefaultOtelCollectorVersion = "0.83.0"
 
 	otelAgentName = "otel-agent"
 	// %s will be replaced with the otelCollectorVersion
-	otelAgentImage                 = "otel/opentelemetry-collector-contrib:%s"
 	otelAgentCPU                   = "100m"
 	otelAgentMemory                = "100Mi"
 	otelAgentMemoryLimit           = "200Mi"
@@ -31,6 +31,7 @@ const (
 type Obsy struct {
 	instance   *instance.Instance
 	obsyConfig *ObsyConfig
+	image      string
 }
 
 var _ instance.SidecarManager = (*Obsy)(nil)
@@ -77,6 +78,7 @@ func New() *Obsy {
 		obsyConfig: &ObsyConfig{
 			otelCollectorVersion: DefaultOtelCollectorVersion,
 		},
+		image: fmt.Sprintf(DefaultImage, DefaultOtelCollectorVersion),
 	}
 }
 
@@ -88,7 +90,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 	}
 	o.instance.SetIsSidecar(true)
 
-	err = o.instance.SetImage(ctx, fmt.Sprintf(otelAgentImage, o.obsyConfig.otelCollectorVersion))
+	err = o.instance.SetImage(ctx, o.image)
 	if err != nil {
 		return ErrSettingOtelAgentImage.Wrap(err)
 	}

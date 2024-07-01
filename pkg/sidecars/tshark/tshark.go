@@ -10,8 +10,9 @@ import (
 )
 
 const (
+	DefaultImage = "ghcr.io/celestiaorg/tshark-s3:pr-11"
+
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-11"
 	tsharkCollectorCPU         = "100m"
 	tsharkCollectorMemory      = "250Mi"
 	tsharkCollectorVolumePath  = "/tshark"
@@ -32,6 +33,7 @@ const (
 // Tshark represents the configuration for the tshark collector
 type Tshark struct {
 	instance *instance.Instance
+	Image    string
 	// VolumeSize is the size of the volume to use for the tshark collector
 	VolumeSize string
 	// S3AccessKey is the access key to use for the s3 server
@@ -62,6 +64,10 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 		return err
 	}
 
+	if t.Image == "" {
+		t.Image = DefaultImage
+	}
+
 	var err error
 	t.instance, err = instance.New(tsharkCollectorName, sysDeps)
 	if err != nil {
@@ -69,7 +75,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 	}
 	t.instance.SetIsSidecar(true)
 
-	if err := t.instance.SetImage(ctx, tsharkCollectorImage); err != nil {
+	if err := t.instance.SetImage(ctx, t.Image); err != nil {
 		return ErrSettingTsharkCollectorImage.Wrap(err)
 	}
 

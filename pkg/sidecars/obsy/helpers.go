@@ -4,6 +4,10 @@ import (
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
+func (o *Obsy) SetImage(image string) {
+	o.image = image
+}
+
 // SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
 func (o *Obsy) SetOtelCollectorVersion(version string) error {
 	if err := o.validateStateForObsy("OpenTelemetry collector version"); err != nil {
