@@ -41,12 +41,13 @@ const (
 )
 
 type Traefik struct {
-	K8s      k8s.KubeManager
-	endpoint string
+	K8sClient k8s.KubeManager
+	Logger    *logrus.Logger
+	endpoint  string
 }
 
 func (t *Traefik) Deploy(ctx context.Context) error {
-	if t.K8s == nil {
+	if t.K8sClient == nil {
 		return ErrTraefikClientNotInitialized
 	}
 
@@ -55,7 +56,7 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := t.K8s.CreateServiceAccount(ctx, serviceAccountName, nil); err != nil {
+	if err := t.K8sClient.CreateServiceAccount(ctx, serviceAccountName, nil); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
@@ -65,7 +66,7 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 	}
 
 	// Define and create a ClusterRole for Traefik
-	err = t.K8s.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
+	err = t.K8sClient.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{""}, // Core group
 			Resources: []string{"pods", "endpoints", "secrets", "services"},
@@ -91,7 +92,7 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 		return ErrTraefikRoleCreationFailed.Wrap(err)
 	}
 
-	if err := t.K8s.CreateClusterRoleBinding(ctx, clusterRoleName, nil, clusterRoleName, serviceAccountName); err != nil {
+	if err := t.K8sClient.CreateClusterRoleBinding(ctx, clusterRoleName, nil, clusterRoleName, serviceAccountName); err != nil {
 		return ErrTraefikRoleBindingCreationFailed.Wrap(err)
 	}
 
@@ -116,7 +117,7 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 	traefikDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
-			Namespace: t.K8s.Namespace(),
+			Namespace: t.K8sClient.Namespace(),
 			Labels:    map[string]string{appLabel: appLabelValue},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -161,12 +162,12 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 			},
 		},
 	}
-	_, err = t.K8s.Clientset().AppsV1().Deployments(t.K8s.Namespace()).Create(ctx, traefikDeployment, metav1.CreateOptions{})
+	_, err = t.K8sClient.Clientset().AppsV1().Deployments(t.K8sClient.Namespace()).Create(ctx, traefikDeployment, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikDeploymentCreationFailed.Wrap(err)
 	}
 
-	if err := t.K8s.WaitForDeployment(ctx, deploymentName); err != nil {
+	if err := t.K8sClient.WaitForDeployment(ctx, deploymentName); err != nil {
 		return err
 	}
 
@@ -174,7 +175,7 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	if err := t.K8s.WaitForService(ctx, traefikServiceName); err != nil {
+	if err := t.K8sClient.WaitForService(ctx, traefikServiceName); err != nil {
 		return err
 	}
 
@@ -182,11 +183,11 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 }
 
 func (t *Traefik) IP(ctx context.Context) (string, error) {
-	if t.K8s == nil {
+	if t.K8sClient == nil {
 		return "", ErrTraefikClientNotInitialized
 	}
 
-	return t.K8s.GetServiceIP(ctx, traefikServiceName)
+	return t.K8sClient.GetServiceIP(ctx, traefikServiceName)
 }
 
 func (t *Traefik) URL(ctx context.Context, prefix string) (string, error) {
@@ -200,10 +201,10 @@ func (t *Traefik) URL(ctx context.Context, prefix string) (string, error) {
 }
 
 func (t *Traefik) Endpoint(ctx context.Context) (string, error) {
-	if t.K8s == nil {
+	if t.K8sClient == nil {
 		return "", ErrTraefikClientNotInitialized
 	}
-	return t.K8s.GetServiceEndpoint(ctx, traefikServiceName)
+	return t.K8sClient.GetServiceEndpoint(ctx, traefikServiceName)
 }
 
 func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portTCP int) error {
@@ -222,12 +223,12 @@ func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portT
 
 // TODO: need to update the k8s pkg to handle service creation in more custom way
 func (t *Traefik) createService(ctx context.Context) error {
-	sCli := t.K8s.Clientset().CoreV1().Services(t.K8s.Namespace())
+	sCli := t.K8sClient.Clientset().CoreV1().Services(t.K8sClient.Namespace())
 
 	srv := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      traefikServiceName,
-			Namespace: t.K8s.Namespace(),
+			Namespace: t.K8sClient.Namespace(),
 			Labels:    map[string]string{appLabel: appLabelValue},
 		},
 		Spec: v1.ServiceSpec{
@@ -254,7 +255,7 @@ func (t *Traefik) createService(ctx context.Context) error {
 		return ErrTraefikFailedToCreateService.Wrap(err)
 	}
 
-	logrus.Debugf("Service %s created successfully.", traefikServiceName)
+	t.Logger.Debugf("Service %s created successfully.", traefikServiceName)
 	return nil
 }
 
@@ -265,7 +266,7 @@ func (t *Traefik) createMiddleware(ctx context.Context, serviceName, middlewareN
 			"kind":       "Middleware",
 			"metadata": map[string]interface{}{
 				"name":      middlewareName,
-				"namespace": t.K8s.Namespace(),
+				"namespace": t.K8sClient.Namespace(),
 			},
 			"spec": map[string]interface{}{
 				"stripPrefix": map[string]interface{}{
@@ -281,7 +282,7 @@ func (t *Traefik) createMiddleware(ctx context.Context, serviceName, middlewareN
 		Resource: "middlewares",
 	}
 
-	_, err := t.K8s.DynamicClient().Resource(middlewareResource).Namespace(t.K8s.Namespace()).Create(ctx, middleware, metav1.CreateOptions{})
+	_, err := t.K8sClient.DynamicClient().Resource(middlewareResource).Namespace(t.K8sClient.Namespace()).Create(ctx, middleware, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikMiddlewareCreationFailed.Wrap(err)
 	}
@@ -311,7 +312,7 @@ func (t *Traefik) createIngressRoute(
 			"kind":       "IngressRoute",
 			"metadata": map[string]interface{}{
 				"name":      ingressRouteName,
-				"namespace": t.K8s.Namespace(),
+				"namespace": t.K8sClient.Namespace(),
 			},
 			"spec": map[string]interface{}{
 				"entryPoints": []string{"web"},
@@ -336,7 +337,7 @@ func (t *Traefik) createIngressRoute(
 		},
 	}
 
-	_, err = t.K8s.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8s.Namespace()).Create(ctx, ingressRoute, metav1.CreateOptions{})
+	_, err = t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).Create(ctx, ingressRoute, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
 	}
@@ -346,9 +347,9 @@ func (t *Traefik) createIngressRoute(
 
 // IsTraefikAPIAvailable checks if the Traefik API is available in the cluster.
 func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
-	apiResourceList, err := t.K8s.Clientset().Discovery().ServerResourcesForGroupVersion(traefikAPIGroupVersion)
+	apiResourceList, err := t.K8sClient.Clientset().Discovery().ServerResourcesForGroupVersion(traefikAPIGroupVersion)
 	if err != nil {
-		logrus.Errorf("Failed to discover Traefik API resources: %v", err)
+		t.Logger.Errorf("Failed to discover Traefik API resources: %v", err)
 		return false
 	}
 
@@ -367,6 +368,6 @@ func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
 		return true
 	}
 
-	logrus.Warnf("Missing Traefik API resources: %v", requiredResources)
+	t.Logger.Warnf("Missing Traefik API resources: %v", requiredResources)
 	return false
 }

@@ -230,7 +230,8 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 func setupProxy(ctx context.Context, k *Knuu) error {
 	k.Proxy = &traefik.Traefik{
-		K8s: k.K8sClient,
+		K8sClient: k.K8sClient,
+		Logger:    k.Logger,
 	}
 	if !k.Proxy.IsTraefikAPIAvailable(ctx) {
 		return ErrTraefikAPINotAvailable
