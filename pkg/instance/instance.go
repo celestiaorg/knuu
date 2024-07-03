@@ -1089,6 +1089,23 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 	return nil
 }
 
+// StartWithCallback starts the instance asynchronously and calls a callback function when the instance is running
+// This function can only be called in the state 'Committed' or 'Stopped'
+func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error {
+	if err := i.StartAsync(ctx); err != nil {
+		return err
+	}
+	go func() {
+		err := i.WaitInstanceIsRunning(ctx)
+		if err != nil {
+			i.Logger.Errorf("Error waiting for instance '%s' to be running: %s", i.k8sName, err)
+			return
+		}
+		callback()
+	}()
+	return nil
+}
+
 // StartWithoutWait starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithoutWait(ctx context.Context) error {
