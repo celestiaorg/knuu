@@ -39,7 +39,7 @@ func (i *InstancePool) Instances() []*Instance {
 // StartWithoutWait starts all instances in the instance pool without waiting for them to be running
 func (i *InstancePool) StartWithoutWait(ctx context.Context) error {
 	for _, instance := range i.instances {
-		err := instance.StartWithoutWait(ctx)
+		err := instance.StartAsync(ctx)
 		if err != nil {
 			return err
 		}

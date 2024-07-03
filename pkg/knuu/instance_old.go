@@ -266,7 +266,7 @@ func (i *Instance) StartAsync() error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) StartWithoutWait() error {
-	return i.Instance.StartWithoutWait(context.Background())
+	return i.Instance.StartAsync(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
