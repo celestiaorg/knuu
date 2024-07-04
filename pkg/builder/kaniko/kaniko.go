@@ -62,10 +62,6 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 		return "", ErrGettingContainerLogs.Wrap(err)
 	}
 
-	if err := k.cleanup(ctx, kJob); err != nil {
-		return "", ErrCleaningUp.Wrap(err)
-	}
-
 	if kJob.Status.Succeeded == 0 {
 		return logs, ErrBuildFailed
 	}
@@ -135,34 +131,6 @@ func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error)
 	}
 
 	return string(logs), nil
-}
-
-func (k *Kaniko) cleanup(ctx context.Context, job *batchv1.Job) error {
-	err := k.K8sClient.Clientset().BatchV1().Jobs(k.K8sClient.Namespace()).
-		Delete(ctx, job.Name, metav1.DeleteOptions{
-			PropagationPolicy: &[]metav1.DeletionPropagation{metav1.DeletePropagationBackground}[0],
-		})
-	if err != nil {
-		return ErrDeletingJob.Wrap(err)
-	}
-
-	// Delete the associated Pods
-	err = k.K8sClient.Clientset().CoreV1().Pods(k.K8sClient.Namespace()).
-		DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("job-name=%s", job.Name),
-		})
-	if err != nil {
-		return ErrDeletingPods.Wrap(err)
-	}
-
-	// Delete the content pushed to Minio
-	if k.ContentName != "" {
-		if err := k.MinioClient.Delete(ctx, k.ContentName, MinioBucketName); err != nil {
-			return ErrDeletingMinioContent.Wrap(err)
-		}
-	}
-
-	return nil
 }
 
 func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*batchv1.Job, error) {
