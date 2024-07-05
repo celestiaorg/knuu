@@ -9,12 +9,13 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
 type KubeManager interface {
-	Clientset() *kubernetes.Clientset
+	Clientset() kubernetes.Interface
 	CreateClusterRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateClusterRoleBinding(ctx context.Context, name string, labels map[string]string, clusterRole, serviceAccount string) error
 	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
@@ -44,6 +45,7 @@ type KubeManager interface {
 	DeleteService(ctx context.Context, name string) error
 	DeleteServiceAccount(ctx context.Context, name string) error
 	DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*corev1.Pod, error)
+	DiscoveryClient() discovery.DiscoveryInterface
 	DynamicClient() dynamic.Interface
 	GetConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error)
 	GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error)
@@ -59,7 +61,7 @@ type KubeManager interface {
 	NamespaceExists(ctx context.Context, name string) bool
 	NetworkPolicyExists(ctx context.Context, name string) bool
 	NewFile(source, dest string) *File
-	NewVolume(path, size string, owner int64) *Volume
+	NewVolume(path string, size resource.Quantity, owner int64) *Volume
 	PatchService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
 	PortForwardPod(ctx context.Context, podName string, localPort, remotePort int) error
 	ReplicaSetExists(ctx context.Context, name string) (bool, error)
@@ -68,9 +70,6 @@ type KubeManager interface {
 	ReplaceReplicaSet(ctx context.Context, ReplicaSetConfig ReplicaSetConfig) (*appv1.ReplicaSet, error)
 	ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error)
 	RunCommandInPod(ctx context.Context, podName, containerName string, cmd []string) (string, error)
-	getPersistentVolumeClaim(ctx context.Context, name string) (*corev1.PersistentVolumeClaim, error)
-	getPod(ctx context.Context, name string) (*corev1.Pod, error)
-	getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error)
 	ConfigMapExists(ctx context.Context, name string) (bool, error)
 	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	WaitForDeployment(ctx context.Context, name string) error

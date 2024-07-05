@@ -26,7 +26,7 @@ type mockK8s struct {
 	mock.Mock
 }
 
-func (m *mockK8s) Clientset() *kubernetes.Clientset {
+func (m *mockK8s) Clientset() kubernetes.Interface {
 	return &kubernetes.Clientset{}
 }
 
@@ -59,30 +59,49 @@ func TestNew(t *testing.T) {
 	defer cancel()
 
 	tt := []struct {
-		name         string
-		options      []Option
-		expectError  bool
-		validateFunc func(*testing.T, *Knuu)
+		name          string
+		options       Options
+		expectedError error
+		validateFunc  func(*testing.T, *Knuu)
 	}{
 		{
-			name:        "Default initialization",
-			options:     nil,
-			expectError: false,
+			name:          "Default initialization",
+			options:       Options{},
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
-				assert.NotNil(t, k.K8sCli)
-				assert.NotNil(t, k.MinioCli)
+				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
+				assert.NotEmpty(t, k.TestScope)
 				assert.Equal(t, defaultTimeout, k.timeout)
 			},
 		},
 		{
-			name: "With custom Logger",
-			options: []Option{
-				WithLogger(&logrus.Logger{}),
+			name:          "With Minio client without setting k8sClient",
+			options:       Options{MinioClient: &minio.Minio{}},
+			expectedError: ErrK8sClientNotSet,
+		},
+		{
+			name: "With Minio client and K8sClient",
+			options: Options{
+				MinioClient: &minio.Minio{},
+				K8sClient:   &mockK8s{},
 			},
-			expectError: false,
+			expectedError: nil,
+			validateFunc: func(t *testing.T, k *Knuu) {
+				assert.NotNil(t, k)
+				assert.NotNil(t, k.MinioClient)
+				assert.NotNil(t, k.K8sClient)
+			},
+		},
+		{
+			name: "With custom Logger",
+			options: Options{
+				TestScope: "test",
+				Logger:    &logrus.Logger{},
+			},
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.Logger)
@@ -90,60 +109,108 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "With custom Timeout",
-			options: []Option{
-				WithTimeout(30 * time.Minute),
+			options: Options{
+				TestScope: "test",
+				Timeout:   30 * time.Minute,
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.Equal(t, 30*time.Minute, k.timeout)
 			},
 		},
 		{
-			name: "With custom K8s client",
-			options: []Option{
-				WithK8s(&mockK8s{}),
-			},
-			expectError: false,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.NotNil(t, k.K8sCli)
-			},
-		},
-		{
-			name: "With custom Minio client",
-			options: []Option{
-				WithMinio(&minio.Minio{}),
-			},
-			expectError: false,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.NotNil(t, k.MinioCli)
-			},
-		},
-		{
 			name: "With custom Image Builder",
-			options: []Option{
-				WithImageBuilder(&kaniko.Kaniko{}),
+			options: Options{
+				TestScope:    "test",
+				ImageBuilder: &kaniko.Kaniko{},
 			},
-			expectError: false,
+			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
 				assert.NotNil(t, k.ImageBuilder)
+			},
+		},
+		{
+			name: "With K8sClient but without TestScope",
+			options: Options{
+				K8sClient: &mockK8s{},
+			},
+			expectedError: nil,
+			validateFunc: func(t *testing.T, k *Knuu) {
+				assert.NotNil(t, k)
+				assert.Equal(t, "test", k.TestScope)
 			},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			k, err := New(ctx, tc.options...)
-			if tc.expectError {
+			k, err := New(ctx, tc.options)
+			if tc.expectedError != nil {
 				assert.Error(t, err)
+				assert.ErrorIs(t, err, tc.expectedError)
 				return
 			}
 
 			assert.NoError(t, err)
 			tc.validateFunc(t, k)
+		})
+	}
+}
+
+func TestValidateOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     Options
+		expectedErr error
+	}{
+		{
+			name: "MinioClient set without K8sClient",
+			options: Options{
+				MinioClient: &minio.Minio{},
+			},
+			expectedErr: ErrK8sClientNotSet,
+		},
+		{
+			name: "Both MinioClient and K8sClient set",
+			options: Options{
+				MinioClient: &minio.Minio{},
+				K8sClient:   &mockK8s{},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "TestScope and K8sClient not set",
+			options: Options{
+				TestScope: "",
+				K8sClient: nil,
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "TestScope does not match K8sClient namespace",
+			options: Options{
+				TestScope: "another_scope",
+				K8sClient: &mockK8s{},
+			},
+			expectedErr: ErrTestScopeMistMatch.WithParams("another_scope", "test"),
+		},
+		{
+			name:        "No options set",
+			options:     Options{},
+			expectedErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOptions(tt.options)
+			if tt.expectedErr != nil {
+				assert.ErrorIs(t, err, tt.expectedErr)
+				return
+			}
+			assert.NoError(t, err)
 		})
 	}
 }

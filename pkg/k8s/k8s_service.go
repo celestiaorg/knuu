@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -37,7 +36,7 @@ func (c *Client) CreateService(
 	if err != nil {
 		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("Service %s created in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s created in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
@@ -59,7 +58,7 @@ func (c *Client) PatchService(
 		return nil, ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s patched in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s patched in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
@@ -74,7 +73,7 @@ func (c *Client) DeleteService(ctx context.Context, name string) error {
 		return ErrDeletingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s deleted in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 
@@ -146,36 +145,36 @@ func prepareService(
 }
 
 func (c *Client) WaitForService(ctx context.Context, name string) error {
-	ticker := time.NewTicker(waitRetry)
-	defer ticker.Stop()
-
+	retryInterval := time.Duration(0)
 	for {
 		select {
 		case <-ctx.Done():
 			return ErrTimeoutWaitingForServiceReady
-
-		case <-ticker.C:
-			ready, err := c.isServiceReady(ctx, name)
-			if err != nil {
-				return ErrCheckingServiceReady.WithParams(name).Wrap(err)
-			}
-			if !ready {
-				continue
-			}
-
-			// Check if service is reachable
-			endpoint, err := c.GetServiceEndpoint(ctx, name)
-			if err != nil {
-				return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
-			}
-
-			if err := checkServiceConnectivity(endpoint); err != nil {
-				continue
-			}
-
-			// Service is reachable
-			return nil
+		case <-time.After(retryInterval):
+			// Reset to default interval
+			retryInterval = waitRetry
 		}
+
+		ready, err := c.isServiceReady(ctx, name)
+		if err != nil {
+			return ErrCheckingServiceReady.WithParams(name).Wrap(err)
+		}
+		if !ready {
+			continue
+		}
+
+		// Check if service is reachable
+		endpoint, err := c.GetServiceEndpoint(ctx, name)
+		if err != nil {
+			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
+		}
+
+		if err := checkServiceConnectivity(endpoint); err != nil {
+			continue
+		}
+
+		// Service is reachable
+		return nil
 	}
 }
 
@@ -206,7 +205,7 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 		// Use the first node for simplicity, you might need to handle multiple nodes
 		var nodeIP string
 		for _, address := range nodes.Items[0].Status.Addresses {
-			if address.Type == "ExternalIP" {
+			if address.Type == v1.NodeExternalIP {
 				nodeIP = address.Address
 				break
 			}
@@ -231,6 +230,7 @@ func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) 
 	if err != nil {
 		return false, ErrGettingService.WithParams(name).Wrap(err)
 	}
+
 	switch service.Spec.Type {
 	case v1.ServiceTypeLoadBalancer:
 		return len(service.Status.LoadBalancer.Ingress) > 0, nil

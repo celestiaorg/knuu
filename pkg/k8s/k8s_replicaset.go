@@ -8,8 +8,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/sirupsen/logrus"
 )
 
 type ReplicaSetConfig struct {
@@ -24,7 +22,7 @@ type ReplicaSetConfig struct {
 func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
 	// Prepare the pod
 	rsConfig.Namespace = c.namespace
-	rs, err := prepareReplicaSet(rsConfig, init)
+	rs, err := c.prepareReplicaSet(rsConfig, init)
 	if err != nil {
 		return nil, ErrPreparingPod.Wrap(err)
 	}
@@ -38,7 +36,7 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
-	logrus.Debugf("Replacing ReplicaSet %s", ReplicaSetConfig.Name)
+	c.logger.Debugf("Replacing ReplicaSet %s", ReplicaSetConfig.Name)
 
 	// Delete the existing ReplicaSet (if any)
 	if err := c.DeleteReplicaSetWithGracePeriod(ctx, ReplicaSetConfig.Name, gracePeriod); err != nil {
@@ -143,8 +141,8 @@ func (c *Client) getReplicaSet(ctx context.Context, name string) (*appv1.Replica
 }
 
 // preparePod prepares a pod configuration.
-func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
-	podSpec, err := preparePodSpec(rsConf.PodConfig, init)
+func (c *Client) prepareReplicaSet(rsConf ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
+	podSpec, err := c.preparePodSpec(rsConf.PodConfig, init)
 	if err != nil {
 		return nil, ErrPreparingPodSpec.Wrap(err)
 	}
@@ -170,7 +168,7 @@ func prepareReplicaSet(rsConf ReplicaSetConfig, init bool) (*appv1.ReplicaSet, e
 		},
 	}
 
-	logrus.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
+	c.logger.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
 	return rs, nil
 }
 

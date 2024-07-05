@@ -2,23 +2,22 @@ package instance
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/celestiaorg/bittwister/sdk"
-
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -69,6 +68,37 @@ type ObsyConfig struct {
 	prometheusRemoteWriteExporterEndpoint string
 }
 
+// TsharkCollectorConfig represents the configuration for the tshark collector
+type TsharkCollectorConfig struct {
+	// VolumeSize is the size of the volume to use for the tshark collector
+	VolumeSize resource.Quantity
+	// S3AccessKey is the access key to use for the s3 server
+	S3AccessKey string
+	// S3SecretKey is the secret key to use for the s3 server
+	S3SecretKey string
+	// S3Region is the region of the s3 server
+	S3Region string
+	// S3Bucket is the bucket to use for the s3 server
+	S3Bucket string
+	// CreateBucket is the flag to create the bucket if it does not exist
+	CreateBucket bool
+	// S3KeyPrefix is the key prefix to use for the s3 server
+	S3KeyPrefix string
+	// S3Endpoint is the endpoint of the s3 server
+	S3Endpoint string
+
+	// UploadInterval is the interval at which the tshark collector will upload the pcap file to the s3 server
+	UploadInterval time.Duration
+
+	// IpFilter is the ip filter to use for the tshark collector
+	// it trace the incoming/outgoing traffic from/to the specific ip
+	// If not set, it will trace all the traffic
+	IpFilter string
+
+	// CompressFiles is the flag to compress the pcap files before pushing them to s3
+	CompressFiles bool
+}
+
 // SecurityContext represents the security settings for a container
 type SecurityContext struct {
 	// Privileged indicates whether the container should be run in privileged mode
@@ -81,35 +111,36 @@ type SecurityContext struct {
 // Instance represents a instance
 type Instance struct {
 	system.SystemDependencies
-	name                 string
-	imageName            string
-	k8sName              string
-	state                InstanceState
-	instanceType         InstanceType
-	kubernetesService    *v1.Service
-	builderFactory       *container.BuilderFactory
-	kubernetesReplicaSet *appv1.ReplicaSet
-	portsTCP             []int
-	portsUDP             []int
-	command              []string
-	args                 []string
-	env                  map[string]string
-	volumes              []*k8s.Volume
-	memoryRequest        string
-	memoryLimit          string
-	cpuRequest           string
-	policyRules          []rbacv1.PolicyRule
-	livenessProbe        *v1.Probe
-	readinessProbe       *v1.Probe
-	startupProbe         *v1.Probe
-	files                []*k8s.File
-	isSidecar            bool
-	parentInstance       *Instance
-	sidecars             []*Instance
-	fsGroup              int64
-	obsyConfig           *ObsyConfig
-	securityContext      *SecurityContext
-	BitTwister           *btConfig
+	name                  string
+	imageName             string
+	k8sName               string
+	state                 InstanceState
+	instanceType          InstanceType
+	kubernetesService     *v1.Service
+	builderFactory        *container.BuilderFactory
+	kubernetesReplicaSet  *appv1.ReplicaSet
+	portsTCP              []int
+	portsUDP              []int
+	command               []string
+	args                  []string
+	env                   map[string]string
+	volumes               []*k8s.Volume
+	memoryRequest         resource.Quantity
+	memoryLimit           resource.Quantity
+	cpuRequest            resource.Quantity
+	policyRules           []rbacv1.PolicyRule
+	livenessProbe         *v1.Probe
+	readinessProbe        *v1.Probe
+	startupProbe          *v1.Probe
+	files                 []*k8s.File
+	isSidecar             bool
+	parentInstance        *Instance
+	sidecars              []*Instance
+	fsGroup               int64
+	obsyConfig            *ObsyConfig
+	tsharkCollectorConfig *TsharkCollectorConfig
+	securityContext       *SecurityContext
+	BitTwister            *btConfig
 }
 
 func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
@@ -141,32 +172,33 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 
 	// Create the instance
 	return &Instance{
-		name:               name,
-		k8sName:            k8sName,
-		imageName:          "",
-		state:              None,
-		instanceType:       BasicInstance,
-		portsTCP:           make([]int, 0),
-		portsUDP:           make([]int, 0),
-		command:            make([]string, 0),
-		args:               make([]string, 0),
-		env:                make(map[string]string),
-		volumes:            make([]*k8s.Volume, 0),
-		memoryRequest:      "",
-		memoryLimit:        "",
-		cpuRequest:         "",
-		policyRules:        make([]rbacv1.PolicyRule, 0),
-		livenessProbe:      nil,
-		readinessProbe:     nil,
-		startupProbe:       nil,
-		files:              make([]*k8s.File, 0),
-		isSidecar:          false,
-		parentInstance:     nil,
-		sidecars:           make([]*Instance, 0),
-		obsyConfig:         obsyConfig,
-		securityContext:    securityContext,
-		BitTwister:         getBitTwisterDefaultConfig(),
-		SystemDependencies: sysDeps,
+		name:                  name,
+		k8sName:               k8sName,
+		imageName:             "",
+		state:                 None,
+		instanceType:          BasicInstance,
+		portsTCP:              make([]int, 0),
+		portsUDP:              make([]int, 0),
+		command:               make([]string, 0),
+		args:                  make([]string, 0),
+		env:                   make(map[string]string),
+		volumes:               make([]*k8s.Volume, 0),
+		memoryRequest:         resource.Quantity{},
+		memoryLimit:           resource.Quantity{},
+		cpuRequest:            resource.Quantity{},
+		policyRules:           make([]rbacv1.PolicyRule, 0),
+		livenessProbe:         nil,
+		readinessProbe:        nil,
+		startupProbe:          nil,
+		files:                 make([]*k8s.File, 0),
+		isSidecar:             false,
+		parentInstance:        nil,
+		sidecars:              make([]*Instance, 0),
+		obsyConfig:            obsyConfig,
+		tsharkCollectorConfig: nil,
+		securityContext:       securityContext,
+		BitTwister:            getBitTwisterDefaultConfig(),
+		SystemDependencies:    sysDeps,
 	}, nil
 }
 
@@ -186,6 +218,10 @@ func (i *Instance) DisableBitTwister() error {
 // Name returns the name of the instance
 func (i *Instance) Name() string {
 	return i.name
+}
+
+func (i *Instance) K8sName() string {
+	return i.k8sName
 }
 
 func (i *Instance) SetInstanceType(instanceType InstanceType) {
@@ -294,7 +330,7 @@ func (i *Instance) AddPortTCP(port int) error {
 		return ErrPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsTCP = append(i.portsTCP, port)
-	logrus.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
+	i.Logger.Debugf("Added TCP port '%d' to instance '%s'", port, i.name)
 	return nil
 }
 
@@ -318,20 +354,20 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 	}
 
 	// Forward the port
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, i.k8sName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, i.k8sName)
 	if err != nil {
 		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := i.K8sCli.PortForwardPod(ctx, pod.Name, localPort, port)
+		err := i.K8sClient.PortForwardPod(ctx, pod.Name, localPort, port)
 		if err == nil {
 			break
 		}
 		if attempt == maxRetries {
 			return -1, ErrForwardingPort.WithParams(maxRetries)
 		}
-		logrus.Debugf("Forwarding port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, retryInterval, attempt, maxRetries)
+		i.Logger.Debugf("Forwarding port %d failed, cause: %v, retrying after %v (retry %d/%d)", port, err, retryInterval, attempt, maxRetries)
 		time.Sleep(retryInterval)
 	}
 	return localPort, nil
@@ -351,7 +387,7 @@ func (i *Instance) AddPortUDP(port int) error {
 		return ErrUDPPortAlreadyRegistered.WithParams(port)
 	}
 	i.portsUDP = append(i.portsUDP, port)
-	logrus.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
+	i.Logger.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
 	return nil
 }
 
@@ -385,13 +421,13 @@ func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (strin
 		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
 	}
 
-	pod, err := i.K8sCli.GetFirstPodFromReplicaSet(ctx, instanceName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
 		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
-	output, err := i.K8sCli.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
+	output, err := i.K8sClient.RunCommandInPod(ctx, pod.Name, containerName, commandWithShell)
 	if err != nil {
 		return "", eErr.Wrap(err)
 	}
@@ -468,7 +504,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		if os.IsNotExist(err) || srcInfo.IsDir() {
 			return ErrSrcDoesNotExistOrIsDirectory.WithParams(src).Wrap(err)
 		}
-		file := i.K8sCli.NewFile(dstPath, dest)
+		file := i.K8sClient.NewFile(dstPath, dest)
 
 		// the user provided a chown string (e.g. "10001:10001") and we only need the group (second part)
 		parts := strings.Split(chown, ":")
@@ -491,7 +527,7 @@ func (i *Instance) AddFile(src string, dest string, chown string) error {
 		i.files = append(i.files, file)
 	}
 
-	logrus.Debugf("Added file '%s' to instance '%s'", dest, i.name)
+	i.Logger.Debugf("Added file '%s' to instance '%s'", dest, i.name)
 	return nil
 }
 
@@ -535,7 +571,7 @@ func (i *Instance) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, i.name).Wrap(err)
 	}
 
-	logrus.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
+	i.Logger.Debugf("Added folder '%s' to instance '%s'", dest, i.name)
 	return nil
 }
 
@@ -575,7 +611,7 @@ func (i *Instance) SetUser(user string) error {
 	if err != nil {
 		return ErrSettingUser.WithParams(user, i.name).Wrap(err)
 	}
-	logrus.Debugf("Set user '%s' for instance '%s'", user, i.name)
+	i.Logger.Debugf("Set user '%s' for instance '%s'", user, i.name)
 	return nil
 }
 
@@ -616,23 +652,23 @@ func (i *Instance) Commit() error {
 		cachedImageName, exists := checkImageHashInCache(imageHash)
 		if exists {
 			i.imageName = cachedImageName
-			logrus.Debugf("Using cached image for instance '%s'", i.name)
+			i.Logger.Debugf("Using cached image for instance '%s'", i.name)
 		} else {
-			logrus.Debugf("Cannot use any cached image for instance '%s'", i.name)
+			i.Logger.Debugf("Cannot use any cached image for instance '%s'", i.name)
 			err = i.builderFactory.PushBuilderImage(imageName)
 			if err != nil {
 				return ErrPushingImage.WithParams(i.name).Wrap(err)
 			}
 			updateImageCacheWithHash(imageHash, imageName)
 			i.imageName = imageName
-			logrus.Debugf("Pushed new image for instance '%s'", i.name)
+			i.Logger.Debugf("Pushed new image for instance '%s'", i.name)
 		}
 	} else {
 		i.imageName = i.builderFactory.ImageNameFrom()
-		logrus.Debugf("No need to build and push image for instance '%s'", i.name)
+		i.Logger.Debugf("No need to build and push image for instance '%s'", i.name)
 	}
 	i.state = Committed
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
 }
@@ -640,10 +676,10 @@ func (i *Instance) Commit() error {
 // AddVolume adds a volume to the instance
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolume(path, size string) error {
+func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
-		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		i.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
 	i.AddVolumeWithOwner(path, size, 0)
@@ -652,41 +688,41 @@ func (i *Instance) AddVolume(path, size string) error {
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
+func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
-		logrus.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
+		i.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", i.name, len(i.volumes))
 		return ErrMaximumVolumesExceeded.WithParams(i.name)
 	}
-	volume := i.K8sCli.NewVolume(path, size, owner)
+	volume := i.K8sClient.NewVolume(path, size, owner)
 	i.volumes = append(i.volumes, volume)
-	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size, owner, i.name)
+	logrus.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, i.name)
 	return nil
 }
 
 // SetMemory sets the memory of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetMemory(request, limit string) error {
+func (i *Instance) SetMemory(request, limit resource.Quantity) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
 	i.memoryLimit = limit
-	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request, limit, i.name)
+	logrus.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request.String(), limit.String(), i.name)
 	return nil
 }
 
 // SetCPU sets the CPU of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (i *Instance) SetCPU(request string) error {
+func (i *Instance) SetCPU(request resource.Quantity) error {
 	if !i.IsInState(Preparing, Committed) {
 		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
-	logrus.Debugf("Set cpu to '%s' in instance '%s'", request, i.name)
+	logrus.Debugf("Set cpu to '%s' in instance '%s'", request.String(), i.name)
 	return nil
 }
 
@@ -704,7 +740,7 @@ func (i *Instance) SetEnvironmentVariable(key, value string) error {
 	} else if i.state == Committed {
 		i.env[key] = value
 	}
-	logrus.Debugf("Set environment variable '%s' to '%s' in instance '%s'", key, value, i.name)
+	i.Logger.Debugf("Set environment variable '%s' in instance '%s'", key, i.name)
 	return nil
 }
 
@@ -716,14 +752,14 @@ func (i *Instance) GetIP(ctx context.Context) (string, error) {
 		return i.kubernetesService.Spec.ClusterIP, nil
 	}
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := i.K8sCli.GetService(ctx, i.k8sName)
+	svc, err := i.K8sClient.GetService(ctx, i.k8sName)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
 			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
-		svc, err = i.K8sCli.GetService(ctx, i.k8sName)
+		svc, err = i.K8sClient.GetService(ctx, i.k8sName)
 		if err != nil {
 			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
 		}
@@ -805,7 +841,7 @@ func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 		return err
 	}
 	i.livenessProbe = livenessProbe
-	logrus.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
+	i.Logger.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, i.name)
 	return nil
 }
 
@@ -818,7 +854,7 @@ func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 		return err
 	}
 	i.readinessProbe = readinessProbe
-	logrus.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
+	i.Logger.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, i.name)
 	return nil
 }
 
@@ -831,7 +867,7 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 		return err
 	}
 	i.startupProbe = startupProbe
-	logrus.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
+	i.Logger.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, i.name)
 	return nil
 }
 
@@ -861,7 +897,7 @@ func (i *Instance) AddSidecar(sidecar *Instance) error {
 	i.sidecars = append(i.sidecars, sidecar)
 	sidecar.isSidecar = true
 	sidecar.parentInstance = i
-	logrus.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
+	i.Logger.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
 	return nil
 }
 
@@ -872,7 +908,7 @@ func (i *Instance) SetOtelCollectorVersion(version string) error {
 		return err
 	}
 	i.obsyConfig.otelCollectorVersion = version
-	logrus.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
+	i.Logger.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
 	return nil
 }
 
@@ -883,7 +919,7 @@ func (i *Instance) SetOtelEndpoint(port int) error {
 		return err
 	}
 	i.obsyConfig.otlpPort = port
-	logrus.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
+	i.Logger.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
 
@@ -896,7 +932,7 @@ func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string
 	i.obsyConfig.prometheusEndpointPort = port
 	i.obsyConfig.prometheusEndpointJobName = jobName
 	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
-	logrus.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
+	i.Logger.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
 	return nil
 }
 
@@ -909,7 +945,7 @@ func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort
 	i.obsyConfig.jaegerGrpcPort = grpcPort
 	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
 	i.obsyConfig.jaegerThriftHttpPort = thriftHttpPort
-	logrus.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
+	i.Logger.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
 	return nil
 }
 
@@ -922,7 +958,7 @@ func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
 	i.obsyConfig.otlpEndpoint = endpoint
 	i.obsyConfig.otlpUsername = username
 	i.obsyConfig.otlpPassword = password
-	logrus.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -933,7 +969,7 @@ func (i *Instance) SetJaegerExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.jaegerEndpoint = endpoint
-	logrus.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -944,7 +980,7 @@ func (i *Instance) SetPrometheusExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.prometheusExporterEndpoint = endpoint
-	logrus.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
 	return nil
 }
 
@@ -955,7 +991,56 @@ func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
 		return err
 	}
 	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
-	logrus.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
+	i.Logger.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
+	return nil
+}
+
+// TsharkCollectorEnabled returns true if the tshark collector is enabled
+func (i *Instance) TsharkCollectorEnabled() bool {
+	return i.tsharkCollectorConfig != nil
+}
+
+// EnableTsharkCollector enables the tshark collector for the instance
+// This function can only be called in the state 'Preparing' or 'Committed'
+func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
+	if err := i.validateStateForObsy(tsharkCollectorName); err != nil {
+		return err
+	}
+	if i.TsharkCollectorEnabled() {
+		return ErrTsharkCollectorAlreadyEnabled
+	}
+
+	if err := validateTsharkCollectorConfig(conf); err != nil {
+		return err
+	}
+
+	i.tsharkCollectorConfig = &conf
+	i.Logger.Debugf("Enabled Tshark collector for instance '%s'", i.name)
+	return nil
+}
+
+// validateTsharkCollectorConfig checks the configuration fields for proper formatting
+func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
+	// Regex patterns for validation
+	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsKeyPattern")
+	}
+	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{1,40}$`)
+	if err != nil {
+		return ErrRegexpCompile.WithParams("awsSecretPattern")
+	}
+
+	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
+		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
+	}
+	if !awsSecretPattern.MatchString(conf.S3SecretKey) {
+		return ErrTsharkCollectorInvalidS3SecretKey.WithParams(conf.S3SecretKey)
+	}
+	if conf.S3Region == "" || conf.S3Bucket == "" {
+		return ErrTsharkCollectorS3RegionOrBucketEmpty.WithParams(conf.S3Region, conf.S3Bucket)
+	}
+
 	return nil
 }
 
@@ -966,7 +1051,7 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
-	logrus.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
+	i.Logger.Debugf("Set privileged to '%t' for instance '%s'", privileged, i.name)
 	return nil
 }
 
@@ -977,7 +1062,7 @@ func (i *Instance) AddCapability(capability string) error {
 		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
-	logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+	i.Logger.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
 	return nil
 }
 
@@ -989,7 +1074,7 @@ func (i *Instance) AddCapabilities(capabilities []string) error {
 	}
 	for _, capability := range capabilities {
 		i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
-		logrus.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
+		i.Logger.Debugf("Added capability '%s' to instance '%s'", capability, i.name)
 	}
 	return nil
 }
@@ -1030,6 +1115,13 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 			}
 		}
 
+		// deploy tshark collector if enabled
+		if i.TsharkCollectorEnabled() {
+			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
+				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+			}
+		}
+
 		if i.BitTwister.Enabled() {
 			if err := i.addBitTwisterSidecar(ctx); err != nil {
 				return ErrAddingNetworkSidecar.WithParams(i.k8sName).Wrap(err)
@@ -1052,7 +1144,7 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 	}
 	i.state = Started
 	setStateForSidecars(i.sidecars, Started)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
@@ -1079,7 +1171,7 @@ func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.IsReplicaSetRunning(ctx, i.k8sName)
+	return i.K8sClient.IsReplicaSetRunning(ctx, i.k8sName)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -1119,7 +1211,7 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 		"knuu.sh/type": ExecutorInstance.String(),
 	}
 
-	err := i.K8sCli.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1155,7 +1247,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		return ErrSettingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
+	i.Logger.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
 	return nil
 }
 
@@ -1190,7 +1282,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		return ErrSettingLatencyJitter.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
+	i.Logger.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
 	return nil
 }
 
@@ -1223,7 +1315,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		return ErrSettingPacketLoss.WithParams(i.k8sName).Wrap(err)
 	}
 
-	logrus.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
+	i.Logger.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
 	return nil
 }
 
@@ -1234,7 +1326,7 @@ func (i *Instance) EnableNetwork(ctx context.Context) error {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
-	err := i.K8sCli.DeleteNetworkPolicy(ctx, i.k8sName)
+	err := i.K8sClient.DeleteNetworkPolicy(ctx, i.k8sName)
 	if err != nil {
 		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
@@ -1248,7 +1340,7 @@ func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sCli.NetworkPolicyExists(ctx, i.k8sName), nil
+	return i.K8sClient.NetworkPolicyExists(ctx, i.k8sName), nil
 }
 
 // WaitInstanceIsStopped waits until the instance is not running anymore
@@ -1284,7 +1376,7 @@ func (i *Instance) Stop(ctx context.Context) error {
 	}
 	i.state = Stopped
 	setStateForSidecars(i.sidecars, Stopped)
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil
 }
@@ -1339,26 +1431,10 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
 	}
 
-	return i.K8sCli.CreateCustomResource(ctx, i.k8sName, gvr, obj)
+	return i.K8sClient.CreateCustomResource(ctx, i.k8sName, gvr, obj)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
-	return i.K8sCli.CustomResourceDefinitionExists(ctx, gvr), nil
-}
-
-func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
-	if i.Proxy == nil {
-		return "", ErrProxyNotInitialized
-	}
-
-	prefix := fmt.Sprintf("%s-%d", i.k8sName, port)
-	if err := i.Proxy.AddHost(ctx, i.k8sName, prefix, port); err != nil {
-		return "", ErrAddingToProxy.WithParams(i.k8sName).Wrap(err)
-	}
-	host, err = i.Proxy.URL(ctx, prefix)
-	if err != nil {
-		return "", ErrGettingProxyURL.WithParams(i.k8sName).Wrap(err)
-	}
-	return host, nil
+	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr), nil
 }

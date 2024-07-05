@@ -205,4 +205,7 @@ var (
 	ErrCannotGetTraefikEndpoint                  = errors.New("CannotGetTraefikEndpoint", "cannot get traefik endpoint")
 	ErrGettingProxyURL                           = errors.New("GettingProxyURL", "error getting proxy URL for service '%s'")
 	ErrTraefikAPINotAvailable                    = errors.New("TraefikAPINotAvailable", "traefik API is not available")
+	ErrTestScopeNotSet                           = errors.New("TestScopeNotSet", "test scope is not set")
+	ErrK8sClientNotSet                           = errors.New("K8sClientNotSet", "k8s client is not set")
+	ErrTestScopeMistMatch                        = errors.New("TestScopeMistMatch", "test scope '%s' set in options does not match scope '%s' set by the k8sClient namespace")
 )

@@ -35,125 +35,54 @@ const (
 
 type Knuu struct {
 	system.SystemDependencies
-	timeout      time.Duration
-	proxyEnabled bool
+	timeout time.Duration
 }
 
-type Option func(*Knuu)
+type Options struct {
+	K8sClient    k8s.KubeManager
+	MinioClient  *minio.Minio
+	ImageBuilder builder.Builder
+	TestScope    string
+	ProxyEnabled bool
+	Timeout      time.Duration
+	Logger       *logrus.Logger
+}
 
-func WithImageBuilder(builder builder.Builder) Option {
-	return func(k *Knuu) {
-		k.ImageBuilder = builder
+func New(ctx context.Context, opts Options) (*Knuu, error) {
+	opts.TestScope = k8s.SanitizeName(opts.TestScope)
+
+	if err := validateOptions(opts); err != nil {
+		return nil, err
 	}
-}
 
-func WithTestScope(scope string) Option {
-	return func(k *Knuu) {
-		k.TestScope = k8s.SanitizeName(scope)
+	if err := loadEnvVariables(); err != nil {
+		return nil, err
 	}
-}
 
-// This timeout indicates how long the test will run before it is considered failed.
-func WithTimeout(timeout time.Duration) Option {
-	return func(k *Knuu) {
-		k.timeout = timeout
+	k := &Knuu{
+		SystemDependencies: system.SystemDependencies{
+			K8sClient:    opts.K8sClient,
+			MinioClient:  opts.MinioClient,
+			ImageBuilder: opts.ImageBuilder,
+			Logger:       opts.Logger,
+			TestScope:    opts.TestScope,
+			StartTime:    time.Now().UTC().Format(TimeFormat),
+		},
+		timeout: opts.Timeout,
 	}
-}
 
-func WithMinio(minio *minio.Minio) Option {
-	return func(k *Knuu) {
-		k.MinioCli = minio
+	if err := setDefaults(ctx, k); err != nil {
+		return nil, err
 	}
-}
 
-func WithK8s(k8s k8s.KubeManager) Option {
-	return func(k *Knuu) {
-		k.K8sCli = k8s
-	}
-}
-
-func WithLogger(logger *logrus.Logger) Option {
-	return func(k *Knuu) {
-		k.Logger = logger
-	}
-}
-
-func WithProxyEnabled() Option {
-	return func(k *Knuu) {
-		k.proxyEnabled = true
-	}
-}
-
-func New(ctx context.Context, opts ...Option) (*Knuu, error) {
-	if err := godotenv.Load(); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, ErrCannotLoadEnv.Wrap(err)
+	if opts.ProxyEnabled {
+		if err := setupProxy(ctx, k); err != nil {
+			return nil, err
 		}
-		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
-	}
-
-	k := &Knuu{}
-	for _, opt := range opts {
-		opt(k)
-	}
-
-	k.StartTime = time.Now().UTC().Format(TimeFormat)
-
-	// handle default values
-	if k.Logger == nil {
-		k.Logger = log.DefaultLogger()
-	}
-
-	if k.TestScope == "" {
-		t := time.Now()
-		k.TestScope = fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
-	}
-
-	if k.timeout == 0 {
-		k.timeout = defaultTimeout
-	}
-
-	if k.K8sCli == nil {
-		var err error
-		k.K8sCli, err = k8s.New(ctx, k.TestScope)
-		if err != nil {
-			return nil, ErrCannotInitializeK8s.Wrap(err)
-		}
-	}
-
-	if k.MinioCli == nil {
-		// TODO: minio also needs a little refactor to accept k8s obj instead
-		k.MinioCli = &minio.Minio{
-			Clientset: k.K8sCli.Clientset(),
-			Namespace: k.K8sCli.Namespace(),
-		}
-	}
-
-	if k.ImageBuilder == nil {
-		// TODO: Also here for kaniko
-		k.ImageBuilder = &kaniko.Kaniko{
-			K8sClientset: k.K8sCli.Clientset(),
-			K8sNamespace: k.K8sCli.Namespace(),
-			Minio:        k.MinioCli,
-		}
-	}
-
-	if k.proxyEnabled {
-		k.Proxy = &traefik.Traefik{
-			K8s: k.K8sCli,
-		}
-		if err := k.Proxy.Deploy(ctx); err != nil {
-			return nil, ErrCannotDeployTraefik.Wrap(err)
-		}
-		endpoint, err := k.Proxy.Endpoint(ctx)
-		if err != nil {
-			return nil, ErrCannotGetTraefikEndpoint.Wrap(err)
-		}
-		k.Logger.Debugf("Proxy endpoint: %s", endpoint)
 	}
 
 	if err := k.handleTimeout(ctx); err != nil {
-		return nil, ErrCannotHandleTimeout.Wrap(err)
+		return nil, err
 	}
 
 	return k, nil
@@ -164,7 +93,7 @@ func (k *Knuu) Scope() string {
 }
 
 func (k *Knuu) CleanUp(ctx context.Context) error {
-	return k.K8sCli.DeleteNamespace(ctx, k.TestScope)
+	return k.K8sClient.DeleteNamespace(ctx, k.TestScope)
 }
 
 func (k *Knuu) HandleStopSignal(ctx context.Context) {
@@ -172,9 +101,9 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-stop
-		logrus.Info("Received signal to stop, cleaning up resources...")
+		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			logrus.Errorf("Error deleting namespace: %v", err)
+			k.Logger.Errorf("Error deleting namespace: %v", err)
 		}
 	}()
 }
@@ -203,15 +132,15 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands,
 		fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s",
-			k.TestScope, k.K8sCli.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sCli.Namespace()))
+			k.TestScope, k.K8sClient.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sClient.Namespace()))
 
 	// Delete the namespace as it was created by knuu.
-	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sCli.Namespace())
-	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k.K8sCli.Namespace()))
+	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sClient.Namespace())
+	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k.K8sClient.Namespace()))
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.TestScope, k.K8sCli.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.TestScope, k.K8sClient.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
@@ -234,5 +163,88 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 		return ErrCannotStartInstance.Wrap(err)
 	}
 
+	return nil
+}
+
+func DefaultTestScope() string {
+	t := time.Now()
+	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
+}
+
+func validateOptions(opts Options) error {
+	// When Minio is set, K8sClient must be set too
+	// to make sure that there is only one source of truth for the k8s client
+	if opts.MinioClient != nil && opts.K8sClient == nil {
+		return ErrK8sClientNotSet
+	}
+
+	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
+		return ErrTestScopeMistMatch.WithParams(opts.TestScope, opts.K8sClient.Namespace())
+	}
+	return nil
+}
+
+func loadEnvVariables() error {
+	err := godotenv.Load()
+	if err != nil && !os.IsNotExist(err) {
+		return ErrCannotLoadEnv.Wrap(err)
+	}
+	if os.IsNotExist(err) {
+		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
+	}
+	return nil
+}
+
+func setDefaults(ctx context.Context, k *Knuu) error {
+	if k.Logger == nil {
+		k.Logger = log.DefaultLogger()
+	}
+
+	if k.TestScope == "" {
+		if k.K8sClient != nil {
+			k.TestScope = k.K8sClient.Namespace()
+		} else {
+			k.TestScope = DefaultTestScope()
+		}
+	}
+	k.TestScope = k8s.SanitizeName(k.TestScope)
+
+	if k.timeout == 0 {
+		k.timeout = defaultTimeout
+	}
+
+	if k.K8sClient == nil {
+		var err error
+		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope, k.Logger)
+		if err != nil {
+			return ErrCannotInitializeK8s.Wrap(err)
+		}
+	}
+
+	if k.ImageBuilder == nil {
+		k.ImageBuilder = &kaniko.Kaniko{
+			SystemDependencies: k.SystemDependencies,
+		}
+	}
+
+	return nil
+}
+
+func setupProxy(ctx context.Context, k *Knuu) error {
+	k.Proxy = &traefik.Traefik{
+		K8s: k.K8sClient,
+	}
+	if !k.Proxy.IsTraefikAPIAvailable(ctx) {
+		return ErrTraefikAPINotAvailable
+	}
+
+	if err := k.Proxy.Deploy(ctx); err != nil {
+		return ErrCannotDeployTraefik.Wrap(err)
+	}
+	endpoint, err := k.Proxy.Endpoint(ctx)
+	if err != nil {
+		return ErrCannotGetTraefikEndpoint.Wrap(err)
+	}
+	k.Logger.Debugf("Proxy endpoint: %s", endpoint)
 	return nil
 }

@@ -3,8 +3,6 @@ package instance
 import (
 	"context"
 	"fmt"
-
-	"github.com/sirupsen/logrus"
 )
 
 // InstancePool is a struct that represents a pool of instances
@@ -25,7 +23,7 @@ func (i *Instance) NewPool(amount int) (*InstancePool, error) {
 	}
 
 	i.state = Destroyed
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return &InstancePool{
 		instances: instances,

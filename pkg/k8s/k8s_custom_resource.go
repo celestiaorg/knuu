@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,11 +29,11 @@ func (c *Client) CreateCustomResource(
 		},
 	}
 
-	if _, err := c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Create(context.TODO(), resourceUnstructured, metav1.CreateOptions{}); err != nil {
+	if _, err := c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Create(ctx, resourceUnstructured, metav1.CreateOptions{}); err != nil {
 		return ErrCreatingCustomResource.WithParams(gvr.Resource).Wrap(err)
 	}
 
-	logrus.Debugf("CustomResource %s created", name)
+	c.logger.Debugf("CustomResource %s created", name)
 	return nil
 }
 
