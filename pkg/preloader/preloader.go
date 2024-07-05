@@ -132,3 +132,7 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	_, err = p.K8sClient.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 	return err
 }
+
+func (p *Preloader) Cleanup(ctx context.Context) error {
+	return p.K8sClient.DeleteDaemonSet(ctx, p.K8sName)
+}
