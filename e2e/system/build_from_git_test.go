@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/celestiaorg/knuu/pkg/minio"
@@ -43,8 +42,8 @@ func TestBuildFromGit(t *testing.T) {
 	t.Log("Image built")
 
 	t.Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
-			t.Logf("Error destroying instance: %v", err)
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
@@ -70,12 +69,14 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	// Setup
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
+	logger := logrus.New()
+
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
 	require.NoError(t, err, "Error creating k8s client")
 
 	// Since we are modifying the git repo,
 	// we need to setup minio to allow the builder to push the changes
-	minioClient, err := minio.New(ctx, k8sClient)
+	minioClient, err := minio.New(ctx, k8sClient, logger)
 	require.NoError(t, err, "Error creating minio client")
 
 	// The default image builder is kaniko here
@@ -105,7 +106,9 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	require.NoError(t, sampleInstance.Commit(), "Error committing instance")
 
 	t.Cleanup(func() {
-		require.NoError(t, instance.BatchDestroy(ctx, sampleInstance))
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("Error cleaning up knuu: %v", err)
+		}
 	})
 
 	require.NoError(t, sampleInstance.Start(ctx), "Error starting instance")

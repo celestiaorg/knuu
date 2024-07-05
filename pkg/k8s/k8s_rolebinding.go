@@ -14,7 +14,7 @@ func (c *Client) CreateRoleBinding(
 	labels map[string]string,
 	role, serviceAccount string,
 ) error {
-	roleBinding := &rbacv1.RoleBinding{
+	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: c.namespace,
@@ -33,7 +33,7 @@ func (c *Client) CreateRoleBinding(
 		},
 	}
 
-	_, err := c.clientset.RbacV1().RoleBindings(c.namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	_, err := c.clientset.RbacV1().RoleBindings(c.namespace).Create(ctx, rb, metav1.CreateOptions{})
 	return err
 }
 

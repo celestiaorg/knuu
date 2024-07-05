@@ -162,7 +162,8 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 			},
 		},
 	}
-	_, err = t.K8sClient.Clientset().AppsV1().Deployments(t.K8sClient.Namespace()).Create(ctx, traefikDeployment, metav1.CreateOptions{})
+	_, err = t.K8s.Clientset().AppsV1().Deployments(t.K8s.Namespace()).
+		Create(ctx, traefikDeployment, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikDeploymentCreationFailed.Wrap(err)
 	}
@@ -282,7 +283,8 @@ func (t *Traefik) createMiddleware(ctx context.Context, serviceName, middlewareN
 		Resource: "middlewares",
 	}
 
-	_, err := t.K8sClient.DynamicClient().Resource(middlewareResource).Namespace(t.K8sClient.Namespace()).Create(ctx, middleware, metav1.CreateOptions{})
+	_, err := t.K8s.DynamicClient().Resource(middlewareResource).Namespace(t.K8s.Namespace()).
+		Create(ctx, middleware, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikMiddlewareCreationFailed.Wrap(err)
 	}
@@ -337,7 +339,8 @@ func (t *Traefik) createIngressRoute(
 		},
 	}
 
-	_, err = t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).Create(ctx, ingressRoute, metav1.CreateOptions{})
+	_, err = t.K8s.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8s.Namespace()).
+		Create(ctx, ingressRoute, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
 	}
