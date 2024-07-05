@@ -10,11 +10,11 @@ import (
 // Destroy destroys the instance
 // This function can only be called in the state 'Started' or 'Destroyed'
 func (i *Instance) Destroy(ctx context.Context) error {
-	if i.state == Destroyed {
+	if i.state == StateDestroyed {
 		return nil
 	}
 
-	if !i.IsInState(Started, Stopped, Destroyed) {
+	if !i.IsInState(StateStarted, StateStopped) {
 		return ErrDestroyingNotAllowed.WithParams(i.state.String())
 	}
 
@@ -25,7 +25,7 @@ func (i *Instance) Destroy(ctx context.Context) error {
 		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 
-	err := applyFunctionToInstances(i.sidecars, func(sidecar Instance) error {
+	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 		i.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
 		return sidecar.destroyResources(ctx)
 	})
@@ -33,8 +33,8 @@ func (i *Instance) Destroy(ctx context.Context) error {
 		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 	}
 
-	i.state = Destroyed
-	setStateForSidecars(i.sidecars, Destroyed)
+	i.state = StateDestroyed
+	setStateForSidecars(i.sidecars, StateDestroyed)
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
 	return nil

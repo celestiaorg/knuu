@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,10 +43,10 @@ func (s *TestSuite) TestDeployPod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingPod.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingPod.Wrap(errInternalServerError),
 		},
 	}
 
@@ -106,10 +105,10 @@ func (s *TestSuite) TestReplacePod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingPod.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingPod.Wrap(errInternalServerError),
 		},
 	}
 
@@ -189,11 +188,11 @@ func (s *TestSuite) TestIsPodRunning() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedRun: false,
-			expectedErr: k8s.ErrGettingPod.WithParams("error-pod").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingPod.WithParams("error-pod").Wrap(errInternalServerError),
 		},
 	}
 
@@ -267,10 +266,10 @@ func (s *TestSuite) TestDeletePodWithGracePeriod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingPodFailed.WithParams("error-pod").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingPodFailed.WithParams("error-pod").Wrap(errInternalServerError),
 		},
 	}
 
@@ -322,10 +321,10 @@ func (s *TestSuite) TestDeletePod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingPodFailed.WithParams("error-pod").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingPodFailed.WithParams("error-pod").Wrap(errInternalServerError),
 		},
 	}
 

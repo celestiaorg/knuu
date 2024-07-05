@@ -30,8 +30,7 @@ func (c *Client) ConfigMapExists(ctx context.Context, name string) (bool, error)
 }
 
 func (c *Client) CreateConfigMap(
-	ctx context.Context,
-	name string,
+	ctx context.Context, name string,
 	labels, data map[string]string,
 ) (*v1.ConfigMap, error) {
 	exists, err := c.ConfigMapExists(ctx, name)
@@ -42,11 +41,7 @@ func (c *Client) CreateConfigMap(
 		return nil, ErrConfigmapAlreadyExists.WithParams(name)
 	}
 
-	cm, err := prepareConfigMap(c.namespace, name, labels, data)
-	if err != nil {
-		return nil, err
-	}
-
+	cm := prepareConfigMap(c.namespace, name, labels, data)
 	created, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Create(ctx, cm, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
@@ -75,8 +70,8 @@ func (c *Client) DeleteConfigMap(ctx context.Context, name string) error {
 func prepareConfigMap(
 	namespace, name string,
 	labels, data map[string]string,
-) (*v1.ConfigMap, error) {
-	cm := &v1.ConfigMap{
+) *v1.ConfigMap {
+	return &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -84,5 +79,4 @@ func prepareConfigMap(
 		},
 		Data: data,
 	}
-	return cm, nil
 }
