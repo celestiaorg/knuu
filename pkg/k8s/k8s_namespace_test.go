@@ -228,7 +228,7 @@ func (s *TestSuite) TestNamespaceExists() {
 						})
 			},
 			expectedExist: false,
-			expectedErr:   k8s.ErrGettingNamespace.WithParams("error-namespace").Wrap(errInternalServerError),
+			expectedErr:   errInternalServerError,
 		},
 	}
 
