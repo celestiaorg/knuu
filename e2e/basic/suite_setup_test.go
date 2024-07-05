@@ -20,7 +20,9 @@ func (s *TestSuite) SetupSuite() {
 		err error
 		ctx = context.Background()
 	)
-	s.Knuu, err = knuu.New(ctx, knuu.Options{})
+	s.Knuu, err = knuu.New(ctx, knuu.Options{
+		TestScope: "e2e-basic",
+	})
 	s.Require().NoError(err)
 	s.Knuu.HandleStopSignal(ctx)
 }

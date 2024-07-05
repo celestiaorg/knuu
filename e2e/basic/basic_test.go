@@ -2,10 +2,9 @@ package basic
 
 import (
 	"context"
+	"strings"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 const (
@@ -26,24 +25,19 @@ func (ts *TestSuite) TestBasic() {
 	ts.Require().NoError(target.Commit())
 
 	ts.T().Cleanup(func() {
-		ts.T().Log("Tearing down Basic Test...")
-		err := instance.BatchDestroy(ctx, target)
-		if err != nil {
-			ts.T().Logf("error destroying instances: %v", err)
+		if err := target.Destroy(ctx); err != nil {
+			ts.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test Logic
 	ts.Require().NoError(target.Start(ctx))
-	ts.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
 	// Perform the test
-	type testCase struct {
+	tt := []struct {
 		name string
-	}
-
-	tt := []testCase{
-		{"Hello World"},
+	}{
+		{name: "Hello World"},
 	}
 
 	for _, tc := range tt {
@@ -52,8 +46,8 @@ func (ts *TestSuite) TestBasic() {
 			output, err := target.ExecuteCommand(ctx, "echo", tc.name)
 			ts.Require().NoError(err)
 
+			output = strings.TrimSpace(output)
 			assert.Contains(ts.T(), output, tc.name)
 		})
 	}
-
 }
