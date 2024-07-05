@@ -49,6 +49,8 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
+	opts.TestScope = k8s.SanitizeName(opts.TestScope)
+
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
@@ -230,7 +232,8 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 func setupProxy(ctx context.Context, k *Knuu) error {
 	k.Proxy = &traefik.Traefik{
-		K8s: k.K8sClient,
+		K8sClient: k.K8sClient,
+		Logger:    k.Logger,
 	}
 	if !k.Proxy.IsTraefikAPIAvailable(ctx) {
 		return ErrTraefikAPINotAvailable
