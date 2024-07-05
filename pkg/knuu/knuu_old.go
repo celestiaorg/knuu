@@ -80,7 +80,7 @@ func InitializeWithScope(testScope string) error {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}
 
-	minioClient, err := minio.New(ctx, k8sClient)
+	minioClient, err := minio.New(ctx, k8sClient, logger)
 	if err != nil {
 		return ErrCannotInitializeKnuu.Wrap(err)
 	}

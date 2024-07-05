@@ -38,6 +38,11 @@ const (
 	pvHostPath           = "/tmp/minio-pv"
 	deploymentAppLabel   = "app"
 	deploymentMinioLabel = "minio"
+	apiServicePortName   = "api"
+	webuiServicePortName = "webui"
+
+	envMinioRootUser     = "MINIO_ROOT_USER"
+	envMinioRootPassword = "MINIO_ROOT_PASSWORD"
 )
 
 var (
@@ -47,6 +52,7 @@ var (
 type Minio struct {
 	client    *miniogo.Client
 	k8sClient k8s.KubeManager
+	Logger    *logrus.Logger
 }
 
 type Config struct {
@@ -55,9 +61,10 @@ type Config struct {
 	SecretAccessKey string
 }
 
-func New(ctx context.Context, k8sClient k8s.KubeManager) (*Minio, error) {
+func New(ctx context.Context, k8sClient k8s.KubeManager, logger *logrus.Logger) (*Minio, error) {
 	m := &Minio{
 		k8sClient: k8sClient,
+		Logger:    logger,
 	}
 
 	if err := m.deployMinio(ctx); err != nil {
@@ -95,7 +102,7 @@ func (m *Minio) Push(ctx context.Context, localReader io.Reader, minioFilePath, 
 		return ErrMinioFailedToUploadData.Wrap(err)
 	}
 
-	logrus.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
+	m.Logger.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
 	return nil
 }
 
@@ -116,7 +123,7 @@ func (m *Minio) Delete(ctx context.Context, minioFilePath, bucketName string) er
 		return ErrMinioFailedToDeleteFile.Wrap(err)
 	}
 
-	logrus.Debugf("File %s deleted successfully from bucket %s", minioFilePath, bucketName)
+	m.Logger.Debugf("File %s deleted successfully from bucket %s", minioFilePath, bucketName)
 	return nil
 }
 
@@ -172,7 +179,7 @@ func (m *Minio) deployMinio(ctx context.Context) error {
 		return ErrMinioFailedToBeReadyService.Wrap(err)
 	}
 
-	logrus.Debug("Minio deployed or updated successfully.")
+	m.Logger.Debug("Minio deployed or updated successfully.")
 	return nil
 }
 
@@ -196,8 +203,8 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 						Name:  DeploymentName,
 						Image: Image,
 						Env: []v1.EnvVar{
-							{Name: "MINIO_ROOT_USER", Value: rootUser},
-							{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
+							{Name: envMinioRootUser, Value: rootUser},
+							{Name: envMinioRootPassword, Value: rootPassword},
 						},
 						Ports: []v1.ContainerPort{
 							{ContainerPort: ServiceAPIPort},
@@ -244,7 +251,7 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 			if err != nil {
 				return ErrMinioFailedToCreateDeployment.Wrap(err)
 			}
-			logrus.Debug("Minio deployment created successfully.")
+			m.Logger.Debug("Minio deployment created successfully.")
 		} else {
 			return ErrMinioFailedToGetDeployment.Wrap(err)
 		}
@@ -254,7 +261,7 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 		if err != nil {
 			return ErrMinioFailedToUpdateDeployment.Wrap(err)
 		}
-		logrus.Debug("Minio deployment updated successfully.")
+		m.Logger.Debug("Minio deployment updated successfully.")
 	}
 
 	return nil
@@ -273,13 +280,13 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 			Selector: map[string]string{"app": "minio"},
 			Ports: []v1.ServicePort{
 				{
-					Name:       "api",
+					Name:       apiServicePortName,
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceAPIPort,
 					TargetPort: intstr.FromInt(ServiceAPIPort),
 				},
 				{
-					Name:       "webui",
+					Name:       webuiServicePortName,
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceWebUIPort,
 					TargetPort: intstr.FromInt(ServiceWebUIPort),
@@ -292,12 +299,12 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 	// Check if Minio service already exists
 	existingService, err := serviceClient.Get(ctx, ServiceName, metav1.GetOptions{})
 	if err == nil {
-		logrus.Debugf("Service `%s` already exists, updating.", ServiceName)
+		m.Logger.Debugf("Service `%s` already exists, updating.", ServiceName)
 		minioService.ResourceVersion = existingService.ResourceVersion // Retain the existing resource version
 		if _, err := serviceClient.Update(ctx, minioService, metav1.UpdateOptions{}); err != nil {
 			return ErrMinioFailedToUpdateService.Wrap(err)
 		}
-		logrus.Debugf("Service %s updated successfully.", ServiceName)
+		m.Logger.Debugf("Service %s updated successfully.", ServiceName)
 		return nil
 	}
 
@@ -306,7 +313,7 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 		return ErrMinioFailedToCreateService.Wrap(err)
 	}
 
-	logrus.Debugf("Service %s created successfully.", ServiceName)
+	m.Logger.Debugf("Service %s created successfully.", ServiceName)
 	return nil
 }
 
@@ -326,7 +333,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 	if err := m.client.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
 		return ErrMinioFailedToCreateBucket.Wrap(err)
 	}
-	logrus.Debugf("Bucket `%s` created successfully.", bucketName)
+	m.Logger.Debugf("Bucket `%s` created successfully.", bucketName)
 
 	return nil
 }
@@ -358,7 +365,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 		// Use the first node for simplicity, you might need to handle multiple nodes
 		var nodeIP string
 		for _, address := range nodes.Items[0].Status.Addresses {
-			if address.Type == "ExternalIP" {
+			if address.Type == v1.NodeExternalIP {
 				nodeIP = address.Address
 				break
 			}
@@ -393,7 +400,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 	// Check if PVC already exists
 	_, err := pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
 	if err == nil {
-		logrus.Debugf("PersistentVolumeClaim `%s` already exists.", pvcName)
+		m.Logger.Debugf("PersistentVolumeClaim `%s` already exists.", pvcName)
 		return nil
 	}
 
@@ -434,7 +441,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 			return ErrMinioFailedToCreatePersistentVolume.Wrap(err)
 		}
 	}
-	logrus.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
+	m.Logger.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
 
 	// Create PVC with the existing or newly created PV
 	pvc := &v1.PersistentVolumeClaim{
@@ -457,6 +464,6 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 		return ErrMinioFailedToCreatePersistentVolumeClaim.Wrap(err)
 	}
 
-	logrus.Debugf("PersistentVolumeClaim `%s` created successfully.", pvcName)
+	m.Logger.Debugf("PersistentVolumeClaim `%s` created successfully.", pvcName)
 	return nil
 }
