@@ -39,10 +39,10 @@ func (s *TestSuite) TestCreateNetworkPolicy() {
 					PrependReactor("create", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, k8s.ErrCreatingNetworkPolicy.WithParams("error-np").
-								Wrap(errors.New("internal server error"))
+								Wrap(errInternalServerError)
 						})
 			},
-			expectedErr: k8s.ErrCreatingNetworkPolicy.WithParams("error-np").Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingNetworkPolicy.WithParams("error-np").Wrap(errInternalServerError),
 		},
 	}
 
@@ -92,11 +92,11 @@ func (s *TestSuite) TestDeleteNetworkPolicy() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrDeletingNetworkPolicy.WithParams("error-np").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 	}
 
@@ -160,11 +160,11 @@ func (s *TestSuite) TestGetNetworkPolicy() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedErr: k8s.ErrGettingNetworkPolicy.WithParams("error-np").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 			expectedNP: nil,
 		},
 	}
@@ -215,7 +215,7 @@ func (s *TestSuite) TestNetworkPolicyExists() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "networkpolicies",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedExist: false,
