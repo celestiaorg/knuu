@@ -69,12 +69,14 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	// Setup
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
+	logger := logrus.New()
+
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
 	require.NoError(t, err, "Error creating k8s client")
 
 	// Since we are modifying the git repo,
 	// we need to setup minio to allow the builder to push the changes
-	minioClient, err := minio.New(ctx, k8sClient)
+	minioClient, err := minio.New(ctx, k8sClient, logger)
 	require.NoError(t, err, "Error creating minio client")
 
 	// The default image builder is kaniko here
