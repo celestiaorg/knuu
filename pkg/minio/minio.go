@@ -38,6 +38,11 @@ const (
 	pvHostPath           = "/tmp/minio-pv"
 	deploymentAppLabel   = "app"
 	deploymentMinioLabel = "minio"
+	apiServicePortName   = "api"
+	webuiServicePortName = "webui"
+
+	envMinioRootUser     = "MINIO_ROOT_USER"
+	envMinioRootPassword = "MINIO_ROOT_PASSWORD"
 )
 
 var (
@@ -196,8 +201,8 @@ func (m *Minio) createOrUpdateDeployment(ctx context.Context) error {
 						Name:  DeploymentName,
 						Image: Image,
 						Env: []v1.EnvVar{
-							{Name: "MINIO_ROOT_USER", Value: rootUser},
-							{Name: "MINIO_ROOT_PASSWORD", Value: rootPassword},
+							{Name: envMinioRootUser, Value: rootUser},
+							{Name: envMinioRootPassword, Value: rootPassword},
 						},
 						Ports: []v1.ContainerPort{
 							{ContainerPort: ServiceAPIPort},
@@ -273,13 +278,13 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 			Selector: map[string]string{"app": "minio"},
 			Ports: []v1.ServicePort{
 				{
-					Name:       "api",
+					Name:       apiServicePortName,
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceAPIPort,
 					TargetPort: intstr.FromInt(ServiceAPIPort),
 				},
 				{
-					Name:       "webui",
+					Name:       webuiServicePortName,
 					Protocol:   v1.ProtocolTCP,
 					Port:       ServiceWebUIPort,
 					TargetPort: intstr.FromInt(ServiceWebUIPort),
@@ -358,7 +363,7 @@ func (m *Minio) getEndpoint(ctx context.Context) (string, error) {
 		// Use the first node for simplicity, you might need to handle multiple nodes
 		var nodeIP string
 		for _, address := range nodes.Items[0].Status.Addresses {
-			if address.Type == "ExternalIP" {
+			if address.Type == v1.NodeExternalIP {
 				nodeIP = address.Address
 				break
 			}
