@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,10 +56,10 @@ func (s *TestSuite) TestCreateReplicaSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingReplicaSet.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrCreatingReplicaSet.Wrap(errInternalServerError),
 		},
 	}
 
@@ -133,10 +132,10 @@ func (s *TestSuite) TestReplaceReplicaSetWithGracePeriod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errInternalServerError),
 		},
 	}
 
@@ -205,10 +204,10 @@ func (s *TestSuite) TestReplaceReplicaSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errInternalServerError),
 		},
 	}
 
@@ -292,11 +291,11 @@ func (s *TestSuite) TestIsReplicaSetRunning() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("get", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
 			expectedRes: false,
-			expectedErr: k8s.ErrGettingPod.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrGettingPod.Wrap(errInternalServerError),
 		},
 	}
 
@@ -374,10 +373,10 @@ func (s *TestSuite) TestDeleteReplicaSetWithGracePeriod() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errInternalServerError),
 		},
 	}
 
@@ -449,10 +448,10 @@ func (s *TestSuite) TestDeleteReplicaSet() {
 				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("delete", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, errors.New("internal server error")
+							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errors.New("internal server error")),
+			expectedErr: k8s.ErrDeletingReplicaSet.Wrap(errInternalServerError),
 		},
 	}
 

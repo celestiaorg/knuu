@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/celestiaorg/knuu/pkg/minio"
@@ -43,8 +42,8 @@ func TestBuildFromGit(t *testing.T) {
 	t.Log("Image built")
 
 	t.Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
-			t.Logf("Error destroying instance: %v", err)
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
@@ -107,7 +106,9 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 	require.NoError(t, sampleInstance.Commit(), "Error committing instance")
 
 	t.Cleanup(func() {
-		require.NoError(t, instance.BatchDestroy(ctx, sampleInstance))
+		if err := kn.CleanUp(ctx); err != nil {
+			t.Logf("Error cleaning up knuu: %v", err)
+		}
 	})
 
 	require.NoError(t, sampleInstance.Start(ctx), "Error starting instance")
