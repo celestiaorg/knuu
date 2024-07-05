@@ -4,7 +4,6 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
-
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,12 +41,15 @@ func (c *Client) GetNamespace(ctx context.Context, name string) (*corev1.Namespa
 
 func (c *Client) NamespaceExists(ctx context.Context, name string) (bool, error) {
 	_, err := c.GetNamespace(ctx, name)
-	if err != nil {
-		if apierrs.IsNotFound(err) {
-			c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
-			return false, nil
-		}
-		return false, ErrGettingNamespace.WithParams(name).Wrap(err)
+	if err == nil {
+		return true, nil
 	}
-	return true, nil
+
+	if apierrs.IsNotFound(err) {
+		c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
+		return false, nil
+	}
+
+	c.logger.Errorf("Error getting namespace %s, err: %v", name, err)
+	return false, err
 }

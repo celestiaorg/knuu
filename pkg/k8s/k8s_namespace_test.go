@@ -127,11 +127,11 @@ func (s *TestSuite) TestDeleteNamespace() {
 
 func (s *TestSuite) TestGetNamespace() {
 	tests := []struct {
-		name             string
-		namespace        string
-		setupMock        func()
-		expectedErrCheck func(err error) bool
-		expectedNS       *corev1.Namespace
+		name       string
+		namespace  string
+		setupMock  func()
+		assertErr  func(err error)
+		expectedNS *corev1.Namespace
 	}{
 		{
 			name:      "successful retrieval",
@@ -140,8 +140,8 @@ func (s *TestSuite) TestGetNamespace() {
 				err := s.createNamespace("existing-namespace")
 				s.Require().NoError(err)
 			},
-			expectedErrCheck: func(err error) bool {
-				return err == nil
+			assertErr: func(err error) {
+				s.Require().NoError(err)
 			},
 			expectedNS: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -153,10 +153,11 @@ func (s *TestSuite) TestGetNamespace() {
 			name:      "namespace not found",
 			namespace: "non-existent-namespace",
 			setupMock: func() {
-				// no mock needed as the namespace does not exist
+				// no need to mock
 			},
-			expectedErrCheck: func(err error) bool {
-				return apierrs.IsNotFound(err)
+			assertErr: func(err error) {
+				s.Require().Error(err)
+				s.Assert().True(apierrs.IsNotFound(err))
 			},
 			expectedNS: nil,
 		},
@@ -170,8 +171,9 @@ func (s *TestSuite) TestGetNamespace() {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErrCheck: func(err error) bool {
-				return errors.Is(err, errInternalServerError)
+			assertErr: func(err error) {
+				s.Require().Error(err)
+				s.Assert().Equal(err.Error(), "internal server error")
 			},
 			expectedNS: nil,
 		},
@@ -182,7 +184,7 @@ func (s *TestSuite) TestGetNamespace() {
 			tt.setupMock()
 
 			ns, err := s.client.GetNamespace(context.Background(), tt.namespace)
-			s.Assert().True(tt.expectedErrCheck(err))
+			tt.assertErr(err)
 			s.Assert().EqualValues(tt.expectedNS, ns)
 		})
 	}
