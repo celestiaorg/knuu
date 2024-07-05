@@ -3,13 +3,13 @@ package instance
 import (
 	"context"
 	"fmt"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:pr-11"
-	tsharkCollectorCPU         = "100m"
-	tsharkCollectorMemory      = "250Mi"
+	tsharkCollectorImage       = "ghcr.io/celestiaorg/tshark-s3:de3f1d7"
 	tsharkCollectorVolumePath  = "/tshark"
 	netAdminCapability         = "NET_ADMIN"
 	TsharkCaptureFileExtension = ".pcapng"
@@ -23,6 +23,13 @@ const (
 	envStorageEndpoint        = "STORAGE_ENDPOINT"
 	envCaptureFileName        = "CAPTURE_FILE_NAME"
 	envUploadInterval         = "UPLOAD_INTERVAL"
+	envCompressFiles          = "COMPRESS_FILES"
+	envIpFilter               = "IP_FILTER"
+)
+
+var (
+	tsharkCollectorCPU    = resource.MustParse("100m")
+	tsharkCollectorMemory = resource.MustParse("250Mi")
 )
 
 func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance, error) {
@@ -43,10 +50,18 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 	if err := tsc.SetCPU(tsharkCollectorCPU); err != nil {
 		return nil, err
 	}
-	if err := tsc.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
+	err = tsc.SetMemory(
+		tsharkCollectorMemory,
+		tsharkCollectorMemory,
+	)
+	if err != nil {
 		return nil, err
 	}
-	if err := tsc.AddVolume(tsharkCollectorVolumePath, i.tsharkCollectorConfig.VolumeSize); err != nil {
+	err = tsc.AddVolume(
+		tsharkCollectorVolumePath,
+		i.tsharkCollectorConfig.VolumeSize,
+	)
+	if err != nil {
 		return nil, err
 	}
 
@@ -60,6 +75,8 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		envStorageEndpoint:        i.tsharkCollectorConfig.S3Endpoint,
 		envUploadInterval:         fmt.Sprintf("%d", int64(i.tsharkCollectorConfig.UploadInterval.Seconds())),
 		envCreateBucket:           fmt.Sprintf("%t", i.tsharkCollectorConfig.CreateBucket),
+		envCompressFiles:          fmt.Sprintf("%t", i.tsharkCollectorConfig.CompressFiles),
+		envIpFilter:               i.tsharkCollectorConfig.IpFilter,
 	}
 
 	for key, value := range envVars {
