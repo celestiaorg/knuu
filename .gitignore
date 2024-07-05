@@ -1,4 +1,7 @@
 coverage.txt
-.vscode/launch.json
+.vscode
 */**.html
 *.idea
+.devcontainer
+Taskfile.yaml
+

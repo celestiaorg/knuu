@@ -34,10 +34,11 @@ func TestTshark(t *testing.T) {
 
 	ctx := context.Background()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logrus.New())
+	logger := logrus.New()
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
 	require.NoError(t, err, "error creating k8s client")
 
-	minioClient, err := minio.New(ctx, k8sClient)
+	minioClient, err := minio.New(ctx, k8sClient, logger)
 	require.NoError(t, err, "error creating minio client")
 
 	kn, err := knuu.New(ctx, knuu.Options{MinioClient: minioClient, K8sClient: k8sClient})
