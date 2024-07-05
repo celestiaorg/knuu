@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -14,7 +15,7 @@ func (c *Client) CreateCustomResource(
 	ctx context.Context,
 	name string,
 	gvr *schema.GroupVersionResource,
-	obj *map[string]interface{},
+	obj *unstructured.Unstructured,
 ) error {
 
 	resourceUnstructured := &unstructured.Unstructured{
@@ -25,7 +26,7 @@ func (c *Client) CreateCustomResource(
 				"name":      name,
 				"namespace": c.namespace,
 			},
-			"spec": (*obj)["spec"],
+			"spec": obj.Object["spec"],
 		},
 	}
 
@@ -37,10 +38,13 @@ func (c *Client) CreateCustomResource(
 	return nil
 }
 
-func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool {
+func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
 	resourceList, err := c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
-		return false
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
 
 	resourceExists := false
@@ -51,5 +55,9 @@ func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema
 		}
 	}
 
-	return resourceExists
+	return resourceExists, nil
+}
+
+func (c *Client) GetCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource) (*unstructured.Unstructured, error) {
+	return c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
