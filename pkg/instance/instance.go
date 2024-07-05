@@ -1091,16 +1091,6 @@ func (i *Instance) AddCapabilities(capabilities []string) error {
 	return nil
 }
 
-// StartAsync starts the instance without waiting for it to be ready
-// This function can only be called in the state 'Committed' or 'Stopped'
-// This function will replace StartWithoutWait
-func (i *Instance) StartAsync(ctx context.Context) error {
-	if err := i.StartWithoutWait(ctx); err != nil {
-		return err
-	}
-	return nil
-}
-
 // StartWithCallback starts the instance asynchronously and calls a callback function when the instance is running
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error {
@@ -1118,9 +1108,9 @@ func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error
 	return nil
 }
 
-// StartWithoutWait starts the instance without waiting for it to be ready
+// StartAsync starts the instance without waiting for it to be ready
 // This function can only be called in the state 'Committed' or 'Stopped'
-func (i *Instance) StartWithoutWait(ctx context.Context) error {
+func (i *Instance) StartAsync(ctx context.Context) error {
 	if !i.IsInState(StateCommitted, StateStopped) {
 		return ErrStartingNotAllowed.WithParams(i.state.String())
 	}
@@ -1181,7 +1171,7 @@ func (i *Instance) StartWithoutWait(ctx context.Context) error {
 // Start starts the instance and waits for it to be ready
 // This function can only be called in the state 'Committed' and 'Stopped'
 func (i *Instance) Start(ctx context.Context) error {
-	if err := i.StartWithoutWait(ctx); err != nil {
+	if err := i.StartAsync(ctx); err != nil {
 		return err
 	}
 
