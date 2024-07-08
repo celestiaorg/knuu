@@ -3,8 +3,6 @@ package instance
 import (
 	"context"
 	"fmt"
-
-	"github.com/sirupsen/logrus"
 )
 
 // InstancePool is a struct that represents a pool of instances
@@ -16,7 +14,7 @@ type InstancePool struct {
 // NewPool creates a pool of instances
 // This function can only be called in the state 'Committed'
 func (i *Instance) NewPool(amount int) (*InstancePool, error) {
-	if !i.IsInState(Committed) {
+	if !i.IsInState(StateCommitted) {
 		return nil, ErrCreatingPoolNotAllowed.WithParams(i.state.String())
 	}
 	instances := make([]*Instance, amount)
@@ -24,8 +22,8 @@ func (i *Instance) NewPool(amount int) (*InstancePool, error) {
 		instances[j] = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
 	}
 
-	i.state = Destroyed
-	logrus.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+	i.state = StateDestroyed
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return &InstancePool{
 		instances: instances,
@@ -41,8 +39,7 @@ func (i *InstancePool) Instances() []*Instance {
 // StartWithoutWait starts all instances in the instance pool without waiting for them to be running
 func (i *InstancePool) StartWithoutWait(ctx context.Context) error {
 	for _, instance := range i.instances {
-		err := instance.StartWithoutWait(ctx)
-		if err != nil {
+		if err := instance.StartAsync(ctx); err != nil {
 			return err
 		}
 	}
@@ -52,8 +49,7 @@ func (i *InstancePool) StartWithoutWait(ctx context.Context) error {
 // Start starts all instances in the instance pool
 func (i *InstancePool) Start(ctx context.Context) error {
 	for _, instance := range i.instances {
-		err := instance.Start(ctx)
-		if err != nil {
+		if err := instance.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -63,8 +59,7 @@ func (i *InstancePool) Start(ctx context.Context) error {
 // Destroy destroys all instances in the instance pool
 func (i *InstancePool) Destroy(ctx context.Context) error {
 	for _, instance := range i.instances {
-		err := instance.Destroy(ctx)
-		if err != nil {
+		if err := instance.Destroy(ctx); err != nil {
 			return err
 		}
 	}
@@ -74,8 +69,7 @@ func (i *InstancePool) Destroy(ctx context.Context) error {
 // WaitInstancePoolIsRunning waits until all instances in the instance pool are running
 func (i *InstancePool) WaitInstancePoolIsRunning(ctx context.Context) error {
 	for _, instance := range i.instances {
-		err := instance.WaitInstanceIsRunning(ctx)
-		if err != nil {
+		if err := instance.WaitInstanceIsRunning(ctx); err != nil {
 			return err
 		}
 	}

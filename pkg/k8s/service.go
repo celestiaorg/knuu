@@ -6,18 +6,14 @@ import (
 	"net"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, error) {
-	svc, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, ErrGettingService.WithParams(name).Wrap(err)
-	}
-	return svc, nil
+	return c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
 func (c *Client) CreateService(
@@ -37,7 +33,7 @@ func (c *Client) CreateService(
 	if err != nil {
 		return nil, ErrCreatingService.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("Service %s created in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s created in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
@@ -59,13 +55,16 @@ func (c *Client) PatchService(
 		return nil, ErrPatchingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s patched in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s patched in namespace %s", name, c.namespace)
 	return serv, nil
 }
 
 func (c *Client) DeleteService(ctx context.Context, name string) error {
 	_, err := c.GetService(ctx, name)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
 		return ErrGettingService.WithParams(name).Wrap(err)
 	}
 
@@ -74,7 +73,7 @@ func (c *Client) DeleteService(ctx context.Context, name string) error {
 		return ErrDeletingService.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("Service %s deleted in namespace %s", name, c.namespace)
+	c.logger.Debugf("Service %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 
@@ -84,65 +83,6 @@ func (c *Client) GetServiceIP(ctx context.Context, name string) (string, error) 
 		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
 	return svc.Spec.ClusterIP, nil
-}
-
-func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
-	ports := make([]v1.ServicePort, 0, len(tcpPorts)+len(udpPorts))
-	for _, port := range tcpPorts {
-		ports = append(ports, v1.ServicePort{
-			Name:       fmt.Sprintf("tcp-%d", port),
-			Protocol:   v1.ProtocolTCP,
-			Port:       int32(port),
-			TargetPort: intstr.FromInt(port),
-		})
-	}
-	for _, port := range udpPorts {
-		ports = append(ports, v1.ServicePort{
-			Name:       fmt.Sprintf("udp-%d", port),
-			Protocol:   v1.ProtocolUDP,
-			Port:       int32(port),
-			TargetPort: intstr.FromInt(port),
-		})
-	}
-	return ports
-}
-
-func prepareService(
-	namespace, name string,
-	labels, selectorMap map[string]string,
-	tcpPorts, udpPorts []int,
-) (*v1.Service, error) {
-	if namespace == "" {
-		return nil, ErrNamespaceRequired
-	}
-	if name == "" {
-		return nil, ErrServiceNameRequired
-	}
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	if selectorMap == nil {
-		selectorMap = make(map[string]string)
-	}
-
-	servicePorts := buildPorts(tcpPorts, udpPorts)
-	if len(servicePorts) == 0 {
-		return nil, ErrNoPortsSpecified.WithParams(name)
-	}
-
-	svc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    labels,
-		},
-		Spec: v1.ServiceSpec{
-			Ports:    servicePorts,
-			Selector: selectorMap,
-			Type:     v1.ServiceTypeClusterIP,
-		},
-	}
-	return svc, nil
 }
 
 func (c *Client) WaitForService(ctx context.Context, name string) error {
@@ -217,15 +157,6 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 	return fmt.Sprintf("%s:%d", srv.Spec.ClusterIP, srv.Spec.Ports[0].Port), nil
 }
 
-func checkServiceConnectivity(serviceEndpoint string) error {
-	conn, err := net.DialTimeout("tcp", serviceEndpoint, waitRetry)
-	if err != nil {
-		return ErrFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
-	}
-	defer conn.Close()
-	return nil // success
-}
-
 func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) {
 	service, err := c.GetService(ctx, name)
 	if err != nil {
@@ -240,4 +171,72 @@ func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) 
 	default:
 		return len(service.Spec.ExternalIPs) > 0, nil
 	}
+}
+
+func checkServiceConnectivity(serviceEndpoint string) error {
+	conn, err := net.DialTimeout("tcp", serviceEndpoint, waitRetry)
+	if err != nil {
+		return ErrFailedToConnect.WithParams(serviceEndpoint).Wrap(err)
+	}
+	defer conn.Close()
+	return nil // success
+}
+
+func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
+	ports := make([]v1.ServicePort, 0, len(tcpPorts)+len(udpPorts))
+	for _, port := range tcpPorts {
+		ports = append(ports, v1.ServicePort{
+			Name:       fmt.Sprintf("tcp-%d", port),
+			Protocol:   v1.ProtocolTCP,
+			Port:       int32(port),
+			TargetPort: intstr.FromInt(port),
+		})
+	}
+	for _, port := range udpPorts {
+		ports = append(ports, v1.ServicePort{
+			Name:       fmt.Sprintf("udp-%d", port),
+			Protocol:   v1.ProtocolUDP,
+			Port:       int32(port),
+			TargetPort: intstr.FromInt(port),
+		})
+	}
+	return ports
+}
+
+func prepareService(
+	namespace, name string,
+	labels, selectorMap map[string]string,
+	tcpPorts, udpPorts []int,
+) (*v1.Service, error) {
+	if namespace == "" {
+		return nil, ErrNamespaceRequired
+	}
+	if name == "" {
+		return nil, ErrServiceNameRequired
+	}
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if selectorMap == nil {
+		selectorMap = make(map[string]string)
+	}
+
+	servicePorts := buildPorts(tcpPorts, udpPorts)
+	if len(servicePorts) == 0 {
+		return nil, ErrNoPortsSpecified.WithParams(name)
+	}
+
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			Labels:    labels,
+		},
+		Spec: v1.ServiceSpec{
+			Ports:    servicePorts,
+			Selector: selectorMap,
+			Type:     v1.ServiceTypeClusterIP,
+		},
+	}
+	return svc, nil
 }

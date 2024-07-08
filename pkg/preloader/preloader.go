@@ -17,6 +17,13 @@ const (
 	preloaderCommand     = "/bin/sh"
 	preloaderCommandArgs = "-c"
 	preloaderCommandExit = "exit 0"
+
+	pauseContainerName = "pause-container"
+
+	labelApp         = "app"
+	labelManagedBy   = "k8s.kubernetes.io/managed-by"
+	labelScope       = "knuu.sh/scope"
+	labelTestStarted = "knuu.sh/test-started"
 )
 
 // Preloader is a struct that contains the list of preloaded images.
@@ -99,15 +106,15 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	var containers []v1.Container
 
 	containers = append(containers, v1.Container{
-		Name:  "pause-container",
+		Name:  pauseContainerName,
 		Image: pauseContainerImage,
 	})
 
 	labels := map[string]string{
-		"app":                          p.K8sName,
-		"k8s.kubernetes.io/managed-by": managedByLabel,
-		"knuu.sh/scope":                p.TestScope,
-		"knuu.sh/test-started":         p.StartTime,
+		labelApp:         p.K8sName,
+		labelManagedBy:   managedByLabel,
+		labelScope:       p.TestScope,
+		labelTestStarted: p.StartTime,
 	}
 
 	exists, err := p.K8sClient.DaemonSetExists(ctx, p.K8sName)
@@ -124,4 +131,8 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	// create the daemonset if it doesn't exist
 	_, err = p.K8sClient.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
 	return err
+}
+
+func (p *Preloader) Cleanup(ctx context.Context) error {
+	return p.K8sClient.DeleteDaemonSet(ctx, p.K8sName)
 }

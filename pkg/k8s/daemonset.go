@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -36,16 +35,12 @@ func (c *Client) CreateDaemonSet(
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
-	ds, err := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
-	if err != nil {
-		return nil, err
-	}
-
+	ds := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	created, err := c.clientset.AppsV1().DaemonSets(c.namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil {
 		return nil, ErrCreatingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s created in namespace %s", name, c.namespace)
+	c.logger.Debugf("DaemonSet %s created in namespace %s", name, c.namespace)
 	return created, nil
 }
 
@@ -55,24 +50,21 @@ func (c *Client) UpdateDaemonSet(ctx context.Context,
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
-	ds, err := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
-	if err != nil {
-		return nil, err
-	}
-
+	ds := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	updated, err := c.clientset.AppsV1().DaemonSets(c.namespace).Update(ctx, ds, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, ErrUpdatingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s updated in namespace %s", name, c.namespace)
+	c.logger.Debugf("DaemonSet %s updated in namespace %s", name, c.namespace)
 	return updated, nil
 }
 
 func (c *Client) DeleteDaemonSet(ctx context.Context, name string) error {
-	if err := c.clientset.AppsV1().DaemonSets(c.namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+	err := c.clientset.AppsV1().DaemonSets(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
 		return ErrDeletingDaemonset.WithParams(name).Wrap(err)
 	}
-	logrus.Debugf("DaemonSet %s deleted in namespace %s", name, c.namespace)
+	c.logger.Debugf("DaemonSet %s deleted in namespace %s", name, c.namespace)
 	return nil
 }
 
@@ -81,8 +73,8 @@ func prepareDaemonSet(
 	labels map[string]string,
 	initContainers,
 	containers []v1.Container,
-) (*appv1.DaemonSet, error) {
-	ds := &appv1.DaemonSet{
+) *appv1.DaemonSet {
+	return &appv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -103,6 +95,4 @@ func prepareDaemonSet(
 			},
 		},
 	}
-
-	return ds, nil
 }

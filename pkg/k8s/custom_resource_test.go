@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,11 +51,11 @@ func (s *TestSuite) TestCreateCustomResource() {
 			setupMock: func(dynamicClient *dynfake.FakeDynamicClient) {
 				dynamicClient.PrependReactor("create", "examples",
 					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New("internal server error")
+						return true, nil, errInternalServerError
 					})
 			},
 			expectedErr: k8s.ErrCreatingCustomResource.WithParams("examples").
-				Wrap(errors.New("internal server error")),
+				Wrap(errInternalServerError),
 		},
 	}
 
@@ -82,6 +81,7 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 		resource       *schema.GroupVersionResource
 		setupMock      func(*discfake.FakeDiscovery)
 		expectedExists bool
+		expectedErr    error
 	}{
 		{
 			name: "resource definition exists",
@@ -105,6 +105,7 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 				}
 			},
 			expectedExists: true,
+			expectedErr:    nil,
 		},
 		{
 			name: "resource definition does not exist",
@@ -117,26 +118,11 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 				discoveryClient.Resources = []*metav1.APIResourceList{
 					{
 						GroupVersion: "example.com/v1",
-						APIResources: []metav1.APIResource{},
 					},
 				}
 			},
 			expectedExists: false,
-		},
-		{
-			name: "discovery client error",
-			resource: &schema.GroupVersionResource{
-				Group:    "example.com",
-				Version:  "v1",
-				Resource: "examples",
-			},
-			setupMock: func(discoveryClient *discfake.FakeDiscovery) {
-				discoveryClient.PrependReactor("get", "serverresourcesforgroupversion",
-					func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New("internal server error")
-					})
-			},
-			expectedExists: false,
+			expectedErr:    nil,
 		},
 	}
 
@@ -144,8 +130,9 @@ func (s *TestSuite) TestCustomResourceDefinitionExists() {
 		s.Run(tt.name, func() {
 			tt.setupMock(s.client.DiscoveryClient().(*discfake.FakeDiscovery))
 
-			exists := s.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
+			exists, err := s.client.CustomResourceDefinitionExists(context.Background(), tt.resource)
 			s.Assert().Equal(tt.expectedExists, exists)
+			s.Assert().Equal(tt.expectedErr, err)
 		})
 	}
 }

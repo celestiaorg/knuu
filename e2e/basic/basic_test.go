@@ -1,53 +1,53 @@
 package basic
 
 import (
-	"testing"
+	"context"
+	"strings"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestBasic(t *testing.T) {
-	t.Parallel()
+const (
+	testImage = "alpine:latest"
+)
+
+func (ts *TestSuite) TestBasic() {
+	ts.T().Parallel()
 	// Setup
 
-	instance, err := knuu.NewInstance("alpine")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = instance.SetImage("docker.io/alpine:latest")
-	if err != nil {
-		t.Fatalf("Error setting image: %v", err)
-	}
-	err = instance.SetCommand("sleep", "infinity")
-	if err != nil {
-		t.Fatalf("Error setting command: %v", err)
-	}
-	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	ctx := context.Background()
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(instance))
+	target, err := ts.Knuu.NewInstance("alpine")
+	ts.Require().NoError(err)
+
+	ts.Require().NoError(target.SetImage(ctx, testImage))
+	ts.Require().NoError(target.SetCommand("sleep", "infinity"))
+	ts.Require().NoError(target.Commit())
+
+	ts.T().Cleanup(func() {
+		if err := target.Destroy(ctx); err != nil {
+			ts.T().Logf("error destroying instance: %v", err)
+		}
 	})
 
-	// Test logic
+	// Test Logic
+	ts.Require().NoError(target.Start(ctx))
 
-	err = instance.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = instance.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
-	wget, err := instance.ExecuteCommand("echo", "Hello World!")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
+	// Perform the test
+	tt := []struct {
+		name string
+	}{
+		{name: "Hello World"},
 	}
 
-	assert.Contains(t, wget, "Hello World!")
+	for _, tc := range tt {
+		tc := tc
+		ts.Run(tc.name, func() {
+			output, err := target.ExecuteCommand(ctx, "echo", tc.name)
+			ts.Require().NoError(err)
+
+			output = strings.TrimSpace(output)
+			assert.Contains(ts.T(), output, tc.name)
+		})
+	}
 }

@@ -3,8 +3,8 @@ package k8s
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,7 +38,7 @@ func (c *Client) CreatePersistentVolumeClaim(
 		return ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("PersistentVolumeClaim %s created", name)
+	c.logger.Debugf("PersistentVolumeClaim %s created", name)
 	return nil
 }
 
@@ -46,14 +46,17 @@ func (c *Client) DeletePersistentVolumeClaim(ctx context.Context, name string) e
 	_, err := c.getPersistentVolumeClaim(ctx, name)
 	if err != nil {
 		// If the pvc does not exist, skip and return without error
-		return nil
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 
 	if err := c.clientset.CoreV1().PersistentVolumeClaims(c.namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return ErrDeletingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	logrus.Debugf("PersistentVolumeClaim %s deleted", name)
+	c.logger.Debugf("PersistentVolumeClaim %s deleted", name)
 	return nil
 }
 

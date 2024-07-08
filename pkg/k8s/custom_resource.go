@@ -5,7 +5,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,8 +17,7 @@ func (c *Client) CreateCustomResource(
 	gvr *schema.GroupVersionResource,
 	obj *map[string]interface{},
 ) error {
-
-	resourceUnstructured := &unstructured.Unstructured{
+	res := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.GroupVersion().String(),
 			"kind":       gvr.Resource,
@@ -30,27 +29,29 @@ func (c *Client) CreateCustomResource(
 		},
 	}
 
-	if _, err := c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Create(ctx, resourceUnstructured, metav1.CreateOptions{}); err != nil {
+	_, err := c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Create(ctx, res, metav1.CreateOptions{})
+	if err != nil {
 		return ErrCreatingCustomResource.WithParams(gvr.Resource).Wrap(err)
 	}
 
-	logrus.Debugf("CustomResource %s created", name)
+	c.logger.Debugf("CustomResource %s created", name)
 	return nil
 }
 
-func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) bool {
-	resourceList, err := c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+func (c *Client) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
+	rsList, err := c.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
-		return false
+		if apierrs.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
 
-	resourceExists := false
-	for _, resource := range resourceList.APIResources {
-		if strings.EqualFold(resource.Kind, gvr.Resource) {
-			resourceExists = true
-			break
+	for _, rs := range rsList.APIResources {
+		if strings.EqualFold(rs.Kind, gvr.Resource) {
+			return true, nil
 		}
 	}
 
-	return resourceExists
+	return false, nil
 }

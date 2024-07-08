@@ -2,8 +2,10 @@ package k8s_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +26,10 @@ type TestSuite struct {
 	namespace string
 }
 
+var (
+	errInternalServerError = errors.New("internal server error")
+)
+
 func TestKubeManagerTestSuite(t *testing.T) {
 	suite.Run(t, new(TestSuite))
 }
@@ -37,6 +43,7 @@ func (s *TestSuite) SetupTest() {
 		&discfake.FakeDiscovery{Fake: &k8stesting.Fake{}},
 		dynfake.NewSimpleDynamicClient(runtime.NewScheme()),
 		s.namespace,
+		logrus.New(),
 	)
 	s.Require().NoError(err)
 }
