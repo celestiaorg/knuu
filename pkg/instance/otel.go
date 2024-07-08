@@ -209,6 +209,9 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 	if err := otelAgent.SetMemory(otelMemoryRequest, otelMemoryLimit); err != nil {
 		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
+	if err := otelAgent.AddVolume("/config", resource.MustParse("1Gi")); err != nil {
+		return nil, ErrAddingOtelAgentVolume.Wrap(err)
+	}
 	if err := otelAgent.Commit(); err != nil {
 		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
 	}
@@ -226,11 +229,11 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 		return nil, ErrMarshalingYAML.Wrap(err)
 	}
 
-	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
+	if err := otelAgent.AddFileBytes(bytes, "/config/otel-agent.yaml", "0:0"); err != nil {
 		return nil, ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
-	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
+	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/config/otel-agent.yaml"); err != nil {
 		return nil, ErrSettingOtelAgentCommand.Wrap(err)
 	}
 
