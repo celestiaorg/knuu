@@ -257,7 +257,7 @@ func (i *Instance) createOtlpReceiver() OTLP {
 	return OTLP{
 		Protocols: OTLPProtocols{
 			HTTP: OTLPHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.otlpPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.otlpPort),
 			},
 		},
 	}
@@ -272,7 +272,7 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 					ScrapeInterval: i.obsyConfig.prometheusEndpointScrapeInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
+							Targets: []string{fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.prometheusEndpointPort)},
 						},
 					},
 				},
@@ -281,7 +281,7 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 					ScrapeInterval: "10s",
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{"localhost:8888"},
+							Targets: []string{"0.0.0.0:8888"},
 						},
 					},
 				},
@@ -293,12 +293,12 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 func (i *Instance) createJaegerReceiver() Jaeger {
 	return Jaeger{
 		Protocols: JaegerProtocols{
-			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerGrpcPort)},
+			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerGrpcPort)},
 			ThriftCompact: JaegerThriftCompact{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftCompactPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerThriftCompactPort),
 			},
 			ThriftHTTP: JaegerThriftHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftHttpPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerThriftHttpPort),
 			},
 		},
 	}
