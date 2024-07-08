@@ -366,7 +366,7 @@ func (i *Instance) createExporters() Exporters {
 		exporters.Jaeger = i.createJaegerExporter()
 	}
 
-	if i.obsyConfig.prometheusEndpointPort != 0 {
+	if i.obsyConfig.prometheusExporterEndpoint != "" {
 		exporters.Prometheus = i.createPrometheusExporter()
 	}
 
@@ -395,6 +395,11 @@ func (i *Instance) prepareMetricsForServicePipeline() Metrics {
 		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
 	}
 	metrics.Processors = []string{"attributes"}
+
+	// if no trace receiver or exporter is added, remove any trace receiver
+	if len(metrics.Receivers) == 0 || len(metrics.Exporters) == 0 {
+		metrics = Metrics{}
+	}
 	return metrics
 }
 
@@ -413,6 +418,12 @@ func (i *Instance) prepareTracesForServicePipeline() Traces {
 		traces.Exporters = append(traces.Exporters, "jaeger")
 	}
 	traces.Processors = []string{"attributes"}
+
+	// if no trace receiver or exporter is added, remove any trace receiver
+	if len(traces.Receivers) == 0 || len(traces.Exporters) == 0 {
+		traces = Traces{}
+	}
+
 	return traces
 }
 
