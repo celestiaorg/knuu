@@ -41,7 +41,7 @@ type Options struct {
 	K8sClient    k8s.KubeManager
 	MinioClient  *minio.Minio
 	ImageBuilder builder.Builder
-	TestScope    string
+	Scope        string
 	ProxyEnabled bool
 	Timeout      time.Duration
 	Logger       *logrus.Logger
@@ -58,7 +58,7 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			MinioClient:  opts.MinioClient,
 			ImageBuilder: opts.ImageBuilder,
 			Logger:       opts.Logger,
-			TestScope:    opts.TestScope,
+			Scope:        opts.Scope,
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
 		timeout: opts.Timeout,
@@ -77,12 +77,8 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	return k, nil
 }
 
-func (k *Knuu) Scope() string {
-	return k.TestScope
-}
-
 func (k *Knuu) CleanUp(ctx context.Context) error {
-	return k.K8sClient.DeleteNamespace(ctx, k.TestScope)
+	return k.K8sClient.DeleteNamespace(ctx, k.Scope)
 }
 
 func (k *Knuu) HandleStopSignal(ctx context.Context) {
@@ -121,7 +117,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands,
 		fmt.Sprintf("kubectl get all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s -o json | jq -r '.items[] | select(.metadata.labels.\"knuu.sh/type\" != \"%s\") | \"\\(.kind)/\\(.metadata.name)\"' | xargs -r kubectl delete -n %s",
-			k.TestScope, k.K8sClient.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sClient.Namespace()))
+			k.Scope, k.K8sClient.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sClient.Namespace()))
 
 	// Delete the namespace as it was created by knuu.
 	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sClient.Namespace())
@@ -129,7 +125,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 
 	// Delete all labeled resources within the namespace.
 	// Unlike the previous command that excludes certain types, this command ensures that everything remaining is deleted.
-	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.TestScope, k.K8sClient.Namespace()))
+	commands = append(commands, fmt.Sprintf("kubectl delete all,pvc,netpol,roles,serviceaccounts,rolebindings,configmaps -l knuu.sh/scope=%s -n %s", k.Scope, k.K8sClient.Namespace()))
 
 	finalCmd := strings.Join(commands, " && ")
 
@@ -155,7 +151,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	return nil
 }
 
-func DefaultTestScope() string {
+func DefaultScope() string {
 	t := time.Now()
 	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
 }
@@ -167,8 +163,8 @@ func validateOptions(opts Options) error {
 		return ErrK8sClientNotSet
 	}
 
-	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
-		return ErrTestScopeMistMatch.WithParams(opts.TestScope, opts.K8sClient.Namespace())
+	if opts.Scope != "" && opts.K8sClient != nil && opts.Scope != opts.K8sClient.Namespace() {
+		return ErrScopeMistMatch.WithParams(opts.Scope, opts.K8sClient.Namespace())
 	}
 	return nil
 }
@@ -178,14 +174,14 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		k.Logger = log.DefaultLogger()
 	}
 
-	if k.TestScope == "" {
+	if k.Scope == "" {
 		if k.K8sClient != nil {
-			k.TestScope = k.K8sClient.Namespace()
+			k.Scope = k.K8sClient.Namespace()
 		} else {
-			k.TestScope = DefaultTestScope()
+			k.Scope = DefaultScope()
 		}
 	}
-	k.TestScope = k8s.SanitizeName(k.TestScope)
+	k.Scope = k8s.SanitizeName(k.Scope)
 
 	if k.timeout == 0 {
 		k.timeout = defaultTimeout
@@ -193,7 +189,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.K8sClient == nil {
 		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.TestScope, k.Logger)
+		k.K8sClient, err = k8s.NewClient(ctx, k.Scope, k.Logger)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}

@@ -15,6 +15,6 @@ type SystemDependencies struct {
 	MinioClient  *minio.Minio
 	Logger       *logrus.Logger
 	Proxy        *traefik.Traefik
-	TestScope    string
+	Scope        string
 	StartTime    string
 }

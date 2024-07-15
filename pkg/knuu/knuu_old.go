@@ -43,7 +43,7 @@ func Scope() string {
 	if tmpKnuu == nil {
 		return ""
 	}
-	return tmpKnuu.Scope()
+	return tmpKnuu.Scope
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -87,7 +87,7 @@ func InitializeWithScope(testScope string) error {
 
 	tmpKnuu, err = New(ctx, Options{
 		K8sClient:    k8sClient,
-		TestScope:    testScope,
+		Scope:        testScope,
 		Timeout:      timeout,
 		ProxyEnabled: true,
 		MinioClient:  minioClient,

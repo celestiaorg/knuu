@@ -71,7 +71,7 @@ func TestBuildFromGitWithModifications(t *testing.T) {
 
 	logger := logrus.New()
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
 	require.NoError(t, err, "Error creating k8s client")
 
 	// Since we are modifying the git repo,
