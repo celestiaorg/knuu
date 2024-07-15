@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -50,10 +49,6 @@ type Options struct {
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
 	if err := validateOptions(opts); err != nil {
-		return nil, err
-	}
-
-	if err := loadEnvVariables(); err != nil {
 		return nil, err
 	}
 
@@ -174,17 +169,6 @@ func validateOptions(opts Options) error {
 
 	if opts.TestScope != "" && opts.K8sClient != nil && opts.TestScope != opts.K8sClient.Namespace() {
 		return ErrTestScopeMistMatch.WithParams(opts.TestScope, opts.K8sClient.Namespace())
-	}
-	return nil
-}
-
-func loadEnvVariables() error {
-	err := godotenv.Load()
-	if err != nil && !os.IsNotExist(err) {
-		return ErrCannotLoadEnv.Wrap(err)
-	}
-	if os.IsNotExist(err) {
-		logrus.Info("The .env file does not exist, continuing without loading environment variables.")
 	}
 	return nil
 }
