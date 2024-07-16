@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ func TestFolder(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "folder-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -32,7 +33,7 @@ func TestFolder(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
+		require.NoError(t, knuu.BatchDestroy(executor, web))
 	})
 
 	// Test logic

@@ -20,7 +20,7 @@ func AssertCleanupInstance(t *testing.T, instance *knuu.Instance) error {
 }
 
 // AssertCleanupInstances is a helper function that cleans up a list of instances.
-func AssertCleanupInstances(t *testing.T, executor *knuu.Executor, instances []*knuu.Instance) error {
+func AssertCleanupInstances(t *testing.T, executor *knuu.Instance, instances []*knuu.Instance) error {
 	if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
 		t.Log("Skipping cleanup")
 		return nil

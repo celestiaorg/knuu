@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -17,7 +19,7 @@ func TestEnvToJSON(t *testing.T) {
 	t.Parallel()
 
 	// Setup
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "env-to-json-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -104,7 +106,7 @@ func TestEnvToJSON(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		all := append(instances, executor.Instance)
+		all := append(instances, executor)
 		require.NoError(t, knuu.BatchDestroy(all...))
 	})
 

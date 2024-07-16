@@ -7,7 +7,6 @@ type InstanceType int
 const (
 	UnknownInstance InstanceType = iota
 	BasicInstance
-	ExecutorInstance
 	TimeoutHandlerInstance
 )
 
@@ -16,8 +15,6 @@ func (s InstanceType) String() string {
 	switch s {
 	case BasicInstance:
 		return "BasicInstance"
-	case ExecutorInstance:
-		return "ExecutorInstance"
 	case TimeoutHandlerInstance:
 		return "TimeoutHandlerInstance"
 	case UnknownInstance:

@@ -353,19 +353,8 @@ func (i *Instance) CustomResourceDefinitionExists(gvr *schema.GroupVersionResour
 }
 
 // Deprecated: Use the new package knuu instead.
-func NewExecutor() (*Executor, error) {
-	if tmpKnuu == nil {
-		return nil, errors.New("tmpKnuu is not initialized")
-	}
-	e, err := tmpKnuu.NewExecutor(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return &Executor{
-		Instance: &Instance{
-			Instance: *e.Instance,
-		},
-	}, nil
+func __NewExecutor() (*Executor, error) {
+	return nil, ErrDeprecated
 }
 
 // Deprecated: Use the new package knuu instead.

@@ -209,4 +209,5 @@ var (
 	ErrK8sClientNotSet                           = errors.New("K8sClientNotSet", "k8s client is not set")
 	ErrScopeMistMatch                            = errors.New("ScopeMistMatch", "scope '%s' set in options does not match scope '%s' set by the k8sClient namespace")
 	ErrHandleTimeout                             = errors.New("HandleTimeout", "error starting handle timeout")
+	ErrDeprecated                                = errors.New("Deprecated", "deprecated")
 )

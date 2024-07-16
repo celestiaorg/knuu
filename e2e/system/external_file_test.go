@@ -1,10 +1,12 @@
 package system
 
 import (
+	"context"
 	"io"
 	"os"
 	"testing"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +17,7 @@ func TestExternalFile(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "external-file-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -69,7 +71,7 @@ func TestExternalFile(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, server))
+		require.NoError(t, knuu.BatchDestroy(executor, server))
 	})
 
 	// Test logic

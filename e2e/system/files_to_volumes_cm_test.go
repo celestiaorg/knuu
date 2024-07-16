@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -20,7 +21,7 @@ func TestNoVolumesNoFiles(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "no-volumes-no-files-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestOneVolumeNoFiles(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "one-volume-no-files-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestOneVolumeNoFiles(t *testing.T) {
 func TestNoVolumesOneFile(t *testing.T) {
 	t.Parallel()
 	// Setup
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "no-volumes-one-file-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestOneVolumeOneFile(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "one-volume-one-file-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -311,7 +312,7 @@ func TestOneVolumeTwoFiles(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "one-volume-two-files-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}

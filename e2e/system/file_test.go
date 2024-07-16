@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ func TestFile(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "file-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestFile(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, serverfile))
+		require.NoError(t, knuu.BatchDestroy(executor, serverfile))
 	})
 
 	// Test logic

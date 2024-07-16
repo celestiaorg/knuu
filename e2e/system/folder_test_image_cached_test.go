@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -15,7 +16,7 @@ func TestFolderCached(t *testing.T) {
 	t.Parallel()
 
 	// Setup
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "folder-cached-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}

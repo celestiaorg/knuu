@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -15,7 +17,7 @@ func TestProbe(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
+	executor, err := e2e.NewExecutor(context.Background(), "prob-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -60,7 +62,7 @@ func TestProbe(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
+		require.NoError(t, knuu.BatchDestroy(executor, web))
 	})
 
 	// Test logic

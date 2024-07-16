@@ -1218,17 +1218,13 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 }
 
 // DisableNetwork disables the network of the instance
-// This does not apply to executor instances
 // This function can only be called in the state 'Started'
 func (i *Instance) DisableNetwork(ctx context.Context) error {
 	if !i.IsInState(StateStarted) {
 		return ErrDisablingNetworkNotAllowed.WithParams(i.state.String())
 	}
-	executorSelectorMap := map[string]string{
-		labelType: ExecutorInstance.String(),
-	}
 
-	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), executorSelectorMap, executorSelectorMap)
+	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), nil, nil)
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
