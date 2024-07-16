@@ -353,7 +353,7 @@ func (i *Instance) CustomResourceDefinitionExists(gvr *schema.GroupVersionResour
 }
 
 // Deprecated: Use the new package knuu instead.
-func __NewExecutor() (*Executor, error) {
+func NewExecutor() (*Executor, error) {
 	return nil, ErrDeprecated
 }
 
