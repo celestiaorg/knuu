@@ -21,7 +21,7 @@ func (s *TestSuite) SetupSuite() {
 		ctx = context.Background()
 	)
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		TestScope: "e2e-basic",
+		Scope: "e2e-basic",
 	})
 	s.Require().NoError(err)
 	s.Knuu.HandleStopSignal(ctx)

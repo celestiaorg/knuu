@@ -78,7 +78,7 @@ func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
 		labelAppKey:         i.k8sName,
 		labelManagedByKey:   labelKnuuValue,
-		labelScopeKey:       i.TestScope,
+		labelScopeKey:       i.Scope,
 		labelTestStartedKey: i.StartTime,
 		labelNameKey:        i.name,
 		labelK8sNameKey:     i.k8sName,

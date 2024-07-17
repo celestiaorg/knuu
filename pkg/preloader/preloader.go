@@ -113,7 +113,7 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	labels := map[string]string{
 		labelApp:         p.K8sName,
 		labelManagedBy:   managedByLabel,
-		labelScope:       p.TestScope,
+		labelScope:       p.Scope,
 		labelTestStarted: p.StartTime,
 	}
 

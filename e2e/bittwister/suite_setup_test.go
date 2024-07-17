@@ -23,7 +23,7 @@ func (s *Suite) SetupSuite() {
 		ProxyEnabled: true,
 	})
 	s.Require().NoError(err)
-	s.T().Logf("Scope: %s", s.Knuu.Scope())
+	s.T().Logf("Scope: %s", s.Knuu.Scope)
 	s.Knuu.HandleStopSignal(ctx)
 }
 
