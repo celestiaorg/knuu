@@ -73,11 +73,6 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) SetImageInstant(image string) error {
-	return i.Instance.SetImageInstant(context.Background(), image)
-}
-
-// Deprecated: Use the new package knuu instead.
 func (i *Instance) SetCommand(command ...string) error {
 	return i.Instance.SetCommand(command...)
 }

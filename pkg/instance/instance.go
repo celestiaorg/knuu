@@ -230,19 +230,14 @@ func (i *Instance) SetInstanceType(instanceType InstanceType) {
 }
 
 // SetImage sets the image of the instance.
-// When calling in state 'Started', make sure to call AddVolume() before.
-// It is only allowed in the 'None' and 'Started' states.
+// It is not allowed in the 'Committed' and 'Started' states.
 func (i *Instance) SetImage(ctx context.Context, image string) error {
-	if !i.IsInState(StateNone, StateStarted) {
+	if i.IsInState(StateCommitted, StateStarted) {
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
 	}
 
 	if i.isSidecar {
 		return ErrSettingImageNotAllowedForSidecarsStarted
-	}
-
-	if i.state == StateStarted {
-		return i.setImageWithGracePeriod(ctx, image, nil)
 	}
 
 	// Use the builder to build a new image
@@ -282,25 +277,10 @@ func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext
 	return i.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
 }
 
-// SetImageInstant sets the image of the instance without a grace period.
-// Instant means that the pod is replaced without a grace period of 1 second.
-// It is only allowed in the 'Running' state.
-func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
-	if !i.IsState(StateStarted) {
-		return ErrSettingImageNotAllowedForSidecarsStarted.WithParams(i.state.String())
-	}
-
-	if i.isSidecar {
-		return ErrSettingImageNotAllowedForSidecars
-	}
-
-	return i.setImageWithGracePeriod(ctx, image, nil)
-}
-
 // SetCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (i *Instance) SetCommand(command ...string) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if i.IsInState(StateStarted, StateCommitted) {
 		return ErrSettingCommand.WithParams(i.state.String())
 	}
 	i.command = command

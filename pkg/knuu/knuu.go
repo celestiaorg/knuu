@@ -113,9 +113,6 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	if err := inst.SetImage(ctx, timeoutHandlerImage); err != nil {
 		return ErrCannotSetImage.Wrap(err)
 	}
-	if err := inst.Commit(); err != nil {
-		return ErrCannotCommitInstance.Wrap(err)
-	}
 
 	var commands []string
 
@@ -152,6 +149,9 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 
 	if err := inst.AddPolicyRule(rule); err != nil {
 		return ErrCannotAddPolicyRule.Wrap(err)
+	}
+	if err := inst.Commit(); err != nil {
+		return ErrCannotCommitInstance.Wrap(err)
 	}
 	if err := inst.Start(ctx); err != nil {
 		return ErrCannotStartInstance.Wrap(err)
