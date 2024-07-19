@@ -550,22 +550,6 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	}
 }
 
-// setImageWithGracePeriod sets the image of the instance with a grace period
-func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod *int64) error {
-	i.imageName = imageName
-
-	_, err := i.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, i.prepareReplicaSetConfig(), gracePeriod)
-	if err != nil {
-		return ErrReplacingPod.Wrap(err)
-	}
-
-	if err := i.WaitInstanceIsRunning(ctx); err != nil {
-		return ErrWaitingInstanceIsRunning.Wrap(err)
-	}
-
-	return nil
-}
-
 // applyFunctionToInstances applies a function to all instances
 func applyFunctionToInstances(instances []*Instance, function func(sidecar *Instance) error) error {
 	for _, i := range instances {
