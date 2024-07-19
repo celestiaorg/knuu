@@ -83,7 +83,7 @@ var (
 	ErrGettingBuildContext                       = errors.New("GettingBuildContext", "error getting build context")
 	ErrGettingImageName                          = errors.New("GettingImageName", "error getting image name")
 	ErrSettingImageNotAllowedForSidecars         = errors.New("SettingImageNotAllowedForSidecars", "setting image is not allowed for sidecars")
-	ErrSettingCommand                            = errors.New("SettingCommand", "setting command is not allowed in state 'Committed' or 'Started'. Current state is '%s")
+	ErrSettingCommand                            = errors.New("SettingCommand", "setting command is not allowed in state 'Committed' or 'Started	'. Current state is '%s")
 	ErrSettingArgsNotAllowed                     = errors.New("SettingArgsNotAllowed", "setting args is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
 	ErrAddingPortNotAllowed                      = errors.New("AddingPortNotAllowed", "adding port is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
 	ErrPortAlreadyRegistered                     = errors.New("PortAlreadyRegistered", "TCP port '%d' is already in registered")
