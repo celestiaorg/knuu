@@ -6,7 +6,8 @@ require (
 	github.com/celestiaorg/bittwister v0.0.0-20231213180407-65cdbaf5b8c7
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/minio/minio-go/v7 v7.0.73
+	github.com/joho/godotenv v1.5.1
+	github.com/minio/minio-go/v7 v7.0.74
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v3 v3.0.1

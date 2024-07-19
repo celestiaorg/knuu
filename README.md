@@ -184,9 +184,9 @@ You can set the following environment variables to change the behavior of knuu:
 
 | Environment Variable | Description | Possible Values | Default |
 | --- | --- | --- | --- |
-| `KNUU_TIMEOUT` | The timeout for the tests. | Any valid duration | `60m` |
-| `KNUU_BUILDER` | The builder to use for building images. | `docker`, `kubernetes` | `docker` |
 | `LOG_LEVEL` | The debug level. | `debug`, `info`, `warn`, `error` | `info` |
+
+**Note:** `knuu` does not load `.env` file, if you want to set environment variables, you can set them directly in the code or use a `.env` file and load it using `go-dotenv`.
 
 ---
 
