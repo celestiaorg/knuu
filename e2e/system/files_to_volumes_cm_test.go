@@ -134,8 +134,8 @@ func (s *Suite) TestNoVolumesOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		err = i.StartAsync(ctx)
-		s.Require().NoError(err)
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
 	for _, i := range instances {
@@ -196,8 +196,8 @@ func (s *Suite) TestOneVolumeOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		err = i.StartAsync(ctx)
-		s.Require().NoError(err)
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
 	for _, i := range instances {
@@ -260,8 +260,8 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 
 	// Test logic
 	for _, i := range instances {
-		err = i.StartAsync(ctx)
-		s.Require().NoError(err)
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
 	for _, i := range instances {
