@@ -5,27 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"testing"
 
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/celestiaorg/knuu/e2e"
-	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
-func TestEnvToJSON(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestEnvToJSON() {
+	const namePrefix = "env-to-json"
+
+	s.T().Parallel()
 
 	// Setup
-	executor, err := e2e.NewExecutor(context.Background(), "env-to-json-executor")
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	executor, err := s.Knuu.NewInstance(namePrefix + "-executor")
+	s.Require().NoError(err)
 
 	const numberOfInstances = 2
-	instances := make([]*knuu.Instance, numberOfInstances)
+	instances := make([]*instance.Instance, numberOfInstances)
 
 	// Define the env vars
 	testEnvVarKey1 := "TESTKEY1"
@@ -36,22 +30,14 @@ func TestEnvToJSON(t *testing.T) {
 	testEnvVarValue3 := "testvalue3"
 
 	// Set the OS env vars
-	setEnv := func(key, value string) {
-		err = os.Setenv(key, value)
-		if err != nil {
-			t.Fatalf("Error setting env var '%v': %v", key, err)
-		}
-	}
-	setEnv(testEnvVarKey1, testEnvVarValue1)
-	setEnv(testEnvVarKey2, testEnvVarValue2)
-	setEnv(testEnvVarKey3, testEnvVarValue3)
+	s.Require().NoError(os.Setenv(testEnvVarKey1, testEnvVarValue1))
+	s.Require().NoError(os.Setenv(testEnvVarKey2, testEnvVarValue2))
+	s.Require().NoError(os.Setenv(testEnvVarKey3, testEnvVarValue3))
 
 	// Define helper function to get env vars
 	getEnv := func(key string) string {
 		value := os.Getenv(key)
-		if value == "" {
-			t.Fatalf("Error getting env var '%v'", key)
-		}
+		s.Require().NotEmpty(value, "getting env var '%v'", key)
 		return value
 	}
 	jsonBytes, err := json.Marshal(map[string]string{
@@ -59,82 +45,62 @@ func TestEnvToJSON(t *testing.T) {
 		testEnvVarKey2: getEnv(testEnvVarKey2),
 		testEnvVarKey3: getEnv(testEnvVarKey3),
 	})
-	if err != nil {
-		t.Fatalf("Error converting env vars to JSON: %v", err)
-	}
+	s.Require().NoError(err)
+
 	jsonString := string(jsonBytes)
-	logrus.Debugf("JSON: %v", jsonString)
+	s.T().Logf("JSON: %v", jsonString)
+	ctx := context.Background()
 
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instance, err := knuu.NewInstance(instanceName)
-		if err != nil {
-			t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-		}
-		err = instance.SetImage("docker.io/nginx:latest")
-		if err != nil {
-			t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-		}
-		instance.AddPortTCP(80)
-		_, err = instance.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-		if err != nil {
-			t.Fatalf("Error executing command for '%v': %v", instanceName, err)
-		}
+		instanceName := fmt.Sprintf("%s-web%d", namePrefix, i+1)
+		ins, err := s.Knuu.NewInstance(instanceName)
+		s.Require().NoError(err)
 
-		logrus.Debugf("Writing JSON to instance '%v': %v", instanceName, jsonString)
-		_, err = instance.ExecuteCommand("mkdir", "-p", "/opt/env")
-		if err != nil {
-			t.Fatalf("Error writing JSON to instance '%v': %v", instanceName, err)
-		}
+		s.Require().NoError(ins.SetImage(ctx, nginxImage))
+		ins.AddPortTCP(80)
+		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", nginxPath)
+		s.Require().NoError(err)
+
+		s.T().Logf("Writing JSON to instance '%v': %v", instanceName, jsonString)
+		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", "/opt/env")
+		s.Require().NoError(err)
+
 		// write the json file to the instance
-		_, err = instance.ExecuteCommand("echo", fmt.Sprintf("'%s'", jsonString), ">", "/opt/env/env.json")
-		if err != nil {
-			t.Fatalf("Error writing JSON to instance '%v': %v", instanceName, err)
-		}
+		_, err = ins.ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", "/opt/env/env.json")
+		s.Require().NoError(err)
+
 		// for testing it, we also add it as index.html to the nginx server
-		_, err = instance.ExecuteCommand("echo", fmt.Sprintf("'%s'", jsonString), ">", "/usr/share/nginx/html/index.html")
-		if err != nil {
-			t.Fatalf("Error writing JSON to instance '%v': %v", instanceName, err)
-		}
+		_, err = ins.ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", "/usr/share/nginx/html/index.html")
+		s.Require().NoError(err, "writing JSON to instance '%v': %v", instanceName, err)
 
-		err = instance.Commit()
-		if err != nil {
-			t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-		}
-
-		instances[i] = instance
+		s.Require().NoError(ins.Commit())
+		instances[i] = ins
 	}
 
-	t.Cleanup(func() {
+	s.T().Cleanup(func() {
 		all := append(instances, executor)
-		require.NoError(t, knuu.BatchDestroy(all...))
+		err := instance.BatchDestroy(ctx, all...)
+		if err != nil {
+			s.T().Logf("error destroying instances: %v", err)
+		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+		err = i.WaitInstanceIsRunning(ctx)
+		s.Require().NoError(err)
 
-		wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 
 		expected := fmt.Sprintf("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":\"%s\"}\n", testEnvVarKey1, testEnvVarValue1, testEnvVarKey2, testEnvVarValue2, testEnvVarKey3, testEnvVarValue3)
-		assert.Equal(t, expected, wget)
+		s.Assert().Equal(expected, wget)
 	}
 }

@@ -4,77 +4,63 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/celestiaorg/knuu/e2e"
-	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
-func TestFileCached(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestFileCached() {
+	const namePrefix = "file-cached"
+	s.T().Parallel()
 	// Setup
-	executor, err := e2e.NewExecutor(context.Background(), "file-cached-executor")
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
 	const numberOfInstances = 10
-	instances := make([]*knuu.Instance, numberOfInstances)
+	instances := make([]*instance.Instance, numberOfInstances)
+
+	instanceName := func(i int) string {
+		return fmt.Sprintf("%s-web%d", namePrefix, i+1)
+	}
 
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		instances[i] = s.createNginxInstanceWithVolume(ctx, instanceName(i))
 	}
 
 	var wgFolders sync.WaitGroup
-	for i, instance := range instances {
+	for i, ins := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
-			if err != nil {
-				t.Errorf("Error adding file to '%v': %v", instanceName, err)
-			}
-		}(i, instance)
+			err = instance.AddFile(resourcesHTML+"/index.html", nginxPath+"/index.html", "0:0")
+			s.Require().NoError(err, "adding file to '%v'", instanceName(i))
+		}(i, ins)
 	}
 	wgFolders.Wait()
 
-	t.Cleanup(func() {
-		// Cleanup
-		err := e2e.AssertCleanupInstances(t, executor, instances)
+	s.T().Cleanup(func() {
+		all := append(instances, executor)
+		err := instance.BatchDestroy(ctx, all...)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 
-		assert.Contains(t, wget, "Hello World!")
+		s.Assert().Contains(wget, "Hello World!")
 	}
 }

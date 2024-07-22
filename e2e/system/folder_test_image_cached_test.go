@@ -4,78 +4,64 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/celestiaorg/knuu/e2e"
-	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
-func TestFolderCached(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestFolderCached() {
+	const (
+		namePrefix        = "folder-cached"
+		numberOfInstances = 10
+	)
+	s.T().Parallel()
 
 	// Setup
-	executor, err := e2e.NewExecutor(context.Background(), "folder-cached-executor")
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	// Test logic
-	const numberOfInstances = 10
-	instances := make([]*knuu.Instance, numberOfInstances)
-
+	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
+		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
-	for _, instance := range instances {
+	for _, i := range instances {
 		wgFolders.Add(1)
-		go func(instance *knuu.Instance) {
+		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err := instance.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
-			if err != nil {
-				t.Errorf("Error adding file to '%v': %v", instance.Name(), err)
-			}
-		}(instance)
+			err := i.AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
+			s.Require().NoError(err, "adding file to '%v'", i.Name())
+		}(i)
 	}
 	wgFolders.Wait()
 
 	// Cleanup
-	t.Cleanup(func() {
-		err := e2e.AssertCleanupInstances(t, executor, instances)
+	s.T().Cleanup(func() {
+		all := append(instances, executor)
+		err := instance.BatchDestroy(ctx, all...)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		err = i.StartAsync(ctx)
+		s.Require().NoError(err)
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 
-		assert.Contains(t, wget, "Hello World!")
+		s.Assert().Contains(wget, "Hello World!")
 	}
 }

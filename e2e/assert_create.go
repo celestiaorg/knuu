@@ -17,6 +17,8 @@ const (
 	nginxPort = 80
 	// nginxPath is the path used to create the instances.
 	nginxPath = "/usr/share/nginx/html"
+
+	nginxCommand = "nginx -g daemon off"
 )
 
 // AssertCreateInstanceNginxWithVolumeOwner creates and configures an instance with common settings used across tests but doesn't call commit.
