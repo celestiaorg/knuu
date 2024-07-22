@@ -136,7 +136,7 @@ var (
 	ErrSettingPrivilegedNotAllowed               = errors.New("SettingPrivilegedNotAllowed", "setting privileged is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
 	ErrAddingCapabilityNotAllowed                = errors.New("AddingCapabilityNotAllowed", "adding capability is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
 	ErrAddingCapabilitiesNotAllowed              = errors.New("AddingCapabilitiesNotAllowed", "adding capabilities is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
-	ErrStartingNotAllowed                        = errors.New("StartingNotAllowed", "starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s'")
+	ErrStartingNotAllowed                        = errors.New("StartingNotAllowed", "starting is only allowed in state 'Committed' or 'Stopped'. Current state of instance '%s' is '%s'")
 	ErrStartingNotAllowedForSidecar              = errors.New("StartingNotAllowedForSidecar", "starting is only allowed in state 'Committed' or 'Stopped'. Current state of sidecar '%s' is '%s")
 	ErrStartingSidecarNotAllowed                 = errors.New("StartingSidecarNotAllowed", "starting a sidecar is not allowed")
 	ErrAddingOtelCollectorSidecar                = errors.New("AddingOtelCollectorSidecar", "error adding OpenTelemetry collector sidecar for instance '%s'")

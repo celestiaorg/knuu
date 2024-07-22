@@ -49,6 +49,7 @@ func (s *Suite) TestFileCached() {
 
 	// Test logic
 	for _, i := range instances {
+		s.Require().NoError(i.Commit())
 		s.Require().NoError(i.StartAsync(ctx))
 	}
 

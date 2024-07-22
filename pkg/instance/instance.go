@@ -1112,7 +1112,7 @@ func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartAsync(ctx context.Context) error {
 	if !i.IsInState(StateCommitted, StateStopped) {
-		return ErrStartingNotAllowed.WithParams(i.state.String())
+		return ErrStartingNotAllowed.WithParams(i.k8sName, i.state.String())
 	}
 	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 		if !sidecar.IsInState(StateCommitted, StateStopped) {
