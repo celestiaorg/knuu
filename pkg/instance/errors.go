@@ -68,6 +68,7 @@ var (
 	ErrSettingOtelAgentImage                     = errors.New("SettingOtelAgentImage", "error setting image for otel-agent instance")
 	ErrAddingOtelAgentPort                       = errors.New("AddingOtelAgentPort", "error adding port for otel-agent instance")
 	ErrSettingOtelAgentCPU                       = errors.New("SettingOtelAgentCPU", "error setting CPU for otel-agent instance")
+	ErrAddingOtelAgentVolume                     = errors.New("AddingOtelAgentVolume", "error adding volume for otel-agent instance")
 	ErrSettingOtelAgentMemory                    = errors.New("SettingOtelAgentMemory", "error setting memory for otel-agent instance")
 	ErrCommittingOtelAgentInstance               = errors.New("CommittingOtelAgentInstance", "error committing otel-agent instance")
 	ErrMarshalingYAML                            = errors.New("MarshalingYAML", "error marshaling YAML")

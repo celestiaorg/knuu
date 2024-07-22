@@ -14,9 +14,9 @@ const (
 )
 
 var (
-	otelMemoryRequest = resource.MustParse("100M")
+	otelMemoryRequest = resource.MustParse("100Mi")
 	otelMemoryLimit   = resource.MustParse("200Mi")
-	otelCpuLimit      = resource.MustParse("100Mi")
+	otelCpuLimit      = resource.MustParse("100m")
 )
 
 type OTelConfig struct {
@@ -209,9 +209,6 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 	if err := otelAgent.SetMemory(otelMemoryRequest, otelMemoryLimit); err != nil {
 		return nil, ErrSettingOtelAgentMemory.Wrap(err)
 	}
-	if err := otelAgent.Commit(); err != nil {
-		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
-	}
 
 	config := OTelConfig{
 		Extensions: i.createExtensions(),
@@ -226,11 +223,15 @@ func (i *Instance) createOtelCollectorInstance(ctx context.Context) (*Instance, 
 		return nil, ErrMarshalingYAML.Wrap(err)
 	}
 
-	if err := otelAgent.AddFileBytes(bytes, "/etc/otel-agent.yaml", "0:0"); err != nil {
+	if err := otelAgent.AddFileBytes(bytes, "/config/otel-agent.yaml", "0:0"); err != nil {
 		return nil, ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
-	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/etc/otel-agent.yaml"); err != nil {
+	if err := otelAgent.Commit(); err != nil {
+		return nil, ErrCommittingOtelAgentInstance.Wrap(err)
+	}
+
+	if err := otelAgent.SetCommand("/otelcol-contrib", "--config=/config/otel-agent.yaml"); err != nil {
 		return nil, ErrSettingOtelAgentCommand.Wrap(err)
 	}
 
@@ -256,7 +257,7 @@ func (i *Instance) createOtlpReceiver() OTLP {
 	return OTLP{
 		Protocols: OTLPProtocols{
 			HTTP: OTLPHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.otlpPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.otlpPort),
 			},
 		},
 	}
@@ -271,7 +272,7 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 					ScrapeInterval: i.obsyConfig.prometheusEndpointScrapeInterval,
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{fmt.Sprintf("localhost:%d", i.obsyConfig.prometheusEndpointPort)},
+							Targets: []string{fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.prometheusEndpointPort)},
 						},
 					},
 				},
@@ -280,7 +281,7 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 					ScrapeInterval: "10s",
 					StaticConfigs: []StaticConfig{
 						{
-							Targets: []string{"localhost:8888"},
+							Targets: []string{"0.0.0.0:8888"},
 						},
 					},
 				},
@@ -292,12 +293,12 @@ func (i *Instance) createPrometheusReceiver() Prometheus {
 func (i *Instance) createJaegerReceiver() Jaeger {
 	return Jaeger{
 		Protocols: JaegerProtocols{
-			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerGrpcPort)},
+			GRPC: JaegerGRPC{Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerGrpcPort)},
 			ThriftCompact: JaegerThriftCompact{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftCompactPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerThriftCompactPort),
 			},
 			ThriftHTTP: JaegerThriftHTTP{
-				Endpoint: fmt.Sprintf("localhost:%d", i.obsyConfig.jaegerThriftHttpPort),
+				Endpoint: fmt.Sprintf("0.0.0.0:%d", i.obsyConfig.jaegerThriftHttpPort),
 			},
 		},
 	}
@@ -365,7 +366,7 @@ func (i *Instance) createExporters() Exporters {
 		exporters.Jaeger = i.createJaegerExporter()
 	}
 
-	if i.obsyConfig.prometheusEndpointPort != 0 {
+	if i.obsyConfig.prometheusExporterEndpoint != "" {
 		exporters.Prometheus = i.createPrometheusExporter()
 	}
 
@@ -394,6 +395,11 @@ func (i *Instance) prepareMetricsForServicePipeline() Metrics {
 		metrics.Exporters = append(metrics.Exporters, "prometheusremotewrite")
 	}
 	metrics.Processors = []string{"attributes"}
+
+	// if no trace receiver or exporter is added, remove any trace receiver
+	if len(metrics.Receivers) == 0 || len(metrics.Exporters) == 0 {
+		metrics = Metrics{}
+	}
 	return metrics
 }
 
@@ -412,6 +418,12 @@ func (i *Instance) prepareTracesForServicePipeline() Traces {
 		traces.Exporters = append(traces.Exporters, "jaeger")
 	}
 	traces.Processors = []string{"attributes"}
+
+	// if no trace receiver or exporter is added, remove any trace receiver
+	if len(traces.Receivers) == 0 || len(traces.Exporters) == 0 {
+		traces = Traces{}
+	}
+
 	return traces
 }
 

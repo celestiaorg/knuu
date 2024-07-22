@@ -49,8 +49,6 @@ type Options struct {
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
-	opts.TestScope = k8s.SanitizeName(opts.TestScope)
-
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
@@ -79,10 +77,6 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 		if err := setupProxy(ctx, k); err != nil {
 			return nil, err
 		}
-	}
-
-	if err := k.handleTimeout(ctx); err != nil {
-		return nil, err
 	}
 
 	return k, nil
@@ -219,6 +213,10 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}
+	}
+
+	if err := k.handleTimeout(ctx); err != nil {
+		return ErrHandleTimeout.Wrap(err)
 	}
 
 	if k.ImageBuilder == nil {
