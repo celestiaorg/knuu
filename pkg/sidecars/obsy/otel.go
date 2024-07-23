@@ -26,8 +26,8 @@ const (
 	prometheusRemoteWriteExporterName = "prometheusremotewrite"
 	attributesProcessorName           = "attributes"
 
-	namespaceAttributeKey = "namespace"
-	insertAction          = "insert"
+	scopeAttributeKey = "scope"
+	insertAction      = "insert"
 
 	// %s is the image tag, e.g. version
 	otelAgentImage = "otel/opentelemetry-collector-contrib:%s"
@@ -410,14 +410,14 @@ func (o *Obsy) createService() Service {
 	}
 }
 
-func (o *Obsy) createProcessors(namespace string) Processors {
+func (o *Obsy) createProcessors(scope string) Processors {
 	processors := Processors{}
 
 	processors.Attributes = Attributes{
 		Actions: []Action{
 			{
-				Key:    namespaceAttributeKey,
-				Value:  namespace,
+				Key:    scopeAttributeKey,
+				Value:  scope,
 				Action: insertAction,
 			},
 		},
