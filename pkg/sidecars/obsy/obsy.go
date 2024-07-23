@@ -38,7 +38,6 @@ var (
 	otelAgentCPU         = resource.MustParse("100m")
 	otelAgentMemory      = resource.MustParse("100Mi")
 	otelAgentMemoryLimit = resource.MustParse("200Mi")
-	otelAgentVolumeSize  = resource.MustParse("100Mi")
 )
 
 // ObsyConfig represents the configuration for the obsy sidecar
@@ -111,11 +110,6 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 	if err := o.instance.SetMemory(otelAgentMemory, otelAgentMemoryLimit); err != nil {
 		return ErrSettingOtelAgentMemory.Wrap(err)
 	}
-
-	if err := o.instance.AddVolume("/etc", otelAgentVolumeSize); err != nil {
-		return ErrAddingVolume.Wrap(err)
-	}
-
 	if err := o.instance.Commit(); err != nil {
 		return ErrCommittingOtelAgentInstance.Wrap(err)
 	}
