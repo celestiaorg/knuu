@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/celestiaorg/bittwister/sdk"
@@ -24,7 +25,9 @@ type TestSuite struct {
 func (s *TestSuite) SetupTest() {
 	s.bt = New()
 	s.ctx = context.Background()
-	s.sysDeps = system.SystemDependencies{}
+	s.sysDeps = system.SystemDependencies{
+		Logger: logrus.New(),
+	}
 
 	s.mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

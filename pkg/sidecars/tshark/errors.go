@@ -17,4 +17,5 @@ var (
 	ErrTsharkCollectorNotInitialized        = errors.New("TsharkCollectorNotInitialized", "tshark collector not initialized")
 	ErrTsharkCollectorInvalidVolumeSize     = errors.New("TsharkCollectorInvalidVolumeSize", "tshark collector invalid volume size `%s`")
 	ErrTsharkCollectorS3RegionOrBucketEmpty = errors.New("TsharkCollectorS3RegionOrBucketEmpty", "tshark collector s3 region or bucket empty")
+	ErrSettingTsharkCollectorCPU            = errors.New("SettingTsharkCollectorCPU", "error setting cpu for tshark collector")
 )
