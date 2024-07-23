@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/signal"
 	"testing"
 	"time"
 
@@ -17,10 +16,10 @@ import (
 )
 
 const (
-	prometheusPort    = obsy.DefaultOtelMetricsPort
-	prometheusImage   = "prom/prometheus:latest"
-	prometheusConfig  = "/etc/prometheus/prometheus.yml"
-	prometheusCommand = "--config.file=/etc/prometheus/prometheus.yml"
+	prometheusPort   = obsy.DefaultOtelMetricsPort
+	prometheusImage  = "prom/prometheus:latest"
+	prometheusConfig = "/etc/prometheus/prometheus.yml"
+	prometheusArgs   = "--config.file=/etc/prometheus/prometheus.yml"
 
 	targetImage = "curlimages/curl:latest"
 	otlpPort    = obsy.DefaultOtelOtlpPort
@@ -54,7 +53,7 @@ scrape_configs:
 `, otlpPort)
 	require.NoError(t, prometheus.AddFileBytes([]byte(prometheusConfigContent), prometheusConfig, "0:0"))
 
-	require.NoError(t, prometheus.SetCommand(prometheusCommand))
+	require.NoError(t, prometheus.SetArgs(prometheusArgs))
 	require.NoError(t, prometheus.Start())
 
 	// Setup obsySidecar collector
@@ -101,7 +100,7 @@ scrape_configs:
 
 	// Verify that data has been pushed to Prometheus
 
-	prometheusURL := fmt.Sprintf("http://%s/api/v1/query?query=up", prometheusEndpoint)
+	prometheusURL := fmt.Sprintf("%s/api/v1/query?query=up", prometheusEndpoint)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -118,16 +117,4 @@ scrape_configs:
 	require.Contains(t, string(body), "otel-collector", "otel-collector data source not found in Prometheus")
 
 	t.Log("otel-collector data source is available in Prometheus")
-
-	// wait for 5 minutes and break if Ctrl+C is pressed
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt)
-
-	fmt.Printf("Waiting for 5 minutes or Ctrl+C to be pressed\n")
-	select {
-	case <-time.After(5 * time.Minute):
-		fmt.Printf("Timeout reached\n")
-	case <-done:
-		fmt.Printf("Interrupt signal received\n")
-	}
 }
