@@ -2,7 +2,6 @@ package instance
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -888,9 +887,9 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 	if err := i.verifySidecarsStates(); err != nil {
 		return err
 	}
-	err := i.applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
-		if !sidecar.IsInState(StateCommitted, StateStopped) {
-			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.name, sidecar.state.String())
+	err := applyFunctionToSidecars(i.sidecars, func(sidecar SidecarManager) error {
+		if !sidecar.Instance().IsInState(StateCommitted, StateStopped) {
+			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.Instance().Name(), sidecar.Instance().state.String())
 		}
 		return nil
 	})
@@ -922,7 +921,7 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 // verifySidecarsStates verifies that all sidecars are in the state 'Committed' or 'Stopped'
 func (i *Instance) verifySidecarsStates() error {
 	for _, sc := range i.sidecars {
-		if !sc.Instance().IsInState(Committed, Stopped) {
+		if !sc.Instance().IsInState(StateCommitted, StateStopped) {
 			return ErrStartingNotAllowedForSidecar.
 				WithParams(sc.Instance().Name(), sc.Instance().state.String())
 		}
@@ -1133,28 +1132,4 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 // CustomResourceDefinitionExists checks if the custom resource definition exists
 func (i *Instance) CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error) {
 	return i.K8sClient.CustomResourceDefinitionExists(ctx, gvr)
-}
-
-func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
-	if i.Proxy == nil {
-		return "", ErrProxyNotInitialized
-	}
-
-	serviceName := i.k8sName
-	if i.isSidecar {
-		// The service is created for the main instance and
-		// named after it which will be the parent instance for sidecars,
-		// so we need to use the parent instance's service name.
-		serviceName = i.parentInstance.k8sName
-	}
-
-	prefix := fmt.Sprintf("%s-%d", serviceName, port)
-	if err := i.Proxy.AddHost(ctx, serviceName, prefix, port); err != nil {
-		return "", ErrAddingToProxy.WithParams(serviceName).Wrap(err)
-	}
-	host, err = i.Proxy.URL(ctx, prefix)
-	if err != nil {
-		return "", ErrGettingProxyURL.WithParams(serviceName).Wrap(err)
-	}
-	return host, nil
 }

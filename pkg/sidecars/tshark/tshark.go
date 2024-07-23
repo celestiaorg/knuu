@@ -7,14 +7,13 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/system"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
 	DefaultImage = "ghcr.io/celestiaorg/tshark-s3:pr-11"
 
 	tsharkCollectorName        = "tshark-collector"
-	tsharkCollectorCPU         = "100m"
-	tsharkCollectorMemory      = "250Mi"
 	tsharkCollectorVolumePath  = "/tshark"
 	netAdminCapability         = "NET_ADMIN"
 	TsharkCaptureFileExtension = ".pcapng"
@@ -35,7 +34,7 @@ type Tshark struct {
 	instance *instance.Instance
 	Image    string
 	// VolumeSize is the size of the volume to use for the tshark collector
-	VolumeSize string
+	VolumeSize resource.Quantity
 	// S3AccessKey is the access key to use for the s3 server
 	S3AccessKey string
 	// S3SecretKey is the secret key to use for the s3 server
@@ -56,6 +55,11 @@ type Tshark struct {
 }
 
 var _ instance.SidecarManager = (*Tshark)(nil)
+
+var (
+	tsharkCollectorCPU    = resource.MustParse("100m")
+	tsharkCollectorMemory = resource.MustParse("250Mi")
+)
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called

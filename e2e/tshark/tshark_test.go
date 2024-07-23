@@ -58,9 +58,6 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, target.SetImage(ctx, "busybox"))
 	require.NoError(t, target.SetCommand("sleep", "infinity"))
 
-	t.Log("deploying minio as s3 backend")
-	require.NoError(t, kn.MinioClient.DeployMinio(ctx))
-
 	t.Log("getting minio configs")
 	minioConf, err := kn.MinioClient.GetConfigs(ctx)
 	require.NoError(t, err, "error getting S3 (minio) configs")
@@ -68,7 +65,7 @@ func TestTshark(t *testing.T) {
 	keyPrefix := "tshark/" + scope
 
 	tsc := &tshark.Tshark{
-		VolumeSize:     "10Gi",
+		VolumeSize:     tsharkVolumeSize,
 		S3AccessKey:    minioConf.AccessKeyID,
 		S3SecretKey:    minioConf.SecretAccessKey,
 		S3Region:       s3Location,

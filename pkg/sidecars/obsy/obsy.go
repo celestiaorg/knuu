@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/system"
@@ -18,9 +19,6 @@ const (
 
 	otelAgentName = "otel-agent"
 	// %s will be replaced with the otelCollectorVersion
-	otelAgentCPU                   = "100m"
-	otelAgentMemory                = "100Mi"
-	otelAgentMemoryLimit           = "200Mi"
 	otelAgentConfigFile            = "/etc/otel-agent.yaml"
 	otelAgentConfigFilePermissions = "0:0"
 
@@ -35,6 +33,13 @@ type Obsy struct {
 }
 
 var _ instance.SidecarManager = (*Obsy)(nil)
+
+var (
+	otelAgentCPU         = resource.MustParse("100m")
+	otelAgentMemory      = resource.MustParse("100Mi")
+	otelAgentMemoryLimit = resource.MustParse("200Mi")
+	otelAgentVolumeSize  = resource.MustParse("100Mi")
+)
 
 // ObsyConfig represents the configuration for the obsy sidecar
 type ObsyConfig struct {
@@ -107,7 +112,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 		return ErrSettingOtelAgentMemory.Wrap(err)
 	}
 
-	if err := o.instance.AddVolume("/etc", "100Mi"); err != nil {
+	if err := o.instance.AddVolume("/etc", otelAgentVolumeSize); err != nil {
 		return ErrAddingVolume.Wrap(err)
 	}
 

@@ -87,7 +87,7 @@ func (o *Obsy) SetPrometheusRemoteWriteExporter(endpoint string) error {
 }
 
 func (o *Obsy) validateStateForObsy(endpoint string) error {
-	if o.instance != nil && !o.instance.IsInState(instance.None) {
+	if o.instance != nil && !o.instance.IsInState(instance.StateNone) {
 		return ErrSettingNotAllowed.WithParams(endpoint, o.instance.State().String())
 	}
 	return nil
