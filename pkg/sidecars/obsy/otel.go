@@ -209,7 +209,7 @@ type Action struct {
 }
 
 func (o *Obsy) createExtensions() Extensions {
-	if o.obsyConfig.otlpEndpoint == "" {
+	if o.obsyConfig.otlpEndpoint == "" || o.obsyConfig.otlpUsername == "" || o.obsyConfig.otlpPassword == "" {
 		return Extensions{}
 	}
 
@@ -293,12 +293,17 @@ func (o *Obsy) createReceivers() Receivers {
 }
 
 func (o *Obsy) createOtlpHttpExporter() OTLPHTTPExporter {
-	return OTLPHTTPExporter{
-		Auth: OTLPAuth{
-			Authenticator: basicAuthOTLPAuthAuthenticator,
-		},
+	exporter := OTLPHTTPExporter{
 		Endpoint: o.obsyConfig.otlpEndpoint,
 	}
+
+	if o.obsyConfig.otlpUsername != "" && o.obsyConfig.otlpPassword != "" {
+		exporter.Auth = OTLPAuth{
+			Authenticator: basicAuthOTLPAuthAuthenticator,
+		}
+	}
+
+	return exporter
 }
 
 func (o *Obsy) createJaegerExporter() JaegerExporter {
@@ -388,7 +393,7 @@ func (o *Obsy) prepareTracesForServicePipeline() Traces {
 
 func (o *Obsy) createService() Service {
 	var extensions []string
-	if o.obsyConfig.otlpEndpoint != "" {
+	if o.obsyConfig.otlpEndpoint != "" && o.obsyConfig.otlpUsername != "" && o.obsyConfig.otlpPassword != "" {
 		extensions = append(extensions, basicAuthOTLPAuthAuthenticator)
 	}
 
