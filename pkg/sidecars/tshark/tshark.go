@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/system"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -85,6 +86,10 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 
 	if err := t.instance.Commit(); err != nil {
 		return ErrCommittingTsharkCollectorInstance.Wrap(err)
+	}
+
+	if err := t.instance.SetCPU(tsharkCollectorCPU); err != nil {
+		return ErrSettingTsharkCollectorCPU.Wrap(err)
 	}
 
 	if err := t.instance.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {

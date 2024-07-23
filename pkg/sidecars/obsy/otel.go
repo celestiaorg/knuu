@@ -2,8 +2,6 @@ package obsy
 
 import (
 	"fmt"
-
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -28,15 +26,6 @@ const (
 
 	namespaceAttributeKey = "namespace"
 	insertAction          = "insert"
-
-	// %s is the image tag, e.g. version
-	otelAgentImage = "otel/opentelemetry-collector-contrib:%s"
-)
-
-var (
-	otelMemoryRequest = resource.MustParse("100Mi")
-	otelMemoryLimit   = resource.MustParse("200Mi")
-	otelCpuLimit      = resource.MustParse("100m")
 )
 
 type OTelConfig struct {
