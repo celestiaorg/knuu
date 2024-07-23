@@ -425,9 +425,9 @@ func (i *Instance) copyFileToBuildDir(src, dest string) (string, error) {
 }
 
 func (i *Instance) addFileToInstance(dstPath, dest, chown string) error {
-	if !i.isSubFolderOfVolumes(dest) {
-		return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
-	}
+	// if !i.isSubFolderOfVolumes(dest) {
+	// 	return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
+	// }
 
 	srcInfo, err := os.Stat(dstPath)
 	if os.IsNotExist(err) || srcInfo.IsDir() {
