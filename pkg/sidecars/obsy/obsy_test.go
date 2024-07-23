@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -34,6 +35,7 @@ func (s *TestSuite) SetupTest() {
 			namespace:   "test",
 			KubeManager: &k8s.Client{},
 		},
+		Logger: logrus.New(),
 	}
 }
 
