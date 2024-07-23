@@ -145,11 +145,10 @@ func (i *Instance) ImageName() string {
 // It is only allowed in the 'None' and 'Started' states.
 func (i *Instance) SetImage(ctx context.Context, image string) error {
 	if !i.IsInState(StateNone, StateStarted) {
+		if i.isSidecar {
+			return ErrSettingImageNotAllowedForSidecarsStarted
+		}
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
-	}
-
-	if i.isSidecar {
-		return ErrSettingImageNotAllowedForSidecarsStarted
 	}
 
 	if i.state == StateStarted {
