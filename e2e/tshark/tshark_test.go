@@ -8,10 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/minio"
 	"github.com/celestiaorg/knuu/pkg/sidecars/tshark"
 )
 
@@ -20,13 +24,24 @@ const (
 	s3Location   = "eu-east-1"
 )
 
+var (
+	tsharkVolumeSize = resource.MustParse("4Gi")
+)
+
 func TestTshark(t *testing.T) {
 	t.Parallel()
 	// Setup
 
 	ctx := context.Background()
 
-	kn, err := knuu.New(ctx, knuu.Options{})
+	logger := logrus.New()
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
+	require.NoError(t, err, "error creating k8s client")
+
+	minioClient, err := minio.New(ctx, k8sClient, logger)
+	require.NoError(t, err, "error creating minio client")
+
+	kn, err := knuu.New(ctx, knuu.Options{MinioClient: minioClient, K8sClient: k8sClient})
 	require.NoError(t, err, "error creating knuu")
 	defer func() {
 		if err := kn.CleanUp(ctx); err != nil {
@@ -81,7 +96,7 @@ func TestTshark(t *testing.T) {
 	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
 	require.NoError(t, err, "error executing command")
 
-	url, err := kn.MinioClient.GetMinioURL(ctx, fileKey, s3BucketName)
+	url, err := kn.MinioClient.GetURL(ctx, fileKey, s3BucketName)
 	require.NoError(t, err, "error getting minio url")
 
 	resp, err := http.Get(url)

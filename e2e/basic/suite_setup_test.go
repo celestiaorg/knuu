@@ -1,4 +1,4 @@
-package bittwister
+package basic
 
 import (
 	"context"
@@ -10,24 +10,24 @@ import (
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-type Suite struct {
+type TestSuite struct {
 	suite.Suite
 	Knuu *knuu.Knuu
 }
 
-func (s *Suite) SetupSuite() {
-	ctx := context.Background()
-
-	var err error
+func (s *TestSuite) SetupSuite() {
+	var (
+		err error
+		ctx = context.Background()
+	)
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		ProxyEnabled: true,
+		TestScope: "e2e-basic",
 	})
 	s.Require().NoError(err)
-	s.T().Logf("Scope: %s", s.Knuu.Scope())
 	s.Knuu.HandleStopSignal(ctx)
 }
 
-func (s *Suite) TearDownSuite() {
+func (s *TestSuite) TearDownSuite() {
 	s.T().Cleanup(func() {
 		logrus.Info("Tearing down test suite...")
 		err := s.Knuu.CleanUp(context.Background())
@@ -38,5 +38,5 @@ func (s *Suite) TearDownSuite() {
 }
 
 func TestRunSuite(t *testing.T) {
-	suite.Run(t, new(Suite))
+	suite.Run(t, new(TestSuite))
 }

@@ -26,6 +26,9 @@ const (
 
 	// CustomBurst is the Burst to use for the Kubernetes client, DefaultBurst: 10.
 	CustomBurst = 200
+
+	// retryInterval is the interval to wait between retries
+	retryInterval = 100 * time.Millisecond
 )
 
 type Client struct {
@@ -33,11 +36,12 @@ type Client struct {
 	discoveryClient discovery.DiscoveryInterface
 	dynamicClient   dynamic.Interface
 	namespace       string
+	logger          *logrus.Logger
 }
 
 var _ KubeManager = &Client{}
 
-func NewClient(ctx context.Context, namespace string) (*Client, error) {
+func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*Client, error) {
 	config, err := getClusterConfig()
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
@@ -57,7 +61,7 @@ func NewClient(ctx context.Context, namespace string) (*Client, error) {
 	if err != nil {
 		return nil, ErrCreatingDynamicClient.Wrap(err)
 	}
-	return NewClientCustom(ctx, cs, dc, dC, namespace)
+	return NewClientCustom(ctx, cs, dc, dC, namespace, logger)
 }
 
 func NewClientCustom(
@@ -66,22 +70,18 @@ func NewClientCustom(
 	dc discovery.DiscoveryInterface,
 	dC dynamic.Interface,
 	namespace string,
+	logger *logrus.Logger,
 ) (*Client, error) {
 	kc := &Client{
 		clientset:       cs,
 		discoveryClient: dc,
 		dynamicClient:   dC,
 		namespace:       namespace,
+		logger:          logger,
 	}
-	namespace = SanitizeName(namespace)
-	kc.namespace = namespace
-	if kc.NamespaceExists(ctx, namespace) {
-		logrus.Debugf("Namespace %s already exists, continuing.\n", namespace)
-		return kc, nil
-	}
-
-	if err := kc.CreateNamespace(ctx, namespace); err != nil {
-		return nil, ErrCreatingNamespace.WithParams(namespace).Wrap(err)
+	kc.namespace = SanitizeName(namespace)
+	if err := kc.CreateNamespace(ctx, kc.namespace); err != nil {
+		return nil, ErrCreatingNamespace.WithParams(kc.namespace).Wrap(err)
 	}
 	return kc, nil
 }

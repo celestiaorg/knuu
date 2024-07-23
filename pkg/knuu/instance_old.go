@@ -14,6 +14,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -140,22 +141,22 @@ func (i *Instance) Commit() error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddVolume(path, size string) error {
-	return i.Instance.AddVolume(path, size)
+	return i.Instance.AddVolume(path, resource.MustParse(size))
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
-	return i.Instance.AddVolumeWithOwner(path, size, owner)
+	return i.Instance.AddVolumeWithOwner(path, resource.MustParse(size), owner)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetMemory(request, limit string) error {
-	return i.Instance.SetMemory(request, limit)
+	return i.Instance.SetMemory(resource.MustParse(request), resource.MustParse(limit))
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetCPU(request string) error {
-	return i.Instance.SetCPU(request)
+	return i.Instance.SetCPU(resource.MustParse(request))
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -225,7 +226,7 @@ func (i *Instance) StartAsync() error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) StartWithoutWait() error {
-	return i.Instance.StartWithoutWait(context.Background())
+	return i.Instance.StartAsync(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.

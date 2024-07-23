@@ -12,6 +12,8 @@ type Error struct {
 	params  []interface{}
 }
 
+var _ error = &Error{}
+
 func New(code, message string) *Error {
 	return &Error{
 		code:    code,
