@@ -196,4 +196,5 @@ func TestTsharkCloneWithSuffix(t *testing.T) {
 	assert.Equal(t, tshark.S3KeyPrefix, clone.(*Tshark).S3KeyPrefix)
 	assert.Equal(t, tshark.S3Endpoint, clone.(*Tshark).S3Endpoint)
 	assert.Equal(t, tshark.UploadInterval, clone.(*Tshark).UploadInterval)
+	assert.NotEmpty(t, clone.(*Tshark).instance)
 }
