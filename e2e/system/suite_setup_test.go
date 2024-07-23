@@ -19,11 +19,10 @@ const (
 	nginxImage       = "docker.io/nginx:latest"
 	nginxVolumeOwner = 0
 	nginxPort        = 80
-	nginxPath        = "/usr/share/nginx/html"
+	nginxHTMLPath    = "/usr/share/nginx/html"
 	nginxCommand     = "nginx -g daemon off"
 
 	resourcesHTML           = "resources/html"
-	nginxHTMLPath           = nginxPath
 	resourcesFileCMToFolder = "resources/file_cm_to_folder"
 )
 
@@ -89,9 +88,9 @@ func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.
 func (s *Suite) createNginxInstanceWithVolume(ctx context.Context, name string) *instance.Instance {
 	ins := s.createNginxInstance(ctx, name)
 
-	_, err := ins.ExecuteCommand(ctx, "mkdir", "-p", nginxPath)
+	_, err := ins.ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
 	s.Require().NoError(err)
 
-	s.Require().NoError(ins.AddVolumeWithOwner(nginxPath, nginxVolume, nginxVolumeOwner))
+	s.Require().NoError(ins.AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner))
 	return ins
 }

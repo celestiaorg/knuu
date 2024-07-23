@@ -33,7 +33,7 @@ func (s *Suite) TestFileCached() {
 		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile(resourcesHTML+"/index.html", nginxPath+"/index.html", "0:0")
+			err = instance.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v'", instanceName(i))
 		}(i, ins)
 	}

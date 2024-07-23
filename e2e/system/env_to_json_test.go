@@ -43,7 +43,7 @@ func (s *Suite) TestEnvToJSON() {
 		s.Require().NoError(ins.Commit())
 		s.Require().NoError(ins.Start(ctx))
 
-		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", nginxPath)
+		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
 		s.Require().NoError(err)
 
 		s.T().Logf("Writing JSON to instance '%v': %v", name, jsonString)

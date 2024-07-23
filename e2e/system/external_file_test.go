@@ -38,7 +38,7 @@ func (s *Suite) TestExternalFile() {
 	// Ensure that the copy is successful by syncing the written data to the disk
 	s.Require().NoError(dstFile.Sync())
 
-	err = server.AddFile(htmlTmpPath, nginxPath+"/index.html", "0:0")
+	err = server.AddFile(htmlTmpPath, nginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
 	s.Require().NoError(server.Commit())
