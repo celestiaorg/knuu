@@ -165,7 +165,7 @@ func validateOptions(opts Options) error {
 
 	if opts.Scope != "" && opts.K8sClient != nil &&
 		k8s.SanitizeName(opts.Scope) != opts.K8sClient.Namespace() {
-		return ErrTestScopeMistMatch.WithParams(opts.Scope, opts.K8sClient.Namespace())
+		return ErrScopeMismatch.WithParams(opts.Scope, opts.K8sClient.Namespace())
 	}
 	return nil
 }

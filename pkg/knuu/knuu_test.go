@@ -194,7 +194,7 @@ func TestValidateOptions(t *testing.T) {
 				Scope:     "another_scope",
 				K8sClient: &mockK8s{},
 			},
-			expectedErr: ErrScopeMistMatch.WithParams("another_scope", "test"),
+			expectedErr: ErrScopeMismatch.WithParams("another_scope", "test"),
 		},
 		{
 			name:        "No options set",
