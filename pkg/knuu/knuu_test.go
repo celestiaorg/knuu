@@ -73,7 +73,7 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k.Logger)
 				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
-				assert.NotEmpty(t, k.TestScope)
+				assert.NotEmpty(t, k.Scope)
 				assert.Equal(t, defaultTimeout, k.timeout)
 			},
 		},
@@ -98,8 +98,8 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Logger",
 			options: Options{
-				TestScope: "test",
-				Logger:    &logrus.Logger{},
+				Scope:  "test",
+				Logger: &logrus.Logger{},
 			},
 			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
@@ -110,8 +110,8 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Timeout",
 			options: Options{
-				TestScope: "test",
-				Timeout:   30 * time.Minute,
+				Scope:   "test",
+				Timeout: 30 * time.Minute,
 			},
 			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
@@ -122,7 +122,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Image Builder",
 			options: Options{
-				TestScope:    "test",
+				Scope:        "test",
 				ImageBuilder: &kaniko.Kaniko{},
 			},
 			expectedError: nil,
@@ -132,14 +132,14 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "With K8sClient but without TestScope",
+			name: "With K8sClient but without Scope",
 			options: Options{
 				K8sClient: &mockK8s{},
 			},
 			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
-				assert.Equal(t, "test", k.TestScope)
+				assert.Equal(t, "test", k.Scope)
 			},
 		},
 	}
@@ -181,20 +181,20 @@ func TestValidateOptions(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "TestScope and K8sClient not set",
+			name: "Scope and K8sClient not set",
 			options: Options{
-				TestScope: "",
+				Scope:     "",
 				K8sClient: nil,
 			},
 			expectedErr: nil,
 		},
 		{
-			name: "TestScope does not match K8sClient namespace",
+			name: "Scope does not match K8sClient namespace",
 			options: Options{
-				TestScope: "another_scope",
+				Scope:     "another_scope",
 				K8sClient: &mockK8s{},
 			},
-			expectedErr: ErrTestScopeMistMatch.WithParams("another_scope", "test"),
+			expectedErr: ErrScopeMismatch.WithParams("another_scope", "test"),
 		},
 		{
 			name:        "No options set",
