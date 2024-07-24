@@ -163,8 +163,9 @@ func validateOptions(opts Options) error {
 		return ErrK8sClientNotSet
 	}
 
-	if opts.Scope != "" && opts.K8sClient != nil && opts.Scope != opts.K8sClient.Namespace() {
-		return ErrScopeMistMatch.WithParams(opts.Scope, opts.K8sClient.Namespace())
+	if opts.Scope != "" && opts.K8sClient != nil &&
+		k8s.SanitizeName(opts.Scope) != opts.K8sClient.Namespace() {
+		return ErrTestScopeMistMatch.WithParams(opts.Scope, opts.K8sClient.Namespace())
 	}
 	return nil
 }
