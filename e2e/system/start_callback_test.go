@@ -15,9 +15,6 @@ import (
 
 const (
 	callbackName         = "callback-test"
-	nginxImage           = "nginx:latest"
-	nginxPort            = 80
-	nginxCommand         = "nginx -g daemon off"
 	sleepTimeBeforeReady = "1" // second
 )
 

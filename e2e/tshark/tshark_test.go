@@ -35,7 +35,7 @@ func TestTshark(t *testing.T) {
 	ctx := context.Background()
 
 	logger := logrus.New()
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
 	require.NoError(t, err, "error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient, logger)
@@ -50,7 +50,7 @@ func TestTshark(t *testing.T) {
 		}
 	}()
 
-	scope := kn.Scope()
+	scope := kn.Scope
 	t.Logf("Test scope: %s", scope)
 
 	target, err := kn.NewInstance("busybox")
