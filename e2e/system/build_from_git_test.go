@@ -3,32 +3,21 @@ package system
 import (
 	"context"
 	"strings"
-	"testing"
-
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/knuu"
-	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
-func TestBuildFromGit(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBuildFromGit() {
+	const namePrefix = "build-from-git"
+	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
 
-	// The default image builder is kaniko here
-	kn, err := knuu.New(ctx, knuu.Options{})
-	require.NoError(t, err, "Error creating knuu")
+	target, err := s.Knuu.NewInstance(namePrefix)
+	s.Require().NoError(err)
 
-	target, err := kn.NewInstance("git-builder")
-	require.NoError(t, err, "Error creating instance")
-
-	t.Log("Building the image")
+	s.T().Log("Building the image")
 
 	// This is a blocking call which builds the image from git repo
 	err = target.SetGitRepo(ctx, builder.GitContext{
@@ -37,84 +26,66 @@ func TestBuildFromGit(t *testing.T) {
 		Username: "",
 		Password: "",
 	})
-	require.NoError(t, err, "Error setting git repo")
+	s.Require().NoError(err)
 
-	t.Log("Image built")
+	s.T().Log("Image built")
 
-	t.Cleanup(func() {
-		if err := kn.CleanUp(ctx); err != nil {
-			t.Logf("Error cleaning up knuu: %v", err)
+	s.T().Cleanup(func() {
+		if err := target.Destroy(ctx); err != nil {
+			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
-	require.NoError(t, target.Commit())
+	s.Require().NoError(target.Commit())
 
-	t.Logf("Starting instance")
+	s.T().Logf("Starting instance")
+	s.Require().NoError(target.Start(ctx))
 
-	assert.NoError(t, target.Start(ctx))
-
-	t.Logf("Instance started")
+	s.T().Logf("Instance started")
 
 	// The file is created by the dockerfile in the repo,
 	// so to make sure it is built correctly, we check the file
 	data, err := target.GetFileBytes(ctx, "/test.txt")
-	require.NoError(t, err, "Error getting file bytes")
+	s.Require().NoError(err)
 
 	data = []byte(strings.TrimSpace(string(data)))
-	assert.Equal(t, []byte("Hello, World!"), data, "File bytes do not match")
+	s.Assert().Equal([]byte("Hello, World!"), data, "File bytes do not match")
 }
-func TestBuildFromGitWithModifications(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestBuildFromGitWithModifications() {
+	const namePrefix = "build-from-git-with-modifications"
+	s.T().Parallel()
 
 	// Setup
+	target, err := s.Knuu.NewInstance(namePrefix)
+	s.Require().NoError(err)
+
 	ctx := context.Background()
-
-	logger := logrus.New()
-
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
-	require.NoError(t, err, "Error creating k8s client")
-
-	// Since we are modifying the git repo,
-	// we need to setup minio to allow the builder to push the changes
-	minioClient, err := minio.New(ctx, k8sClient, logger)
-	require.NoError(t, err, "Error creating minio client")
-
-	// The default image builder is kaniko here
-	kn, err := knuu.New(ctx, knuu.Options{
-		K8sClient:   k8sClient,
-		MinioClient: minioClient,
-	})
-	require.NoError(t, err, "Error creating knuu")
-
-	sampleInstance, err := kn.NewInstance("git-builder")
-	require.NoError(t, err, "Error creating instance")
-
 	// This is a blocking call which builds the image from git repo
-	err = sampleInstance.SetGitRepo(ctx, builder.GitContext{
+	err = target.SetGitRepo(ctx, builder.GitContext{
 		Repo:     "https://github.com/celestiaorg/knuu.git",
 		Branch:   "test/build-from-git", // This branch has a Dockerfile and is protected as to not be deleted
 		Username: "",
 		Password: "",
 	})
-	require.NoError(t, err, "Error setting git repo")
+	s.Require().NoError(err)
 
-	require.NoError(t, sampleInstance.SetCommand("sleep", "infinity"), "Error setting command")
+	s.Require().NoError(target.SetCommand("sleep", "infinity"))
 
-	err = sampleInstance.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
-	require.NoError(t, err, "Error adding file")
+	err = target.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
+	s.Require().NoError(err, "Error adding file")
 
-	require.NoError(t, sampleInstance.Commit(), "Error committing instance")
+	s.Require().NoError(target.Commit())
 
-	t.Cleanup(func() {
-		if err := kn.CleanUp(ctx); err != nil {
-			t.Logf("Error cleaning up knuu: %v", err)
+	s.T().Cleanup(func() {
+		if err := target.Destroy(ctx); err != nil {
+			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
-	require.NoError(t, sampleInstance.Start(ctx), "Error starting instance")
+	s.Require().NoError(target.Start(ctx))
 
-	data, err := sampleInstance.GetFileBytes(ctx, "/home/hello.txt")
-	require.NoError(t, err, "Error getting file bytes")
+	data, err := target.GetFileBytes(ctx, "/home/hello.txt")
+	s.Require().NoError(err, "Error getting file bytes")
 
-	require.Equal(t, []byte("Hello, world!"), data, "File bytes do not match")
+	s.Assert().Equal([]byte("Hello, world!"), data, "File bytes do not match")
 }

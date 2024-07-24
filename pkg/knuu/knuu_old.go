@@ -160,3 +160,7 @@ func PushFileToMinio(ctx context.Context, contentName string, reader io.Reader) 
 func GetMinioURL(ctx context.Context, contentName string) (string, error) {
 	return tmpKnuu.MinioClient.GetURL(ctx, contentName, minioBucketName)
 }
+
+func GetKnuuObj() *Knuu {
+	return tmpKnuu
+}

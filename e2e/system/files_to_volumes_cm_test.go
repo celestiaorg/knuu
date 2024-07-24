@@ -1,397 +1,283 @@
 package system
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/celestiaorg/knuu/e2e"
-	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 // TestOneVolumeNoFiles tests the scenario where we have one volume and no files.
 // the initContainer command that it generates looks like:
 // no initContainer command, as there is no volumes, nor files.
-func TestNoVolumesNoFiles(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestNoVolumesNoFiles() {
+	const namePrefix = "no-volumes-no-files"
+	s.T().Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	instanceName := "web-1"
-	instance, err := knuu.NewInstance(instanceName)
-	if err != nil {
-		t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-	}
-	err = instance.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-	}
-	err = instance.AddPortTCP(80)
-	if err != nil {
-		t.Fatalf("Error adding port for '%v': %v", instanceName, err)
-	}
-	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-	}
+	target := s.createNginxInstance(ctx, namePrefix+"-target")
+	s.Require().NoError(target.Commit())
 
 	// Cleanup
-	t.Cleanup(func() {
-		err := e2e.AssertCleanupInstance(t, instance)
+	s.T().Cleanup(func() {
+		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	err = instance.StartAsync()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.Require().NoError(target.StartAsync(ctx))
 
-	webIP, err := instance.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP: %v", err)
-	}
+	webIP, err := target.GetIP(ctx)
+	s.Require().NoError(err)
 
-	err = instance.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-	if err != nil {
-		t.Fatalf("Error executing command: %v", err)
-	}
+	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	s.Require().NoError(err)
 
-	assert.Contains(t, wget, "Welcome to nginx!")
+	s.Assert().Contains(wget, "Welcome to nginx!")
 }
 
 // TestOneVolumeNoFiles tests the scenario where we have one volume and no files.
 // the initContainer command that it generates looks like:
 // mkdir -p /knuu && if [ -d /opt/vol1 ] && [ \"$(ls -A /opt/vol1)\" ]; then cp -r /opt/vol1/* /knuu//opt/vol1 && chown -R 0:0 /knuu/* ;fi
-func TestOneVolumeNoFiles(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestOneVolumeNoFiles() {
+	const namePrefix = "one-volume-no-files"
+	s.T().Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	instanceName := "web-1"
-	instance, err := knuu.NewInstance(instanceName)
-	if err != nil {
-		t.Fatalf("Error creating instance '%v': %v", instanceName, err)
-	}
-	err = instance.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image for '%v': %v", instanceName, err)
-	}
-	err = instance.AddPortTCP(80)
-	if err != nil {
-		t.Fatalf("Error adding port for '%v': %v", instanceName, err)
-	}
-	err = instance.AddVolumeWithOwner("/opt/vol1", "1Gi", 0)
-	if err != nil {
-		t.Fatalf("Error adding volume: %v", err)
-	}
-	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-	}
+	target := s.createNginxInstance(ctx, namePrefix+"-target")
 
-	// Cleanup
-	t.Cleanup(func() {
-		err := e2e.AssertCleanupInstance(t, instance)
+	err = target.AddVolumeWithOwner("/opt/vol1", resource.MustParse("1Gi"), 0)
+	s.Require().NoError(err)
+
+	s.Require().NoError(target.Commit())
+
+	s.T().Cleanup(func() {
+		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	err = instance.StartAsync()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.Require().NoError(target.StartAsync(ctx))
 
-	webIP, err := instance.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP: %v", err)
-	}
+	webIP, err := target.GetIP(ctx)
+	s.Require().NoError(err)
 
-	err = instance.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-	if err != nil {
-		t.Fatalf("Error executing command: %v", err)
-	}
+	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	s.Require().NoError(err)
 
-	assert.Contains(t, wget, "Welcome to nginx!")
+	s.Assert().Contains(wget, "Welcome to nginx!")
 }
 
 // TestNoVolumesOneFile tests the scenario where we have no volumes and one file.
 // the initContainer command that it generates looks like:
 // no initContainer command, as we do not have volumes.
-func TestNoVolumesOneFile(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestNoVolumesOneFile() {
+	const (
+		namePrefix        = "no-volumes-one-file"
+		numberOfInstances = 2
+	)
+
+	s.T().Parallel()
 	// Setup
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	const numberOfInstances = 2
-	instances := make([]*knuu.Instance, numberOfInstances)
-
+	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
+		instances[i] = s.createNginxInstance(ctx, name)
 	}
 
-	var wgFolders sync.WaitGroup
-	errorChannel := make(chan error, len(instances))
+	var (
+		wgFolders sync.WaitGroup
+	)
 
-	for i, instance := range instances {
+	for _, i := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
-			if err != nil {
-				errorChannel <- fmt.Errorf("Error adding file to '%v': %v", instanceName, err)
-				return
-			}
-			errorChannel <- nil
-		}(i, instance)
+			err = i.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			s.Require().NoError(err, "adding file to '%v'", i.Name())
+		}(i)
 	}
 	wgFolders.Wait()
-	close(errorChannel)
 
-	for err := range errorChannel {
+	s.T().Cleanup(func() {
+		all := append(instances, executor)
+		err := instance.BatchDestroy(ctx, all...)
 		if err != nil {
-			t.Fatalf("%v", err)
-		}
-	}
-
-	// Cleanup
-	t.Cleanup(func() {
-		err := e2e.AssertCleanupInstances(t, executor, instances)
-		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+		err = i.WaitInstanceIsRunning(ctx)
+		s.Require().NoError(err)
 
-		wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
-		assert.Equal(t, "hello from 1", wget)
+		s.Assert().Equal("hello from 1", wget)
 	}
 }
 
 // TestOneVolumeOneFile tests the scenario where we have one volume and one file.
 // the initContainer command that it generates looks like:
 // mkdir -p /knuu && mkdir -p /knuu/usr/share/nginx/html && chmod -R 777 /knuu//usr/share/nginx/html && if [ -d /usr/share/nginx/html ] && [ \"$(ls -A /usr/share/nginx/html)\" ]; then cp -r /usr/share/nginx/html/* /knuu//usr/share/nginx/html && chown -R 0:0 /knuu/* ;fi
-func TestOneVolumeOneFile(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestOneVolumeOneFile() {
+	const (
+		namePrefix        = "one-volume-one-file"
+		numberOfInstances = 2
+	)
+	s.T().Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	const numberOfInstances = 2
-	instances := make([]*knuu.Instance, numberOfInstances)
-
+	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
+		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
-	errorChannel := make(chan error, len(instances))
-
-	for i, instance := range instances {
+	for _, i := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(ins *instance.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err := instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0")
-			if err != nil {
-				errorChannel <- fmt.Errorf("Error adding file to '%v': %v", instanceName, err)
-				return
-			}
-			errorChannel <- nil
-		}(i, instance)
+			err = ins.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			s.Require().NoError(err, "adding file to '%v': %v", i.Name())
+		}(i)
 	}
 	wgFolders.Wait()
-	close(errorChannel)
 
-	for err := range errorChannel {
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		// Cleanup
-		err := e2e.AssertCleanupInstances(t, executor, instances)
+	s.T().Cleanup(func() {
+		all := append(instances, executor)
+		err := instance.BatchDestroy(ctx, all...)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
+		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
-
-		wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
-		assert.Equal(t, "hello from 1", wget)
+		s.Assert().Equal("hello from 1", wget)
 	}
 }
 
 // TestOneVolumeOneFile tests the scenario where we have one volume and one file.
 // the initContainer command that it generates looks like:
 // mkdir -p /knuu && mkdir -p /knuu/usr/share/nginx/html && chmod -R 777 /knuu//usr/share/nginx/html && if [ -d /usr/share/nginx/html ] && [ \"$(ls -A /usr/share/nginx/html)\" ]; then cp -r /usr/share/nginx/html/* /knuu//usr/share/nginx/html && chown -R 0:0 /knuu/* ;fi
-func TestOneVolumeTwoFiles(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestOneVolumeTwoFiles() {
+	const (
+		namePrefix        = "one-volume-two-files"
+		numberOfInstances = 2
+	)
+	s.T().Parallel()
 	// Setup
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	const numberOfInstances = 2
-	instances := make([]*knuu.Instance, numberOfInstances)
+	instances := make([]*instance.Instance, numberOfInstances)
 
 	for i := 0; i < numberOfInstances; i++ {
-		instanceName := fmt.Sprintf("web%d", i+1)
-		instances[i] = e2e.AssertCreateInstanceNginxWithVolumeOwner(t, instanceName)
+		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
+		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
-	errorChannel := make(chan error, len(instances)*2) // Allocate space for potential errors from each file addition in each instance
-
-	for i, instance := range instances {
+	for _, i := range instances {
 		wgFolders.Add(1)
-		go func(i int, instance *knuu.Instance) {
+		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			instanceName := fmt.Sprintf("web%d", i+1)
 			// adding the folder after the Commit, it will help us to use a cached image.
-			if err := instance.AddFile("resources/file_cm_to_folder/test_1", "/usr/share/nginx/html/index.html", "0:0"); err != nil {
-				errorChannel <- fmt.Errorf("Error adding file test_1 to '%v': %w", instanceName, err)
-				return
-			}
-			if err := instance.AddFile("resources/file_cm_to_folder/test_2", "/usr/share/nginx/html/index-2.html", "0:0"); err != nil {
-				errorChannel <- fmt.Errorf("Error adding file test_2 to '%v': %w", instanceName, err)
-				return
-			}
-		}(i, instance)
+			err := i.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			s.Require().NoError(err, "adding file to '%v'", i.Name())
+
+			err = i.AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
+			s.Require().NoError(err, "adding file to '%v'", i.Name())
+		}(i)
 	}
 	wgFolders.Wait()
-	close(errorChannel)
 
-	// Handle errors from the error channel
-	for err := range errorChannel {
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		// Cleanup
-		err := e2e.AssertCleanupInstances(t, executor, instances)
+	s.T().Cleanup(func() {
+		all := append(instances, executor)
+		err := instance.BatchDestroy(ctx, all...)
 		if err != nil {
-			t.Fatalf("Error cleaning up: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test logic
-	for _, instance := range instances {
-		err = instance.StartAsync()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
+	for _, i := range instances {
+		s.Require().NoError(i.Commit())
+		s.Require().NoError(i.StartAsync(ctx))
 	}
 
-	for _, instance := range instances {
-		webIP, err := instance.GetIP()
-		if err != nil {
-			t.Fatalf("Error getting IP: %v", err)
-		}
+	for _, i := range instances {
+		webIP, err := i.GetIP(ctx)
+		s.Require().NoError(err)
+		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
 
-		err = instance.WaitInstanceIsRunning()
-		if err != nil {
-			t.Fatalf("Error waiting for instance to be running: %v", err)
-		}
-
-		wgetIndex, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wgetIndex, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		s.Require().NoError(err)
 		wgetIndex = strings.TrimSpace(wgetIndex)
+		s.Assert().Equal("hello from 1", wgetIndex)
 
 		webIP2 := webIP + "/index-2.html"
-		wgetIndex2, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP2)
-		if err != nil {
-			t.Fatalf("Error executing command: %v", err)
-		}
+		wgetIndex2, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP2)
+		s.Require().NoError(err)
 		wgetIndex2 = strings.TrimSpace(wgetIndex2)
-
-		assert.Equal(t, "hello from 1", wgetIndex)
-		assert.Equal(t, "hello from 2", wgetIndex2)
+		s.Assert().Equal("hello from 2", wgetIndex2)
 	}
 }
