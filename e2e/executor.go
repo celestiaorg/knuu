@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -14,18 +15,22 @@ const (
 	infinityArg          = "infinity"
 )
 
+type Executor struct {
+	Kn *knuu.Knuu
+}
+
 var (
 	executorMemoryLimit = resource.MustParse("100Mi")
 	executorCpuLimit    = resource.MustParse("100m")
 )
 
-func NewExecutor(ctx context.Context, executorName string) (*knuu.Instance, error) {
-	i, err := knuu.NewInstance(executorName)
+func (e *Executor) NewInstance(ctx context.Context, name string) (*instance.Instance, error) {
+	i, err := e.Kn.NewInstance(name)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := i.SetImage(executorDefaultImage); err != nil {
+	if err := i.SetImage(ctx, executorDefaultImage); err != nil {
 		return nil, err
 	}
 
@@ -37,15 +42,15 @@ func NewExecutor(ctx context.Context, executorName string) (*knuu.Instance, erro
 		return nil, err
 	}
 
-	if err := i.SetMemory(executorMemoryLimit.String(), executorMemoryLimit.String()); err != nil {
+	if err := i.SetMemory(executorMemoryLimit, executorMemoryLimit); err != nil {
 		return nil, err
 	}
 
-	if err := i.SetCPU(executorCpuLimit.String()); err != nil {
+	if err := i.SetCPU(executorCpuLimit); err != nil {
 		return nil, err
 	}
 
-	if err := i.Start(); err != nil {
+	if err := i.Start(ctx); err != nil {
 		return nil, err
 	}
 

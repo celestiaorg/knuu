@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -17,7 +16,13 @@ func TestProbe(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	executor, err := e2e.NewExecutor(context.Background(), "prob-executor")
+	// Ideally this has to be defined in the test suit setup
+	exe := e2e.Executor{
+		Kn: knuu.GetKnuuObj(),
+	}
+
+	ctx := context.Background()
+	executor, err := exe.NewInstance(ctx, "prob-executor")
 	if err != nil {
 		t.Fatalf("Error creating executor: %v", err)
 	}
@@ -62,7 +67,16 @@ func TestProbe(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor, web))
+		// after refactor, we can use instance.BatchDestroy for simplicity
+		err := executor.Destroy(ctx)
+		if err != nil {
+			t.Logf("Error destroying instance: %v", err)
+		}
+
+		err = web.Destroy()
+		if err != nil {
+			t.Logf("Error destroying instance: %v", err)
+		}
 	})
 
 	// Test logic
@@ -81,7 +95,7 @@ func TestProbe(t *testing.T) {
 		t.Fatalf("Error waiting for instance to be running: %v", err)
 	}
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
+	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}
