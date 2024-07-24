@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 
 type TestSuite struct {
 	suite.Suite
-	bt         *BitTwister
+	bt         *NetShaper
 	ctx        context.Context
 	sysDeps    system.SystemDependencies
 	mockServer *httptest.Server
@@ -82,7 +82,7 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	clone := s.bt.CloneWithSuffix("test")
 	s.Assert().NotNil(clone)
 
-	clonedBt, ok := clone.(*BitTwister)
+	clonedBt, ok := clone.(*NetShaper)
 	s.Assert().True(ok)
 	s.Assert().Equal(s.bt.port, clonedBt.port)
 	s.Assert().Equal(s.bt.image, clonedBt.image)

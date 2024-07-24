@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
-	"github.com/celestiaorg/knuu/pkg/sidecars/bittwister"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
-// It mainly tests the ability to reach to a service running in a sidecar like BitTwister.
+// It mainly tests the ability to reach to a service running in a sidecar like netshaper (BitTwister).
 // It calls an endpoint of the service and checks if the response is as expected.
 func TestReverseProxy(t *testing.T) {
 	t.Parallel()
@@ -34,7 +34,7 @@ func TestReverseProxy(t *testing.T) {
 
 	require.NoError(t, main.Commit(), "Error committing instance")
 
-	btSidecar := bittwister.New()
+	btSidecar := netshaper.New()
 	require.NoError(t, main.AddSidecar(context.Background(), btSidecar))
 
 	t.Cleanup(func() {

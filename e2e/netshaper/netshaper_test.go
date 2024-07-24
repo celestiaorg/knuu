@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
-	"github.com/celestiaorg/knuu/pkg/sidecars/bittwister"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	gopingImage        = "ghcr.io/celestiaorg/goping:4803195"
 )
 
-func (s *Suite) TestBittwisterBandwidth() {
+func (s *Suite) TestNetShaperBandwidth() {
 	s.T().Parallel()
 	// Setup
 
@@ -44,11 +44,11 @@ func (s *Suite) TestBittwisterBandwidth() {
 	iperfClient, err := iperfMother.CloneWithName("iperf-client")
 	s.Require().NoError(err)
 
-	btSidecar := bittwister.New()
+	btSidecar := netshaper.New()
 	s.Require().NoError(iperfServer.AddSidecar(ctx, btSidecar))
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterBandwidth test...")
+		s.T().Log("Tearing down TestNetShaperBandwidth test...")
 		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -124,7 +124,7 @@ func (s *Suite) TestBittwisterBandwidth() {
 	}
 }
 
-func (s *Suite) TestBittwisterPacketloss() {
+func (s *Suite) TestNetShaperPacketloss() {
 	s.T().Parallel()
 	// Setup
 
@@ -150,14 +150,14 @@ func (s *Suite) TestBittwisterPacketloss() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
-	btSidecar := bittwister.New()
+	btSidecar := netshaper.New()
 	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterPacketloss test...")
+		s.T().Log("Tearing down TestNetShaperPacketloss test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -227,7 +227,7 @@ func (s *Suite) TestBittwisterPacketloss() {
 	}
 }
 
-func (s *Suite) TestBittwisterLatency() {
+func (s *Suite) TestNetShaperLatency() {
 	s.T().Parallel()
 	// Setup
 
@@ -253,14 +253,14 @@ func (s *Suite) TestBittwisterLatency() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
-	btSidecar := bittwister.New()
+	btSidecar := netshaper.New()
 	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterLatency test...")
+		s.T().Log("Tearing down TestNetShaperLatency test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -337,7 +337,7 @@ func (s *Suite) TestBittwisterLatency() {
 		})
 	}
 }
-func (s *Suite) TestBittwisterJitter() {
+func (s *Suite) TestNetShaperJitter() {
 	s.T().Parallel()
 	// Setup
 
@@ -363,14 +363,14 @@ func (s *Suite) TestBittwisterJitter() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
-	btSidecar := bittwister.New()
+	btSidecar := netshaper.New()
 	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterJitter test...")
+		s.T().Log("Tearing down TestNetShaperJitter test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)

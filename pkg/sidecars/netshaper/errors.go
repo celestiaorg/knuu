@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"github.com/celestiaorg/knuu/pkg/errors"
@@ -25,4 +25,6 @@ var (
 	ErrBitTwisterNotInitialized                  = errors.New("BitTwisterNotInitialized", "bit-twister instance '%s' not initialized")
 	ErrStoppingLatencyJitter                     = errors.New("StoppingLatencyJitter", "error stopping latency/jitter for bit-twister instance '%s'")
 	ErrStoppingPacketLoss                        = errors.New("StoppingPacketLoss", "error stopping packet loss for bit-twister instance '%s'")
+	ErrGettingServiceStatus                      = errors.New("GettingServiceStatus", "error getting service status for net-shaper (bit-twister) instance '%s'")
+	ErrStoppingService                           = errors.New("StoppingService", "error stopping service for net-shaper (bit-twister) instance '%s'")
 )

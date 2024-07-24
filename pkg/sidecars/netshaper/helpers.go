@@ -1,26 +1,27 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
 	"time"
 
+	"github.com/celestiaorg/bittwister/api/v1"
 	"github.com/celestiaorg/bittwister/sdk"
 )
 
-func (bt *BitTwister) setNewClientByURL(url string) {
+func (bt *NetShaper) setNewClientByURL(url string) {
 	bt.client = sdk.NewClient(url)
-	bt.instance.Logger.Debugf("BitTwister address '%s'", url)
+	bt.instance.Logger.Debugf("NetShaper (BitTwister) address '%s'", url)
 }
 
-func (bt *BitTwister) SetPort(port int) {
+func (bt *NetShaper) SetPort(port int) {
 	bt.port = port
 }
 
-func (bt *BitTwister) SetImage(image string) {
+func (bt *NetShaper) SetImage(image string) {
 	bt.image = image
 }
 
-func (bt *BitTwister) SetNetworkInterface(netIf string) {
+func (bt *NetShaper) SetNetworkInterface(netIf string) {
 	bt.networkInterface = netIf
 }
 
@@ -28,18 +29,14 @@ func (bt *BitTwister) SetNetworkInterface(netIf string) {
 // bandwidth limit in bps (e.g. 1000 for 1Kbps)
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
 // This function can only be called in the state 'Commited'
-func (bt *BitTwister) SetBandwidthLimit(limit int64) error {
+func (bt *NetShaper) SetBandwidthLimit(limit int64) error {
 	if bt.client == nil {
 		return ErrBitTwisterNotInitialized
 	}
 
-	// We first need to stop it, otherwise we get an error
-	if err := bt.client.BandwidthStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingBandwidthLimit.WithParams(bt.instance.Name()).Wrap(err)
-		}
+	err := bt.stopIfRunning(bt.client.BandwidthStatus, bt.client.BandwidthStop)
+	if err != nil {
+		return err
 	}
 
 	return bt.client.BandwidthStart(sdk.BandwidthStartRequest{
@@ -51,19 +48,16 @@ func (bt *BitTwister) SetBandwidthLimit(limit int64) error {
 // SetLatency sets the latency of the instance
 // latency in ms (e.g. 1000 for 1s)
 // jitter in ms (e.g. 1000 for 1s)
-func (bt *BitTwister) SetLatencyAndJitter(latency, jitter int64) error {
+func (bt *NetShaper) SetLatencyAndJitter(latency, jitter int64) error {
 	if bt.client == nil {
 		return ErrBitTwisterNotInitialized
 	}
 
-	// We first need to stop it, otherwise we get an error
-	if err := bt.client.LatencyStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingLatencyJitter.WithParams(bt.instance.Name()).Wrap(err)
-		}
+	err := bt.stopIfRunning(bt.client.LatencyStatus, bt.client.LatencyStop)
+	if err != nil {
+		return err
 	}
+
 	return bt.client.LatencyStart(sdk.LatencyStartRequest{
 		NetworkInterfaceName: bt.networkInterface,
 		Latency:              latency,
@@ -74,17 +68,14 @@ func (bt *BitTwister) SetLatencyAndJitter(latency, jitter int64) error {
 // SetPacketLoss sets the packet loss of the instance
 // packet loss in percent (e.g. 10 for 10%)
 // Currently, only one of bandwidth, jitter, latency or packet loss can be set
-func (bt *BitTwister) SetPacketLoss(packetLoss int32) error {
+func (bt *NetShaper) SetPacketLoss(packetLoss int32) error {
 	if bt.client == nil {
 		return ErrBitTwisterNotInitialized
 	}
-	// We first need to stop it, otherwise we get an error
-	if err := bt.client.PacketlossStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingPacketLoss.WithParams(bt.instance.Name()).Wrap(err)
-		}
+
+	err := bt.stopIfRunning(bt.client.PacketlossStatus, bt.client.PacketlossStop)
+	if err != nil {
+		return err
 	}
 
 	return bt.client.PacketlossStart(sdk.PacketLossStartRequest{
@@ -93,7 +84,7 @@ func (bt *BitTwister) SetPacketLoss(packetLoss int32) error {
 	})
 }
 
-func (bt *BitTwister) WaitForStart(ctx context.Context) error {
+func (bt *NetShaper) WaitForStart(ctx context.Context) error {
 	if bt.client == nil {
 		return ErrBitTwisterNotInitialized
 	}
@@ -113,9 +104,34 @@ func (bt *BitTwister) WaitForStart(ctx context.Context) error {
 	}
 }
 
-func (bt *BitTwister) AllServicesStatus() ([]sdk.ServiceStatus, error) {
+func (bt *NetShaper) AllServicesStatus() ([]sdk.ServiceStatus, error) {
 	if bt.client == nil {
 		return nil, ErrBitTwisterNotInitialized
 	}
 	return bt.client.AllServicesStatus()
+}
+
+func (bt *NetShaper) stopIfRunning(
+	statusFunc func() (*api.MetaMessage, error),
+	stopFunc func() error,
+) error {
+	status, err := statusFunc()
+	if err != nil {
+		return ErrGettingServiceStatus.WithParams(bt.instance.Name()).Wrap(err)
+	}
+
+	if status.Slug != api.SlugServiceReady {
+		return nil
+	}
+
+	err = stopFunc()
+	if err == nil {
+		return nil
+	}
+	if !sdk.IsErrorServiceNotInitialized(err) &&
+		!sdk.IsErrorServiceNotReady(err) &&
+		!sdk.IsErrorServiceNotStarted(err) {
+		return ErrStoppingService.WithParams(bt.instance.Name()).Wrap(err)
+	}
+	return err
 }

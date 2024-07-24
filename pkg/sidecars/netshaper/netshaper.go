@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
@@ -22,7 +22,7 @@ const (
 	capabilityNetAdmin  = "NET_ADMIN"
 )
 
-type BitTwister struct {
+type NetShaper struct {
 	instance         *instance.Instance
 	port             int
 	image            string
@@ -30,10 +30,10 @@ type BitTwister struct {
 	client           *sdk.Client
 }
 
-var _ instance.SidecarManager = (*BitTwister)(nil)
+var _ instance.SidecarManager = (*NetShaper)(nil)
 
-func New() *BitTwister {
-	return &BitTwister{
+func New() *NetShaper {
+	return &NetShaper{
 		port:             DefaultPort,
 		image:            DefaultImage,
 		networkInterface: DefaultNetworkInterface,
@@ -42,7 +42,7 @@ func New() *BitTwister {
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called
-func (bt *BitTwister) Initialize(ctx context.Context, sysDeps system.SystemDependencies) error {
+func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDependencies) error {
 	var err error
 	bt.instance, err = instance.New(instanceName, sysDeps)
 	if err != nil {
@@ -81,7 +81,7 @@ func (bt *BitTwister) Initialize(ctx context.Context, sysDeps system.SystemDepen
 
 // PreStart is called before the instance is started
 // It is used to prepare the sidecar for the instance to start
-func (bt *BitTwister) PreStart(ctx context.Context) error {
+func (bt *NetShaper) PreStart(ctx context.Context) error {
 	if bt.instance == nil {
 		return ErrBitTwisterNotInitialized
 	}
@@ -96,12 +96,12 @@ func (bt *BitTwister) PreStart(ctx context.Context) error {
 	return nil
 }
 
-func (bt *BitTwister) Instance() *instance.Instance {
+func (bt *NetShaper) Instance() *instance.Instance {
 	return bt.instance
 }
 
-func (bt *BitTwister) CloneWithSuffix(suffix string) instance.SidecarManager {
-	return &BitTwister{
+func (bt *NetShaper) CloneWithSuffix(suffix string) instance.SidecarManager {
+	return &NetShaper{
 		instance:         bt.instance.CloneWithSuffix(suffix),
 		port:             bt.port,
 		image:            bt.image,

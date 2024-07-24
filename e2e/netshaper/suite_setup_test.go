@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
