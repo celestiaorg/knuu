@@ -30,7 +30,7 @@ const (
 )
 
 type Kaniko struct {
-	system.SystemDependencies
+	*system.SystemDependencies
 	ContentName string // Name of the content pushed to Minio
 }
 

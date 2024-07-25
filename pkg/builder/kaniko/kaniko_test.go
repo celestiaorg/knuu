@@ -30,7 +30,7 @@ func TestKanikoBuilder(t *testing.T) {
 	k8sClient, err := k8s.NewClientCustom(context.Background(), k8sCS, k8sCS.Discovery(), nil, k8sNamespace, logrus.New())
 	require.NoError(t, err)
 	kb := &Kaniko{
-		SystemDependencies: system.SystemDependencies{
+		SystemDependencies: &system.SystemDependencies{
 			K8sClient: k8sClient,
 		},
 	}

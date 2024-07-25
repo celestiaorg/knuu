@@ -202,7 +202,7 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.ImageBuilder == nil {
 		k.ImageBuilder = &kaniko.Kaniko{
-			SystemDependencies: k.SystemDependencies,
+			SystemDependencies: &k.SystemDependencies,
 		}
 	}
 
