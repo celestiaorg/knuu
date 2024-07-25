@@ -363,7 +363,7 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
+func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
 	var containerVolumes []v1.VolumeMount
 	for _, volume := range volumes {
 		containerVolumes = append(
@@ -376,7 +376,26 @@ func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
 		)
 	}
 
-	return containerVolumes
+	var containerFiles []v1.VolumeMount
+
+	for n, file := range files {
+		shouldAddFile := true
+		for _, volume := range volumes {
+			if strings.HasPrefix(file.Dest, volume.Path) {
+				shouldAddFile = false
+				break
+			}
+		}
+		if shouldAddFile {
+			containerFiles = append(containerFiles, v1.VolumeMount{
+				Name:      name + podFilesConfigmapNameSuffix,
+				MountPath: file.Dest,
+				SubPath:   fmt.Sprintf("%d", n),
+			})
+		}
+	}
+
+	return append(containerVolumes, containerFiles...)
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
@@ -472,7 +491,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 		Command:         config.Command,
 		Args:            config.Args,
 		Env:             buildEnv(config.Env),
-		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes),
+		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes, config.Files),
 		Resources:       buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest),
 		LivenessProbe:   config.LivenessProbe,
 		ReadinessProbe:  config.ReadinessProbe,
@@ -516,9 +535,10 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
+		sidecarContainer := prepareContainer(sidecarConfig)
 		sidecarVolumes := preparePodVolumes(sidecarConfig)
 
-		podSpec.Containers = append(podSpec.Containers, prepareContainer(sidecarConfig))
+		podSpec.Containers = append(podSpec.Containers, sidecarContainer)
 		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}
 

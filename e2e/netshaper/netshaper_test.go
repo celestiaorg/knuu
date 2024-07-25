@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 	gopingImage        = "ghcr.io/celestiaorg/goping:4803195"
 )
 
-func (s *Suite) TestBittwisterBandwidth() {
+func (s *Suite) TestNetShaperBandwidth() {
 	s.T().Parallel()
 	// Setup
 
@@ -43,8 +44,11 @@ func (s *Suite) TestBittwisterBandwidth() {
 	iperfClient, err := iperfMother.CloneWithName("iperf-client")
 	s.Require().NoError(err)
 
+	btSidecar := netshaper.New()
+	s.Require().NoError(iperfServer.AddSidecar(ctx, btSidecar))
+
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterBandwidth test...")
+		s.T().Log("Tearing down TestNetShaperBandwidth test...")
 		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -53,9 +57,9 @@ func (s *Suite) TestBittwisterBandwidth() {
 
 	// Prepare iperf client & server
 
-	s.Require().NoError(iperfServer.EnableBitTwister())
 	s.Require().NoError(iperfServer.Start(ctx))
-	s.Require().NoError(iperfServer.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
+
 	s.Require().NoError(iperfClient.Start(ctx))
 
 	iperfServerIP, err := iperfServer.GetIP(ctx)
@@ -86,8 +90,7 @@ func (s *Suite) TestBittwisterBandwidth() {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Max bandwidth: %v \t tolerance: %v%%", formatBandwidth(float64(tc.targetBandwidth)), tc.tolerancePercent)
-
-			s.Require().NoError(iperfServer.SetBandwidthLimit(tc.targetBandwidth))
+			s.Require().NoError(btSidecar.SetBandwidthLimit(tc.targetBandwidth))
 
 			s.T().Log("Starting bandwidth test. It takes a while.")
 			startTime := time.Now()
@@ -121,7 +124,7 @@ func (s *Suite) TestBittwisterBandwidth() {
 	}
 }
 
-func (s *Suite) TestBittwisterPacketloss() {
+func (s *Suite) TestNetShaperPacketloss() {
 	s.T().Parallel()
 	// Setup
 
@@ -147,11 +150,14 @@ func (s *Suite) TestBittwisterPacketloss() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterPacketloss test...")
+		s.T().Log("Tearing down TestNetShaperPacketloss test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -160,10 +166,9 @@ func (s *Suite) TestBittwisterPacketloss() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -191,9 +196,7 @@ func (s *Suite) TestBittwisterPacketloss() {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Target packetloss: %v%% \t tolerance: %v%%", tc.targetPacketlossRate, tc.tolerancePercent)
-
-			err = target.SetPacketLoss(tc.targetPacketlossRate)
-			s.Require().NoError(err)
+			s.Require().NoError(btSidecar.SetPacketLoss(tc.targetPacketlossRate))
 
 			s.T().Log("Starting packetloss test. It takes a while.")
 			startTime := time.Now()
@@ -224,7 +227,7 @@ func (s *Suite) TestBittwisterPacketloss() {
 	}
 }
 
-func (s *Suite) TestBittwisterLatency() {
+func (s *Suite) TestNetShaperLatency() {
 	s.T().Parallel()
 	// Setup
 
@@ -250,11 +253,14 @@ func (s *Suite) TestBittwisterLatency() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterLatency test...")
+		s.T().Log("Tearing down TestNetShaperLatency test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -263,10 +269,9 @@ func (s *Suite) TestBittwisterLatency() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -299,7 +304,7 @@ func (s *Suite) TestBittwisterLatency() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max latency: %v ms \t tolerance: %v%%", tc.targetLatency.Milliseconds(), tc.tolerancePercent)
 
-			err = target.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
+			err = btSidecar.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
 			s.Require().NoError(err)
 
 			s.T().Log("Starting latency test. It takes a while.")
@@ -332,7 +337,7 @@ func (s *Suite) TestBittwisterLatency() {
 		})
 	}
 }
-func (s *Suite) TestBittwisterJitter() {
+func (s *Suite) TestNetShaperJitter() {
 	s.T().Parallel()
 	// Setup
 
@@ -358,11 +363,14 @@ func (s *Suite) TestBittwisterJitter() {
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterJitter test...")
+		s.T().Log("Tearing down TestNetShaperJitter test...")
 		err := instance.BatchDestroy(ctx, executor, target)
 		if err != nil {
 			s.T().Logf("error destroying instances: %v", err)
@@ -371,9 +379,9 @@ func (s *Suite) TestBittwisterJitter() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
 	s.Require().NoError(target.Start(ctx))
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
+
 	s.Require().NoError(executor.Start(ctx))
 
 	// Perform the test
@@ -400,7 +408,7 @@ func (s *Suite) TestBittwisterJitter() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max jitter: %v", tc.maxTargetJitter.Milliseconds())
 
-			err = target.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
+			err = btSidecar.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
 			s.Require().NoError(err)
 
 			s.T().Log("Starting jitter test. It takes a while.")

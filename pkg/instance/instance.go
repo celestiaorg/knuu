@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/celestiaorg/bittwister/sdk"
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -32,74 +30,6 @@ const (
 	labelType            = "knuu.sh/type"
 )
 
-// ObsyConfig represents the configuration for the obsy sidecar
-type ObsyConfig struct {
-	// otelCollectorVersion is the version of the otel collector to use
-	otelCollectorVersion string
-
-	// prometheusEndpointPort is the port on which the prometheus server will be exposed
-	prometheusEndpointPort int
-	// prometheusEndpointJobName is the name of the prometheus job
-	prometheusEndpointJobName string
-	// prometheusEndpointScrapeInterval is the scrape interval for the prometheus job
-	prometheusEndpointScrapeInterval string
-
-	// jaegerGrpcPort is the port on which the jaeger grpc server is exposed
-	jaegerGrpcPort int
-	// jaegerThriftCompactPort is the port on which the jaeger thrift compact server is exposed
-	jaegerThriftCompactPort int
-	// jaegerThriftHttpPort is the port on which the jaeger thrift http server is exposed
-	jaegerThriftHttpPort int
-	// jaegerEndpoint is the endpoint of the jaeger collector where spans will be sent to
-	jaegerEndpoint string
-
-	// otlpPort is the port on which the otlp server is exposed
-	otlpPort int
-	// otlpEndpoint is the endpoint of the otlp collector where spans will be sent to
-	otlpEndpoint string
-	// otlpUsername is the username to use for the otlp collector
-	otlpUsername string
-	// otlpPassword is the password to use for the otlp collector
-	otlpPassword string
-
-	// prometheusExporterEndpoint is the endpoint of the prometheus exporter
-	prometheusExporterEndpoint string
-
-	// prometheusRemoteWriteExporterEndpoint is the endpoint of the prometheus remote write
-	prometheusRemoteWriteExporterEndpoint string
-}
-
-// TsharkCollectorConfig represents the configuration for the tshark collector
-type TsharkCollectorConfig struct {
-	// VolumeSize is the size of the volume to use for the tshark collector
-	VolumeSize resource.Quantity
-	// S3AccessKey is the access key to use for the s3 server
-	S3AccessKey string
-	// S3SecretKey is the secret key to use for the s3 server
-	S3SecretKey string
-	// S3Region is the region of the s3 server
-	S3Region string
-	// S3Bucket is the bucket to use for the s3 server
-	S3Bucket string
-	// CreateBucket is the flag to create the bucket if it does not exist
-	CreateBucket bool
-	// S3KeyPrefix is the key prefix to use for the s3 server
-	S3KeyPrefix string
-	// S3Endpoint is the endpoint of the s3 server
-	S3Endpoint string
-
-	// UploadInterval is the interval at which the tshark collector will upload the pcap file to the s3 server
-	UploadInterval time.Duration
-
-	// IpFilter is the ip filter to use for the tshark collector
-	// it trace the incoming/outgoing traffic from/to the specific ip
-	// If not set, it will trace all the traffic
-	IpFilter string
-
-	// CompressFiles is the flag to compress the pcap files before pushing them to s3
-	CompressFiles bool
-}
-
 // SecurityContext represents the security settings for a container
 type SecurityContext struct {
 	// Privileged indicates whether the container should be run in privileged mode
@@ -112,36 +42,33 @@ type SecurityContext struct {
 // Instance represents a instance
 type Instance struct {
 	system.SystemDependencies
-	name                  string
-	imageName             string
-	k8sName               string
-	state                 InstanceState
-	instanceType          InstanceType
-	kubernetesService     *v1.Service
-	builderFactory        *container.BuilderFactory
-	kubernetesReplicaSet  *appv1.ReplicaSet
-	portsTCP              []int
-	portsUDP              []int
-	command               []string
-	args                  []string
-	env                   map[string]string
-	volumes               []*k8s.Volume
-	memoryRequest         resource.Quantity
-	memoryLimit           resource.Quantity
-	cpuRequest            resource.Quantity
-	policyRules           []rbacv1.PolicyRule
-	livenessProbe         *v1.Probe
-	readinessProbe        *v1.Probe
-	startupProbe          *v1.Probe
-	files                 []*k8s.File
-	isSidecar             bool
-	parentInstance        *Instance
-	sidecars              []*Instance
-	fsGroup               int64
-	obsyConfig            *ObsyConfig
-	tsharkCollectorConfig *TsharkCollectorConfig
-	securityContext       *SecurityContext
-	BitTwister            *btConfig
+	name                 string
+	imageName            string
+	k8sName              string
+	state                InstanceState
+	instanceType         InstanceType
+	kubernetesService    *v1.Service
+	builderFactory       *container.BuilderFactory
+	kubernetesReplicaSet *appv1.ReplicaSet
+	portsTCP             []int
+	portsUDP             []int
+	command              []string
+	args                 []string
+	env                  map[string]string
+	volumes              []*k8s.Volume
+	memoryRequest        resource.Quantity
+	memoryLimit          resource.Quantity
+	cpuRequest           resource.Quantity
+	policyRules          []rbacv1.PolicyRule
+	livenessProbe        *v1.Probe
+	readinessProbe       *v1.Probe
+	startupProbe         *v1.Probe
+	files                []*k8s.File
+	isSidecar            bool
+	parentInstance       *Instance
+	sidecars             []SidecarManager
+	fsGroup              int64
+	securityContext      *SecurityContext
 }
 
 func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
@@ -150,22 +77,6 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		return nil, ErrGeneratingK8sName.WithParams(name).Wrap(err)
 	}
 
-	obsyConfig := &ObsyConfig{
-		otelCollectorVersion:                  "0.83.0",
-		otlpPort:                              0,
-		prometheusEndpointPort:                0,
-		prometheusEndpointJobName:             "",
-		prometheusEndpointScrapeInterval:      "",
-		jaegerGrpcPort:                        0,
-		jaegerThriftCompactPort:               0,
-		jaegerThriftHttpPort:                  0,
-		otlpEndpoint:                          "",
-		otlpUsername:                          "",
-		otlpPassword:                          "",
-		jaegerEndpoint:                        "",
-		prometheusExporterEndpoint:            "",
-		prometheusRemoteWriteExporterEndpoint: "",
-	}
 	securityContext := &SecurityContext{
 		privileged:      false,
 		capabilitiesAdd: make([]string, 0),
@@ -173,47 +84,31 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 
 	// Create the instance
 	return &Instance{
-		name:                  name,
-		k8sName:               k8sName,
-		imageName:             "",
-		state:                 StateNone,
-		instanceType:          BasicInstance,
-		portsTCP:              make([]int, 0),
-		portsUDP:              make([]int, 0),
-		command:               make([]string, 0),
-		args:                  make([]string, 0),
-		env:                   make(map[string]string),
-		volumes:               make([]*k8s.Volume, 0),
-		memoryRequest:         resource.Quantity{},
-		memoryLimit:           resource.Quantity{},
-		cpuRequest:            resource.Quantity{},
-		policyRules:           make([]rbacv1.PolicyRule, 0),
-		livenessProbe:         nil,
-		readinessProbe:        nil,
-		startupProbe:          nil,
-		files:                 make([]*k8s.File, 0),
-		isSidecar:             false,
-		parentInstance:        nil,
-		sidecars:              make([]*Instance, 0),
-		obsyConfig:            obsyConfig,
-		tsharkCollectorConfig: nil,
-		securityContext:       securityContext,
-		BitTwister:            getBitTwisterDefaultConfig(),
-		SystemDependencies:    sysDeps,
+		name:               name,
+		k8sName:            k8sName,
+		imageName:          "",
+		state:              StateNone,
+		instanceType:       BasicInstance,
+		portsTCP:           make([]int, 0),
+		portsUDP:           make([]int, 0),
+		command:            make([]string, 0),
+		args:               make([]string, 0),
+		env:                make(map[string]string),
+		volumes:            make([]*k8s.Volume, 0),
+		memoryRequest:      resource.Quantity{},
+		memoryLimit:        resource.Quantity{},
+		cpuRequest:         resource.Quantity{},
+		policyRules:        make([]rbacv1.PolicyRule, 0),
+		livenessProbe:      nil,
+		readinessProbe:     nil,
+		startupProbe:       nil,
+		files:              make([]*k8s.File, 0),
+		isSidecar:          false,
+		parentInstance:     nil,
+		sidecars:           make([]SidecarManager, 0),
+		securityContext:    securityContext,
+		SystemDependencies: sysDeps,
 	}, nil
-}
-
-func (i *Instance) EnableBitTwister() error {
-	if i.IsInState(StateStarted) {
-		return ErrEnablingBitTwister
-	}
-	i.BitTwister.enable()
-	return nil
-}
-
-func (i *Instance) DisableBitTwister() error {
-	i.BitTwister.disable()
-	return nil
 }
 
 // Name returns the name of the instance
@@ -225,8 +120,24 @@ func (i *Instance) K8sName() string {
 	return i.k8sName
 }
 
+func (i *Instance) State() InstanceState {
+	return i.state
+}
+
 func (i *Instance) SetInstanceType(instanceType InstanceType) {
 	i.instanceType = instanceType
+}
+
+func (i *Instance) SetIsSidecar(isSidecar bool) {
+	i.isSidecar = isSidecar
+}
+
+func (i *Instance) IsSidecar() bool {
+	return i.isSidecar
+}
+
+func (i *Instance) ImageName() string {
+	return i.imageName
 }
 
 // SetImage sets the image of the instance.
@@ -234,11 +145,10 @@ func (i *Instance) SetInstanceType(instanceType InstanceType) {
 // It is only allowed in the 'None' and 'Started' states.
 func (i *Instance) SetImage(ctx context.Context, image string) error {
 	if !i.IsInState(StateNone, StateStarted) {
+		if i.isSidecar {
+			return ErrSettingImageNotAllowedForSidecarsStarted
+		}
 		return ErrSettingImageNotAllowed.WithParams(i.state.String())
-	}
-
-	if i.isSidecar {
-		return ErrSettingImageNotAllowedForSidecarsStarted
 	}
 
 	if i.state == StateStarted {
@@ -515,10 +425,6 @@ func (i *Instance) copyFileToBuildDir(src, dest string) (string, error) {
 }
 
 func (i *Instance) addFileToInstance(dstPath, dest, chown string) error {
-	if !i.isSubFolderOfVolumes(dest) {
-		return ErrFileIsNotSubFolderOfVolumes.WithParams(dest)
-	}
-
 	srcInfo, err := os.Stat(dstPath)
 	if os.IsNotExist(err) || srcInfo.IsDir() {
 		return ErrSrcDoesNotExistOrIsDirectory.WithParams(dstPath).Wrap(err)
@@ -885,174 +791,32 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 
 // AddSidecar adds a sidecar to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) AddSidecar(sidecar *Instance) error {
-
+func (i *Instance) AddSidecar(ctx context.Context, sc SidecarManager) error {
+	if sc == nil {
+		return ErrSidecarIsNil
+	}
 	if !i.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingSidecarNotAllowed.WithParams(i.state.String())
 	}
-	if sidecar == nil {
-		return ErrSidecarIsNil
+
+	if err := sc.Initialize(ctx, i.SystemDependencies); err != nil {
+		return ErrInitializingSidecar.WithParams(i.name).Wrap(err)
 	}
-	if sidecar == i {
-		return ErrSidecarCannotBeSameInstance
+
+	if sc.Instance() == nil {
+		return ErrSidecarInstanceIsNil.WithParams(i.name)
 	}
-	if sidecar.state != StateCommitted {
-		return ErrSidecarNotCommitted.WithParams(sidecar.name)
+
+	if !sc.Instance().IsInState(StateCommitted) {
+		return ErrSidecarNotCommitted.WithParams(sc.Instance().Name())
 	}
 	if i.isSidecar {
 		return ErrSidecarCannotHaveSidecar.WithParams(i.name)
 	}
-	if sidecar.isSidecar {
-		return ErrSidecarAlreadySidecar.WithParams(sidecar.name)
-	}
 
-	i.sidecars = append(i.sidecars, sidecar)
-	sidecar.isSidecar = true
-	sidecar.parentInstance = i
-	i.Logger.Debugf("Added sidecar '%s' to instance '%s'", sidecar.name, i.name)
-	return nil
-}
-
-// SetOtelCollectorVersion sets the OpenTelemetry collector version for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetOtelCollectorVersion(version string) error {
-	if err := i.validateStateForObsy("OpenTelemetry collector version"); err != nil {
-		return err
-	}
-	i.obsyConfig.otelCollectorVersion = version
-	i.Logger.Debugf("Set OpenTelemetry collector version '%s' for instance '%s'", version, i.name)
-	return nil
-}
-
-// SetOtelEndpoint sets the OpenTelemetry endpoint for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetOtelEndpoint(port int) error {
-	if err := i.validateStateForObsy("OpenTelemetry endpoint"); err != nil {
-		return err
-	}
-	i.obsyConfig.otlpPort = port
-	i.Logger.Debugf("Set OpenTelemetry endpoint '%d' for instance '%s'", port, i.name)
-	return nil
-}
-
-// SetPrometheusEndpoint sets the Prometheus endpoint for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
-	if err := i.validateStateForObsy("Prometheus endpoint"); err != nil {
-		return err
-	}
-	i.obsyConfig.prometheusEndpointPort = port
-	i.obsyConfig.prometheusEndpointJobName = jobName
-	i.obsyConfig.prometheusEndpointScrapeInterval = scapeInterval
-	i.Logger.Debugf("Set Prometheus endpoint '%d' for instance '%s'", port, i.name)
-	return nil
-}
-
-// SetJaegerEndpoint sets the Jaeger endpoint for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
-	if err := i.validateStateForObsy("Jaeger endpoint"); err != nil {
-		return err
-	}
-	i.obsyConfig.jaegerGrpcPort = grpcPort
-	i.obsyConfig.jaegerThriftCompactPort = thriftCompactPort
-	i.obsyConfig.jaegerThriftHttpPort = thriftHttpPort
-	i.Logger.Debugf("Set Jaeger endpoints '%d', '%d' and '%d' for instance '%s'", grpcPort, thriftCompactPort, thriftHttpPort, i.name)
-	return nil
-}
-
-// SetOtlpExporter sets the OTLP exporter for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
-	if err := i.validateStateForObsy("OTLP exporter"); err != nil {
-		return err
-	}
-	i.obsyConfig.otlpEndpoint = endpoint
-	i.obsyConfig.otlpUsername = username
-	i.obsyConfig.otlpPassword = password
-	i.Logger.Debugf("Set OTLP exporter '%s' for instance '%s'", endpoint, i.name)
-	return nil
-}
-
-// SetJaegerExporter sets the Jaeger exporter for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetJaegerExporter(endpoint string) error {
-	if err := i.validateStateForObsy("Jaeger exporter"); err != nil {
-		return err
-	}
-	i.obsyConfig.jaegerEndpoint = endpoint
-	i.Logger.Debugf("Set Jaeger exporter '%s' for instance '%s'", endpoint, i.name)
-	return nil
-}
-
-// SetPrometheusExporter sets the Prometheus exporter for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetPrometheusExporter(endpoint string) error {
-	if err := i.validateStateForObsy("Prometheus exporter"); err != nil {
-		return err
-	}
-	i.obsyConfig.prometheusExporterEndpoint = endpoint
-	i.Logger.Debugf("Set Prometheus exporter '%s' for instance '%s'", endpoint, i.name)
-	return nil
-}
-
-// SetPrometheusRemoteWriteExporter sets the Prometheus remote write exporter for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
-	if err := i.validateStateForObsy("Prometheus remote write exporter"); err != nil {
-		return err
-	}
-	i.obsyConfig.prometheusRemoteWriteExporterEndpoint = endpoint
-	i.Logger.Debugf("Set Prometheus remote write exporter '%s' for instance '%s'", endpoint, i.name)
-	return nil
-}
-
-// TsharkCollectorEnabled returns true if the tshark collector is enabled
-func (i *Instance) TsharkCollectorEnabled() bool {
-	return i.tsharkCollectorConfig != nil
-}
-
-// EnableTsharkCollector enables the tshark collector for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
-func (i *Instance) EnableTsharkCollector(conf TsharkCollectorConfig) error {
-	if err := i.validateStateForObsy(tsharkCollectorName); err != nil {
-		return err
-	}
-	if i.TsharkCollectorEnabled() {
-		return ErrTsharkCollectorAlreadyEnabled
-	}
-
-	if err := validateTsharkCollectorConfig(conf); err != nil {
-		return err
-	}
-
-	i.tsharkCollectorConfig = &conf
-	i.Logger.Debugf("Enabled Tshark collector for instance '%s'", i.name)
-	return nil
-}
-
-// validateTsharkCollectorConfig checks the configuration fields for proper formatting
-func validateTsharkCollectorConfig(conf TsharkCollectorConfig) error {
-	// Regex patterns for validation
-	awsKeyPattern, err := regexp.Compile(`^[A-Za-z0-9]{1,20}$`)
-	if err != nil {
-		return ErrRegexpCompile.WithParams("awsKeyPattern")
-	}
-	awsSecretPattern, err := regexp.Compile(`^[A-Za-z0-9/+=]{1,40}$`)
-	if err != nil {
-		return ErrRegexpCompile.WithParams("awsSecretPattern")
-	}
-
-	if !awsKeyPattern.MatchString(conf.S3AccessKey) {
-		return ErrTsharkCollectorInvalidS3AccessKey.WithParams(conf.S3AccessKey)
-	}
-	if !awsSecretPattern.MatchString(conf.S3SecretKey) {
-		return ErrTsharkCollectorInvalidS3SecretKey.WithParams(conf.S3SecretKey)
-	}
-	if conf.S3Region == "" || conf.S3Bucket == "" {
-		return ErrTsharkCollectorS3RegionOrBucketEmpty.WithParams(conf.S3Region, conf.S3Bucket)
-	}
-
+	i.sidecars = append(i.sidecars, sc)
+	sc.Instance().parentInstance = i
+	i.Logger.Debugf("Added sidecar '%s' to instance '%s'", sc.Instance().Name(), i.name)
 	return nil
 }
 
@@ -1114,56 +878,66 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 	if !i.IsInState(StateCommitted, StateStopped) {
 		return ErrStartingNotAllowed.WithParams(i.k8sName, i.state.String())
 	}
-	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
-		if !sidecar.IsInState(StateCommitted, StateStopped) {
-			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.name, sidecar.state.String())
+
+	if err := i.verifySidecarsStates(); err != nil {
+		return err
+	}
+	err := applyFunctionToSidecars(i.sidecars, func(sidecar SidecarManager) error {
+		if !sidecar.Instance().IsInState(StateCommitted, StateStopped) {
+			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.Instance().Name(), sidecar.Instance().state.String())
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
+
 	if i.isSidecar {
 		return ErrStartingSidecarNotAllowed
 	}
 
 	if i.state == StateCommitted {
-		// deploy otel collector if observability is enabled
-		if i.isObservabilityEnabled() {
-			if err := i.addOtelCollectorSidecar(ctx); err != nil {
-				return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
-			}
-		}
-
-		// deploy tshark collector if enabled
-		if i.TsharkCollectorEnabled() {
-			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
-				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
-			}
-		}
-
-		if i.BitTwister.Enabled() {
-			if err := i.addBitTwisterSidecar(ctx); err != nil {
-				return ErrAddingNetworkSidecar.WithParams(i.k8sName).Wrap(err)
-			}
-		}
-
-		if err := i.deployResources(ctx); err != nil {
+		if err := i.deployResourcesForCommittedState(ctx); err != nil {
 			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
-		}
-		if err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
-			return sidecar.deployResources(ctx)
-		}); err != nil {
-			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
 		}
 	}
 
 	if err := i.deployPod(ctx); err != nil {
 		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
 	}
+
 	i.state = StateStarted
 	setStateForSidecars(i.sidecars, StateStarted)
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+
+	return nil
+}
+
+// verifySidecarsStates verifies that all sidecars are in the state 'Committed' or 'Stopped'
+func (i *Instance) verifySidecarsStates() error {
+	for _, sc := range i.sidecars {
+		if !sc.Instance().IsInState(StateCommitted, StateStopped) {
+			return ErrStartingNotAllowedForSidecar.
+				WithParams(sc.Instance().Name(), sc.Instance().state.String())
+		}
+	}
+	return nil
+}
+
+// deployResourcesForCommittedState handles resource deployment for instances in the 'Committed' state
+func (i *Instance) deployResourcesForCommittedState(ctx context.Context) error {
+	if err := i.deployResources(ctx); err != nil {
+		return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
+	}
+	err := applyFunctionToSidecars(i.sidecars, func(sc SidecarManager) error {
+		if err := sc.PreStart(ctx); err != nil {
+			return err
+		}
+		return sc.Instance().deployResources(ctx)
+	})
+	if err != nil {
+		return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
+	}
 
 	return nil
 }
@@ -1228,107 +1002,6 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 	if err != nil {
 		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
 	}
-	return nil
-}
-
-// SetBandwidthLimit sets the bandwidth limit of the instance
-// bandwidth limit in bps (e.g. 1000 for 1Kbps)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
-func (i *Instance) SetBandwidthLimit(limit int64) error {
-	if !i.IsInState(StateStarted) {
-		return ErrSettingBandwidthLimitNotAllowed.WithParams(i.state.String())
-	}
-	if !i.BitTwister.Enabled() {
-		return ErrSettingBandwidthLimitNotAllowedBitTwister
-	}
-
-	// We first need to stop it, otherwise we get an error
-	if err := i.BitTwister.Client().BandwidthStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
-		}
-	}
-
-	err := i.BitTwister.Client().BandwidthStart(sdk.BandwidthStartRequest{
-		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
-		Limit:                limit,
-	})
-	if err != nil {
-		return ErrSettingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
-	}
-
-	i.Logger.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
-	return nil
-}
-
-// SetLatency sets the latency of the instance
-// latency in ms (e.g. 1000 for 1s)
-// jitter in ms (e.g. 1000 for 1s)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
-func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
-	if !i.IsInState(StateStarted) {
-		return ErrSettingLatencyJitterNotAllowed.WithParams(i.state.String())
-	}
-	if !i.BitTwister.Enabled() {
-		return ErrSettingLatencyJitterNotAllowedBitTwister
-	}
-
-	// We first need to stop it, otherwise we get an error
-	if err := i.BitTwister.Client().LatencyStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingLatencyJitter.WithParams(i.k8sName).Wrap(err)
-		}
-	}
-
-	err := i.BitTwister.Client().LatencyStart(sdk.LatencyStartRequest{
-		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
-		Latency:              latency,
-		Jitter:               jitter,
-	})
-	if err != nil {
-		return ErrSettingLatencyJitter.WithParams(i.k8sName).Wrap(err)
-	}
-
-	i.Logger.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
-	return nil
-}
-
-// SetPacketLoss sets the packet loss of the instance
-// packet loss in percent (e.g. 10 for 10%)
-// Currently, only one of bandwidth, jitter, latency or packet loss can be set
-// This function can only be called in the state 'Commited'
-func (i *Instance) SetPacketLoss(packetLoss int32) error {
-	if !i.IsInState(StateStarted) {
-		return ErrSettingPacketLossNotAllowed.WithParams(i.state.String())
-	}
-	if !i.BitTwister.Enabled() {
-		return ErrSettingPacketLossNotAllowedBitTwister
-	}
-
-	// We first need to stop it, otherwise we get an error
-	if err := i.BitTwister.Client().PacketlossStop(); err != nil {
-		if !sdk.IsErrorServiceNotInitialized(err) &&
-			!sdk.IsErrorServiceNotReady(err) &&
-			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingPacketLoss.WithParams(i.k8sName).Wrap(err)
-		}
-	}
-
-	err := i.BitTwister.Client().PacketlossStart(sdk.PacketLossStartRequest{
-		NetworkInterfaceName: i.BitTwister.NetworkInterface(),
-		PacketLossRate:       packetLoss,
-	})
-	if err != nil {
-		return ErrSettingPacketLoss.WithParams(i.k8sName).Wrap(err)
-	}
-
-	i.Logger.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
 	return nil
 }
 
@@ -1408,7 +1081,7 @@ func (i *Instance) Clone() (*Instance, error) {
 		return nil, ErrGeneratingK8sName.WithParams(i.name).Wrap(err)
 	}
 	// Create a new instance with the same attributes as the original instance
-	ins := i.cloneWithSuffix("")
+	ins := i.CloneWithSuffix("")
 	ins.k8sName = newK8sName
 	return ins, nil
 }
@@ -1427,7 +1100,7 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 		return nil, ErrGeneratingK8sNameForSidecar.WithParams(name).Wrap(err)
 	}
 	// Create a new instance with the same attributes as the original instance
-	ins := i.cloneWithSuffix("")
+	ins := i.CloneWithSuffix("")
 	ins.name = name
 	ins.k8sName = newK8sName
 	return ins, nil

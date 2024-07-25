@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
-// It mainly tests the ability to reach to a service running in a sidecar like BitTwister.
+// It mainly tests the ability to reach to a service running in a sidecar like netshaper (BitTwister).
 // It calls an endpoint of the service and checks if the response is as expected.
 func TestReverseProxy(t *testing.T) {
 	t.Parallel()
@@ -33,6 +34,9 @@ func TestReverseProxy(t *testing.T) {
 
 	require.NoError(t, main.Commit(), "Error committing instance")
 
+	btSidecar := netshaper.New()
+	require.NoError(t, main.AddSidecar(context.Background(), btSidecar))
+
 	t.Cleanup(func() {
 		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
 			t.Log("Skipping cleanup")
@@ -42,20 +46,19 @@ func TestReverseProxy(t *testing.T) {
 		require.NoError(t, main.Destroy(), "Error destroying instance")
 	})
 
-	require.NoError(t, main.EnableBitTwister(), "Error enabling BitTwister")
 	require.NoError(t, main.Start(), "Error starting main instance")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	require.NoError(t, main.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
+	require.NoError(t, btSidecar.WaitForStart(ctx), "Error waiting for BitTwister to start")
 
 	// test if BitTwister running in a sidecar is accessible
-	err = main.SetBandwidthLimit(1000)
+	err = btSidecar.SetBandwidthLimit(1000)
 	assert.NoError(t, err, "Error setting bandwidth limit")
 
 	// Check if the BitTwister service is set
-	out, err := main.BitTwister.Client().AllServicesStatus()
+	out, err := btSidecar.AllServicesStatus()
 	assert.NoError(t, err, "Error getting all services status")
 	assert.GreaterOrEqual(t, len(out), 1, "No services found")
 	assert.NotEmpty(t, out[0].Name, "Service name is empty")
