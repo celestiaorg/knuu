@@ -12,21 +12,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/pkg/knuu"
-	"github.com/celestiaorg/knuu/pkg/sidecars/obsy"
+	"github.com/celestiaorg/knuu/pkg/sidecars/observability"
 )
 
 const (
-	prometheusPort   = obsy.DefaultOtelMetricsPort
+	prometheusPort   = observability.DefaultOtelMetricsPort
 	prometheusImage  = "prom/prometheus:latest"
 	prometheusConfig = "/etc/prometheus/prometheus.yml"
 	prometheusArgs   = "--config.file=/etc/prometheus/prometheus.yml"
 
 	targetImage = "curlimages/curl:latest"
-	otlpPort    = obsy.DefaultOtelOtlpPort
+	otlpPort    = observability.DefaultOtelOtlpPort
 )
 
-// TestObsyCollector is a test function that verifies the functionality of the otel collector setup
-func TestObsyCollector(t *testing.T) {
+// TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
+func TestObservabilityCollector(t *testing.T) {
 	t.Parallel()
 
 	// Setup Prometheus
@@ -56,17 +56,17 @@ scrape_configs:
 	require.NoError(t, prometheus.SetArgs(prometheusArgs))
 	require.NoError(t, prometheus.Start())
 
-	// Setup obsySidecar collector
-	obsySidecar := obsy.New()
+	// Setup observabilitySidecar collector
+	observabilitySidecar := observability.New()
 
-	require.NoError(t, obsySidecar.SetOtelEndpoint(4318))
+	require.NoError(t, observabilitySidecar.SetOtelEndpoint(4318))
 
-	err = obsySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", knuu.Scope()), "10s")
+	err = observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", knuu.Scope()), "10s")
 	require.NoError(t, err)
 
-	require.NoError(t, obsySidecar.SetJaegerEndpoint(14250, 6831, 14268))
+	require.NoError(t, observabilitySidecar.SetJaegerEndpoint(14250, 6831, 14268))
 
-	require.NoError(t, obsySidecar.SetOtlpExporter("prometheus:9090", "", ""))
+	require.NoError(t, observabilitySidecar.SetOtlpExporter("prometheus:9090", "", ""))
 
 	// Create and start a target pod and configure it to use the obsySidecar to push metrics
 	target, err := knuu.NewInstance("target")
@@ -78,7 +78,7 @@ scrape_configs:
 	err = target.SetCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
 	require.NoError(t, err, "Error setting target command")
 
-	require.NoError(t, target.AddSidecar(context.Background(), obsySidecar))
+	require.NoError(t, target.AddSidecar(context.Background(), observabilitySidecar))
 
 	require.NoError(t, target.Commit(), "Error committing target instance")
 

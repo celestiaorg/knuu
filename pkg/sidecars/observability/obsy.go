@@ -1,4 +1,4 @@
-package obsy
+package observability
 
 import (
 	"context"
@@ -119,7 +119,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 		Receivers:  o.createReceivers(),
 		Exporters:  o.createExporters(),
 		Service:    o.createService(),
-		Processors: o.createProcessors(sysDeps.TestScope),
+		Processors: o.createProcessors(sysDeps.Scope),
 	}
 
 	bytes, err := yaml.Marshal(config)

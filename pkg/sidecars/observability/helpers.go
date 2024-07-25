@@ -1,4 +1,4 @@
-package obsy
+package observability
 
 import (
 	"github.com/celestiaorg/knuu/pkg/instance"
