@@ -22,7 +22,7 @@ func TestReverseProxy(t *testing.T) {
 	t.Parallel()
 	// Setup
 
-	main, err := knuu.NewInstance("main")
+	main, err := knuu.NewInstance("main-reverse-proxy")
 	require.NoError(t, err, "Error creating instance")
 
 	err = main.SetImage("alpine:latest")
@@ -64,7 +64,7 @@ func TestReverseProxy(t *testing.T) {
 func TestAddHostWithReadyCheck(t *testing.T) {
 	t.Parallel()
 
-	target, err := knuu.NewInstance("target")
+	target, err := knuu.NewInstance("target-add-host-check")
 	require.NoError(t, err, "Error creating instance 'target'")
 
 	err = target.SetImage("nginx:latest")

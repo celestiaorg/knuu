@@ -71,7 +71,7 @@ func (i *Instance) createTsharkCollectorInstance(ctx context.Context) (*Instance
 		envStorageRegion:          i.tsharkCollectorConfig.S3Region,
 		envStorageBucketName:      i.tsharkCollectorConfig.S3Bucket,
 		envStorageKeyPrefix:       i.tsharkCollectorConfig.S3KeyPrefix,
-		envCaptureFileName:        i.k8sName + TsharkCaptureFileExtension,
+		envCaptureFileName:        i.name + TsharkCaptureFileExtension,
 		envStorageEndpoint:        i.tsharkCollectorConfig.S3Endpoint,
 		envUploadInterval:         fmt.Sprintf("%d", int64(i.tsharkCollectorConfig.UploadInterval.Seconds())),
 		envCreateBucket:           fmt.Sprintf("%t", i.tsharkCollectorConfig.CreateBucket),

@@ -1,6 +1,8 @@
 package system
 
 import (
+	"sync"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -17,4 +19,14 @@ type SystemDependencies struct {
 	Proxy        *traefik.Traefik
 	Scope        string
 	StartTime    string
+	instancesMap sync.Map
+}
+
+func (s *SystemDependencies) AddInstanceName(name string) {
+	s.instancesMap.Store(name, struct{}{})
+}
+
+func (s *SystemDependencies) HasInstanceName(name string) bool {
+	_, exists := s.instancesMap.Load(name)
+	return exists
 }

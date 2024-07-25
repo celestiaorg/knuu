@@ -325,15 +325,6 @@ func (i *Instance) Stop() error {
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) Clone() (*Instance, error) {
-	newInst, err := i.Instance.Clone()
-	if err != nil {
-		return nil, err
-	}
-	return &Instance{Instance: *newInst}, nil
-}
-
-// Deprecated: Use the new package knuu instead.
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
 	newInst, err := i.Instance.CloneWithName(name)
 	if err != nil {

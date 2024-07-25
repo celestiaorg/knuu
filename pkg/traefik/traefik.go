@@ -3,6 +3,7 @@ package traefik
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,11 +18,11 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 const (
 	traefikServiceName     = "traefik"
+	serviceAccountName     = "traefik-service-account"
 	traefikAPIGroupVersion = "traefik.io/v1alpha1"
 	Port                   = 80
 	PortSecure             = 443
@@ -44,6 +45,7 @@ type Traefik struct {
 	K8sClient k8s.KubeManager
 	Logger    *logrus.Logger
 	endpoint  string
+	namesMap  sync.Map
 }
 
 func (t *Traefik) Deploy(ctx context.Context) error {
@@ -51,22 +53,18 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 		return ErrTraefikClientNotInitialized
 	}
 
-	// Create a dedicated service account for Traefik
-	serviceAccountName, err := names.NewRandomK8("traefik-service-account")
-	if err != nil {
-		return err
-	}
 	if err := t.K8sClient.CreateServiceAccount(ctx, serviceAccountName, nil); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
-	clusterRoleName, err := names.NewRandomK8(roleName)
-	if err != nil {
+	// This is a global name, so we need to make it unique clusterwise
+	clusterRoleName := k8s.SanitizeName(t.K8sClient.Namespace() + "-" + roleName)
+	if err := t.checkAndAddUniqueName(clusterRoleName); err != nil {
 		return err
 	}
 
 	// Define and create a ClusterRole for Traefik
-	err = t.K8sClient.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
+	err := t.K8sClient.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{""}, // Core group
 			Resources: []string{"pods", "endpoints", "secrets", "services"},
@@ -209,9 +207,9 @@ func (t *Traefik) Endpoint(ctx context.Context) (string, error) {
 }
 
 func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portTCP int) error {
-	middlewareName, err := names.NewRandomK8("strip-" + prefix)
-	if err != nil {
-		return ErrGeneratingRandomK8sName.Wrap(err)
+	middlewareName := k8s.SanitizeName("strip-" + prefix)
+	if err := t.checkAndAddUniqueName(middlewareName); err != nil {
+		return err
 	}
 
 	// middleware is required to strip the prefix from the service name
@@ -303,9 +301,9 @@ func (t *Traefik) createIngressRoute(
 		Resource: "ingressroutes",
 	}
 
-	ingressRouteName, err := names.NewRandomK8("ing-route-" + prefix)
-	if err != nil {
-		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
+	ingressRouteName := k8s.SanitizeName("ing-route-" + prefix)
+	if err := t.checkAndAddUniqueName(ingressRouteName); err != nil {
+		return err
 	}
 
 	ingressRoute := &unstructured.Unstructured{
@@ -339,7 +337,7 @@ func (t *Traefik) createIngressRoute(
 		},
 	}
 
-	_, err = t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).
+	_, err := t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).
 		Create(ctx, ingressRoute, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
@@ -373,4 +371,12 @@ func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
 
 	t.Logger.Warnf("Missing Traefik API resources: %v", requiredResources)
 	return false
+}
+
+func (t *Traefik) checkAndAddUniqueName(name string) error {
+	_, loaded := t.namesMap.LoadOrStore(name, struct{}{})
+	if loaded {
+		return ErrNameAlreadyExist.WithParams(name)
+	}
+	return nil
 }

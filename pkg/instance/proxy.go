@@ -15,13 +15,13 @@ func (i *Instance) AddHost(ctx context.Context, port int) (host string, err erro
 		return "", ErrProxyNotInitialized
 	}
 
-	prefix := fmt.Sprintf("%s-%d", i.k8sName, port)
-	if err := i.Proxy.AddHost(ctx, i.k8sName, prefix, port); err != nil {
-		return "", ErrAddingToProxy.WithParams(i.k8sName).Wrap(err)
+	prefix := fmt.Sprintf("%s-%d", i.name, port)
+	if err := i.Proxy.AddHost(ctx, i.name, prefix, port); err != nil {
+		return "", ErrAddingToProxy.WithParams(i.name).Wrap(err)
 	}
 	host, err = i.Proxy.URL(ctx, prefix)
 	if err != nil {
-		return "", ErrGettingProxyURL.WithParams(i.k8sName).Wrap(err)
+		return "", ErrGettingProxyURL.WithParams(i.name).Wrap(err)
 	}
 	return host, nil
 }
