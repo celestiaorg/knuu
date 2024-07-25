@@ -577,13 +577,3 @@ func setStateForSidecars(sidecars []SidecarManager, state InstanceState) {
 		return nil
 	})
 }
-
-// isSubFolderOfVolumes checks if the given path is a subfolder of the volumes
-func (i *Instance) isSubFolderOfVolumes(path string) bool {
-	for _, volume := range i.volumes {
-		if strings.HasPrefix(path, volume.Path) {
-			return true
-		}
-	}
-	return false
-}
