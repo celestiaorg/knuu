@@ -20,7 +20,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -111,10 +110,9 @@ type SecurityContext struct {
 
 // Instance represents a instance
 type Instance struct {
-	system.SystemDependencies
+	*system.SystemDependencies
 	name                  string
 	imageName             string
-	k8sName               string
 	state                 InstanceState
 	instanceType          InstanceType
 	kubernetesService     *v1.Service
@@ -144,11 +142,12 @@ type Instance struct {
 	BitTwister            *btConfig
 }
 
-func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
-	k8sName, err := names.NewRandomK8(name)
-	if err != nil {
-		return nil, ErrGeneratingK8sName.WithParams(name).Wrap(err)
+func New(name string, sysDeps *system.SystemDependencies) (*Instance, error) {
+	name = k8s.SanitizeName(name)
+	if sysDeps.HasInstanceName(name) {
+		return nil, ErrInstanceNameAlreadyExists.WithParams(name)
 	}
+	sysDeps.AddInstanceName(name)
 
 	obsyConfig := &ObsyConfig{
 		otelCollectorVersion:                  "0.83.0",
@@ -174,7 +173,6 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 	// Create the instance
 	return &Instance{
 		name:                  name,
-		k8sName:               k8sName,
 		imageName:             "",
 		state:                 StateNone,
 		instanceType:          BasicInstance,
@@ -219,10 +217,6 @@ func (i *Instance) DisableBitTwister() error {
 // Name returns the name of the instance
 func (i *Instance) Name() string {
 	return i.name
-}
-
-func (i *Instance) K8sName() string {
-	return i.k8sName
 }
 
 func (i *Instance) SetInstanceType(instanceType InstanceType) {
@@ -356,9 +350,9 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 	}
 
 	// Forward the port
-	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, i.k8sName)
+	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, i.name)
 	if err != nil {
-		return -1, ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
+		return -1, ErrGettingPodFromReplicaSet.WithParams(i.name).Wrap(err)
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -397,7 +391,7 @@ func (i *Instance) AddPortUDP(port int) error {
 	}
 	i.portsUDP = append(i.portsUDP, port)
 
-	i.Logger.Debugf("Added UDP port '%d' to instance '%s'", port, i.k8sName)
+	i.Logger.Debugf("Added UDP port '%d' to instance '%s'", port, i.name)
 	return nil
 }
 
@@ -420,20 +414,20 @@ func (i *Instance) ExecuteCommand(ctx context.Context, command ...string) (strin
 	var (
 		instanceName  string
 		eErr          *Error
-		containerName = i.k8sName
+		containerName = i.name
 	)
 
 	if i.isSidecar {
-		instanceName = i.parentInstance.k8sName
-		eErr = ErrExecutingCommandInSidecar.WithParams(command, i.k8sName, i.parentInstance.k8sName)
+		instanceName = i.parentInstance.name
+		eErr = ErrExecutingCommandInSidecar.WithParams(command, i.name, i.parentInstance.name)
 	} else {
-		instanceName = i.k8sName
-		eErr = ErrExecutingCommandInInstance.WithParams(command, i.k8sName)
+		instanceName = i.name
+		eErr = ErrExecutingCommandInInstance.WithParams(command, i.name)
 	}
 
 	pod, err := i.K8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
-		return "", ErrGettingPodFromReplicaSet.WithParams(i.k8sName).Wrap(err)
+		return "", ErrGettingPodFromReplicaSet.WithParams(i.name).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
@@ -765,22 +759,22 @@ func (i *Instance) GetIP(ctx context.Context) (string, error) {
 		return i.kubernetesService.Spec.ClusterIP, nil
 	}
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := i.K8sClient.GetService(ctx, i.k8sName)
+	svc, err := i.K8sClient.GetService(ctx, i.name)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := i.deployService(ctx, i.portsTCP, i.portsUDP)
 		if err != nil {
-			return "", ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
+			return "", ErrDeployingServiceForInstance.WithParams(i.name).Wrap(err)
 		}
-		svc, err = i.K8sClient.GetService(ctx, i.k8sName)
+		svc, err = i.K8sClient.GetService(ctx, i.name)
 		if err != nil {
-			return "", ErrGettingServiceForInstance.WithParams(i.k8sName).Wrap(err)
+			return "", ErrGettingServiceForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 
 	ip := svc.Spec.ClusterIP
 	if ip == "" {
-		return "", ErrGettingServiceIP.WithParams(i.k8sName)
+		return "", ErrGettingServiceIP.WithParams(i.name)
 	}
 
 	// Update i.kubernetesService for future reference
@@ -1100,7 +1094,7 @@ func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error
 	go func() {
 		err := i.WaitInstanceIsRunning(ctx)
 		if err != nil {
-			i.Logger.Errorf("Error waiting for instance '%s' to be running: %s", i.k8sName, err)
+			i.Logger.Errorf("Error waiting for instance '%s' to be running: %s", i.name, err)
 			return
 		}
 		callback()
@@ -1112,7 +1106,7 @@ func (i *Instance) StartWithCallback(ctx context.Context, callback func()) error
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (i *Instance) StartAsync(ctx context.Context) error {
 	if !i.IsInState(StateCommitted, StateStopped) {
-		return ErrStartingNotAllowed.WithParams(i.k8sName, i.state.String())
+		return ErrStartingNotAllowed.WithParams(i.name, i.state.String())
 	}
 	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 		if !sidecar.IsInState(StateCommitted, StateStopped) {
@@ -1131,39 +1125,39 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 		// deploy otel collector if observability is enabled
 		if i.isObservabilityEnabled() {
 			if err := i.addOtelCollectorSidecar(ctx); err != nil {
-				return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+				return ErrAddingOtelCollectorSidecar.WithParams(i.name).Wrap(err)
 			}
 		}
 
 		// deploy tshark collector if enabled
 		if i.TsharkCollectorEnabled() {
 			if err := i.addTsharkCollectorSidecar(ctx); err != nil {
-				return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+				return ErrAddingTsharkCollectorSidecar.WithParams(i.name).Wrap(err)
 			}
 		}
 
 		if i.BitTwister.Enabled() {
 			if err := i.addBitTwisterSidecar(ctx); err != nil {
-				return ErrAddingNetworkSidecar.WithParams(i.k8sName).Wrap(err)
+				return ErrAddingNetworkSidecar.WithParams(i.name).Wrap(err)
 			}
 		}
 
 		if err := i.deployResources(ctx); err != nil {
-			return ErrDeployingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDeployingResourcesForInstance.WithParams(i.name).Wrap(err)
 		}
 		if err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
 			return sidecar.deployResources(ctx)
 		}); err != nil {
-			return ErrDeployingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
+			return ErrDeployingResourcesForSidecars.WithParams(i.name).Wrap(err)
 		}
 	}
 
 	if err := i.deployPod(ctx); err != nil {
-		return ErrDeployingPodForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrDeployingPodForInstance.WithParams(i.name).Wrap(err)
 	}
 	i.state = StateStarted
 	setStateForSidecars(i.sidecars, StateStarted)
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
 }
@@ -1176,7 +1170,7 @@ func (i *Instance) Start(ctx context.Context) error {
 	}
 
 	if err := i.WaitInstanceIsRunning(ctx); err != nil {
-		return ErrWaitingForInstanceRunning.WithParams(i.k8sName).Wrap(err)
+		return ErrWaitingForInstanceRunning.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -1188,7 +1182,7 @@ func (i *Instance) IsRunning(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sClient.IsReplicaSetRunning(ctx, i.k8sName)
+	return i.K8sClient.IsReplicaSetRunning(ctx, i.name)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -1201,7 +1195,7 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 	for {
 		running, err := i.IsRunning(ctx)
 		if err != nil {
-			return ErrCheckingIfInstanceRunning.WithParams(i.k8sName).Wrap(err)
+			return ErrCheckingIfInstanceRunning.WithParams(i.name).Wrap(err)
 		}
 		if running {
 			return nil
@@ -1210,7 +1204,7 @@ func (i *Instance) WaitInstanceIsRunning(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ErrWaitingForInstanceTimeout.
-				WithParams(i.k8sName).Wrap(ctx.Err())
+				WithParams(i.name).Wrap(ctx.Err())
 		case <-time.After(waitForInstanceRetry):
 			continue
 		}
@@ -1224,9 +1218,9 @@ func (i *Instance) DisableNetwork(ctx context.Context) error {
 		return ErrDisablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
-	err := i.K8sClient.CreateNetworkPolicy(ctx, i.k8sName, i.getLabels(), nil, nil)
+	err := i.K8sClient.CreateNetworkPolicy(ctx, i.name, i.getLabels(), nil, nil)
 	if err != nil {
-		return ErrDisablingNetwork.WithParams(i.k8sName).Wrap(err)
+		return ErrDisablingNetwork.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -1248,7 +1242,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
+			return ErrStoppingBandwidthLimit.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -1257,7 +1251,7 @@ func (i *Instance) SetBandwidthLimit(limit int64) error {
 		Limit:                limit,
 	})
 	if err != nil {
-		return ErrSettingBandwidthLimit.WithParams(i.k8sName).Wrap(err)
+		return ErrSettingBandwidthLimit.WithParams(i.name).Wrap(err)
 	}
 
 	i.Logger.Debugf("Set bandwidth limit to '%d' in instance '%s'", limit, i.name)
@@ -1282,7 +1276,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingLatencyJitter.WithParams(i.k8sName).Wrap(err)
+			return ErrStoppingLatencyJitter.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -1292,7 +1286,7 @@ func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
 		Jitter:               jitter,
 	})
 	if err != nil {
-		return ErrSettingLatencyJitter.WithParams(i.k8sName).Wrap(err)
+		return ErrSettingLatencyJitter.WithParams(i.name).Wrap(err)
 	}
 
 	i.Logger.Debugf("Set latency to '%d' and jitter to '%d' in instance '%s'", latency, jitter, i.name)
@@ -1316,7 +1310,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		if !sdk.IsErrorServiceNotInitialized(err) &&
 			!sdk.IsErrorServiceNotReady(err) &&
 			!sdk.IsErrorServiceNotStarted(err) {
-			return ErrStoppingPacketLoss.WithParams(i.k8sName).Wrap(err)
+			return ErrStoppingPacketLoss.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -1325,7 +1319,7 @@ func (i *Instance) SetPacketLoss(packetLoss int32) error {
 		PacketLossRate:       packetLoss,
 	})
 	if err != nil {
-		return ErrSettingPacketLoss.WithParams(i.k8sName).Wrap(err)
+		return ErrSettingPacketLoss.WithParams(i.name).Wrap(err)
 	}
 
 	i.Logger.Debugf("Set packet loss to '%d' in instance '%s'", packetLoss, i.name)
@@ -1339,9 +1333,9 @@ func (i *Instance) EnableNetwork(ctx context.Context) error {
 		return ErrEnablingNetworkNotAllowed.WithParams(i.state.String())
 	}
 
-	err := i.K8sClient.DeleteNetworkPolicy(ctx, i.k8sName)
+	err := i.K8sClient.DeleteNetworkPolicy(ctx, i.name)
 	if err != nil {
-		return ErrEnablingNetwork.WithParams(i.k8sName).Wrap(err)
+		return ErrEnablingNetwork.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -1353,7 +1347,7 @@ func (i *Instance) NetworkIsDisabled(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(i.state.String())
 	}
 
-	return i.K8sClient.NetworkPolicyExists(ctx, i.k8sName), nil
+	return i.K8sClient.NetworkPolicyExists(ctx, i.name), nil
 }
 
 // WaitInstanceIsStopped waits until the instance is not running anymore
@@ -1368,7 +1362,7 @@ func (i *Instance) WaitInstanceIsStopped(ctx context.Context) error {
 			break
 		}
 		if err != nil {
-			return ErrCheckingIfInstanceStopped.WithParams(i.k8sName).Wrap(err)
+			return ErrCheckingIfInstanceStopped.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -1385,32 +1379,13 @@ func (i *Instance) Stop(ctx context.Context) error {
 	}
 
 	if err := i.destroyPod(ctx); err != nil {
-		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
+		return ErrDestroyingPod.WithParams(i.name).Wrap(err)
 	}
 	i.state = StateStopped
 	setStateForSidecars(i.sidecars, StateStopped)
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
-}
-
-// Clone creates a clone of the instance
-// This function can only be called in the state 'Committed'
-// When cloning an instance that is a sidecar, the clone will be not a sidecar
-// When cloning an instance with sidecars, the sidecars will be cloned as well
-func (i *Instance) Clone() (*Instance, error) {
-	if !i.IsInState(StateCommitted) {
-		return nil, ErrCloningNotAllowed.WithParams(i.state.String())
-	}
-
-	newK8sName, err := names.NewRandomK8(i.name)
-	if err != nil {
-		return nil, ErrGeneratingK8sName.WithParams(i.name).Wrap(err)
-	}
-	// Create a new instance with the same attributes as the original instance
-	ins := i.cloneWithSuffix("")
-	ins.k8sName = newK8sName
-	return ins, nil
 }
 
 // CloneWithName creates a clone of the instance with a given name
@@ -1422,14 +1397,12 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 		return nil, ErrCloningNotAllowedForSidecar.WithParams(i.state.String())
 	}
 
-	newK8sName, err := names.NewRandomK8(name)
-	if err != nil {
-		return nil, ErrGeneratingK8sNameForSidecar.WithParams(name).Wrap(err)
-	}
 	// Create a new instance with the same attributes as the original instance
-	ins := i.cloneWithSuffix("")
+	ins, err := i.cloneWithName(name)
+	if err != nil {
+		return nil, err
+	}
 	ins.name = name
-	ins.k8sName = newK8sName
 	return ins, nil
 }
 
@@ -1444,7 +1417,7 @@ func (i *Instance) CreateCustomResource(ctx context.Context, gvr *schema.GroupVe
 		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
 	}
 
-	return i.K8sClient.CreateCustomResource(ctx, i.k8sName, gvr, obj)
+	return i.K8sClient.CreateCustomResource(ctx, i.name, gvr, obj)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists

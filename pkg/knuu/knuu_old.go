@@ -101,7 +101,7 @@ func InitializeWithScope(testScope string) error {
 	switch builderType {
 	case "kubernetes":
 		tmpKnuu.ImageBuilder = &kaniko.Kaniko{
-			SystemDependencies: tmpKnuu.SystemDependencies,
+			SystemDependencies: &tmpKnuu.SystemDependencies,
 		}
 	case "docker", "":
 		tmpKnuu.ImageBuilder = &docker.Docker{

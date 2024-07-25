@@ -18,8 +18,8 @@ type Preloader struct {
 }
 
 // Deprecated: Use the new package knuu instead.
-func NewPreloader() (*Preloader, error) {
-	p, err := tmpKnuu.NewPreloader()
+func NewPreloader(name string) (*Preloader, error) {
+	p, err := tmpKnuu.NewPreloader(name)
 	if err != nil {
 		return nil, err
 	}

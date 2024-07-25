@@ -19,23 +19,23 @@ func (i *Instance) Destroy(ctx context.Context) error {
 	}
 
 	if err := i.destroyPod(ctx); err != nil {
-		return ErrDestroyingPod.WithParams(i.k8sName).Wrap(err)
+		return ErrDestroyingPod.WithParams(i.name).Wrap(err)
 	}
 	if err := i.destroyResources(ctx); err != nil {
-		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrDestroyingResourcesForInstance.WithParams(i.name).Wrap(err)
 	}
 
 	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
-		i.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
+		i.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.name)
 		return sidecar.destroyResources(ctx)
 	})
 	if err != nil {
-		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
+		return ErrDestroyingResourcesForSidecars.WithParams(i.name).Wrap(err)
 	}
 
 	i.state = StateDestroyed
 	setStateForSidecars(i.sidecars, StateDestroyed)
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
 }

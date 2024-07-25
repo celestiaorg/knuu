@@ -24,4 +24,5 @@ var (
 	ErrTraefikIngressRouteCreationFailed = errors.New("TraefikIngressRouteCreationFailed", "error creating Traefik ingress route")
 	ErrGeneratingRandomK8sName           = errors.New("GeneratingRandomK8sName", "error generating random K8s name")
 	ErrTraefikFailedToParseQuantity      = errors.New("TraefikFailedToParseQuantity", "error parsing resource quantity")
+	ErrNameAlreadyExist                  = errors.New("NameAlreadyExist", "name '%s' already exists")
 )

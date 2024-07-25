@@ -17,9 +17,15 @@ func (i *Instance) NewPool(amount int) (*InstancePool, error) {
 	if !i.IsInState(StateCommitted) {
 		return nil, ErrCreatingPoolNotAllowed.WithParams(i.state.String())
 	}
-	instances := make([]*Instance, amount)
+	var (
+		instances = make([]*Instance, amount)
+		err       error
+	)
 	for j := 0; j < amount; j++ {
-		instances[j] = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
+		instances[j], err = i.cloneWithSuffix(fmt.Sprintf("-%d", j))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	i.state = StateDestroyed

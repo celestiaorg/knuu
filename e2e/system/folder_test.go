@@ -14,10 +14,10 @@ func (s *Suite) TestFolder() {
 
 	// Setup
 	ctx := context.Background()
-	executor, err := s.Executor.NewInstance(ctx, namePrefix)
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	require.NoError(s.T(), err)
 
-	web := s.createNginxInstanceWithVolume(ctx, namePrefix)
+	web := s.createNginxInstanceWithVolume(ctx, namePrefix+"-web")
 	err = web.AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
 	require.NoError(s.T(), err)
 

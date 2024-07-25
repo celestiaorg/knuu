@@ -212,4 +212,6 @@ var (
 	ErrTsharkCollectorS3RegionOrBucketEmpty      = errors.New("TsharkCollectorS3RegionOrBucketEmpty", "S3 region or bucket cannot be empty for tshark collector: %s, %s")
 	ErrRegexpCompile                             = errors.New("RegexpCompile", "error compiling regexp for %s")
 	ErrFailedToDeletePersistentVolumeClaim       = errors.New("FailedToDeletePersistentVolumeClaim", "failed to delete persistent volume claim")
+	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
+	ErrEmptySuffix                               = errors.New("EmptySuffix", "empty suffix")
 )

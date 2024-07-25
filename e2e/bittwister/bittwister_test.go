@@ -29,7 +29,7 @@ func (s *Suite) TestBittwisterBandwidth() {
 	)
 	ctx := context.Background()
 
-	iperfMother, err := s.Knuu.NewInstance("iperf")
+	iperfMother, err := s.Knuu.NewInstance("iperf-bandwidth")
 	s.Require().NoError(err)
 
 	s.Require().NoError(iperfMother.SetImage(ctx, iperfImage))
@@ -37,10 +37,10 @@ func (s *Suite) TestBittwisterBandwidth() {
 	s.Require().NoError(iperfMother.AddPortTCP(iperfPort))
 	s.Require().NoError(iperfMother.Commit())
 
-	iperfServer, err := iperfMother.CloneWithName("iperf-server")
+	iperfServer, err := iperfMother.CloneWithName("iperf-server-bandwidth")
 	s.Require().NoError(err)
 
-	iperfClient, err := iperfMother.CloneWithName("iperf-client")
+	iperfClient, err := iperfMother.CloneWithName("iperf-client-bandwidth")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
@@ -132,7 +132,7 @@ func (s *Suite) TestBittwisterPacketloss() {
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance("packetloss")
 	s.Require().NoError(err)
 
 	err = mother.SetImage(ctx, gopingImage)
@@ -144,10 +144,10 @@ func (s *Suite) TestBittwisterPacketloss() {
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName("target-packetloss")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName("executor-packetloss")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
@@ -235,7 +235,7 @@ func (s *Suite) TestBittwisterLatency() {
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance("mother-latency")
 	s.Require().NoError(err)
 
 	err = mother.SetImage(ctx, gopingImage)
@@ -247,10 +247,10 @@ func (s *Suite) TestBittwisterLatency() {
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName("target-latency")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName("executor-latency")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {
@@ -343,7 +343,7 @@ func (s *Suite) TestBittwisterJitter() {
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance("mother-jitter")
 	s.Require().NoError(err)
 
 	err = mother.SetImage(ctx, gopingImage)
@@ -355,10 +355,10 @@ func (s *Suite) TestBittwisterJitter() {
 	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName("target-jitter")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName("executor-jitter")
 	s.Require().NoError(err)
 
 	s.T().Cleanup(func() {

@@ -76,12 +76,12 @@ func (i *Instance) isUDPPortRegistered(port int) bool {
 // getLabels returns the labels for the instance
 func (i *Instance) getLabels() map[string]string {
 	return map[string]string{
-		labelAppKey:         i.k8sName,
+		labelAppKey:         i.name,
 		labelManagedByKey:   labelKnuuValue,
 		labelScopeKey:       i.Scope,
 		labelTestStartedKey: i.StartTime,
 		labelNameKey:        i.name,
-		labelK8sNameKey:     i.k8sName,
+		labelK8sNameKey:     i.name,
 		labelTypeKey:        i.instanceType.String(),
 	}
 
@@ -96,21 +96,21 @@ func (i *Instance) Labels() map[string]string {
 func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) error {
 	// a sidecar instance should use the parent instance's service
 	if i.isSidecar {
-		return ErrDeployingServiceForSidecar.WithParams(i.k8sName)
+		return ErrDeployingServiceForSidecar.WithParams(i.name)
 	}
 
 	var (
-		serviceName    = i.k8sName
+		serviceName    = i.name
 		labels         = i.getLabels()
 		labelSelectors = labels
 	)
 
 	srv, err := i.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
-		return ErrDeployingService.WithParams(i.k8sName).Wrap(err)
+		return ErrDeployingService.WithParams(i.name).Wrap(err)
 	}
 	i.kubernetesService = srv
-	i.Logger.Debugf("Started service '%s'", i.k8sName)
+	i.Logger.Debugf("Started service '%s'", i.name)
 	return nil
 }
 
@@ -118,11 +118,11 @@ func (i *Instance) deployService(ctx context.Context, portsTCP, portsUDP []int) 
 func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) error {
 	// a sidecar instance should use the parent instance's service
 	if i.isSidecar {
-		return ErrPatchingServiceForSidecar.WithParams(i.k8sName)
+		return ErrPatchingServiceForSidecar.WithParams(i.name)
 	}
 
 	var (
-		serviceName    = i.k8sName
+		serviceName    = i.name
 		labels         = i.getLabels()
 		labelSelectors = labels
 	)
@@ -138,7 +138,7 @@ func (i *Instance) patchService(ctx context.Context, portsTCP, portsUDP []int) e
 
 // destroyService destroys the service for the instance
 func (i *Instance) destroyService(ctx context.Context) error {
-	return i.K8sClient.DeleteService(ctx, i.k8sName)
+	return i.K8sClient.DeleteService(ctx, i.name)
 }
 
 // deployPod deploys the pod for the instance
@@ -147,16 +147,16 @@ func (i *Instance) deployPod(ctx context.Context) error {
 	labels := i.getLabels()
 
 	// create a service account for the pod
-	if err := i.K8sClient.CreateServiceAccount(ctx, i.k8sName, labels); err != nil {
+	if err := i.K8sClient.CreateServiceAccount(ctx, i.name, labels); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
 	// create a role and role binding for the pod if there are policy rules
 	if len(i.policyRules) > 0 {
-		if err := i.K8sClient.CreateRole(ctx, i.k8sName, labels, i.policyRules); err != nil {
+		if err := i.K8sClient.CreateRole(ctx, i.name, labels, i.policyRules); err != nil {
 			return ErrFailedToCreateRole.Wrap(err)
 		}
-		if err := i.K8sClient.CreateRoleBinding(ctx, i.k8sName, labels, i.k8sName, i.k8sName); err != nil {
+		if err := i.K8sClient.CreateRoleBinding(ctx, i.name, labels, i.name, i.name); err != nil {
 			return ErrFailedToCreateRoleBinding.Wrap(err)
 		}
 	}
@@ -171,8 +171,8 @@ func (i *Instance) deployPod(ctx context.Context) error {
 	i.kubernetesReplicaSet = replicaSet
 
 	// Log the deployment of the pod
-	i.Logger.Debugf("Started statefulSet '%s'", i.k8sName)
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
+	i.Logger.Debugf("Started statefulSet '%s'", i.name)
+	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
 
 	return nil
 }
@@ -180,13 +180,13 @@ func (i *Instance) deployPod(ctx context.Context) error {
 // destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
 func (i *Instance) destroyPod(ctx context.Context) error {
-	err := i.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, i.k8sName, nil)
+	err := i.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, i.name, nil)
 	if err != nil {
 		return ErrFailedToDeletePod.Wrap(err)
 	}
 
 	// Delete the service account for the pod
-	if err := i.K8sClient.DeleteServiceAccount(ctx, i.k8sName); err != nil {
+	if err := i.K8sClient.DeleteServiceAccount(ctx, i.name); err != nil {
 		return ErrFailedToDeleteServiceAccount.Wrap(err)
 	}
 
@@ -195,10 +195,10 @@ func (i *Instance) destroyPod(ctx context.Context) error {
 		return nil
 	}
 
-	if err := i.K8sClient.DeleteRole(ctx, i.k8sName); err != nil {
+	if err := i.K8sClient.DeleteRole(ctx, i.name); err != nil {
 		return ErrFailedToDeleteRole.Wrap(err)
 	}
-	if err := i.K8sClient.DeleteRoleBinding(ctx, i.k8sName); err != nil {
+	if err := i.K8sClient.DeleteRoleBinding(ctx, i.name); err != nil {
 		return ErrFailedToDeleteRoleBinding.Wrap(err)
 	}
 
@@ -211,17 +211,17 @@ func (i *Instance) deployOrPatchService(ctx context.Context, portsTCP, portsUDP 
 		return nil
 	}
 
-	i.Logger.Debugf("Ports not empty, deploying service for instance '%s'", i.k8sName)
-	svc, _ := i.K8sClient.GetService(ctx, i.k8sName)
+	i.Logger.Debugf("Ports not empty, deploying service for instance '%s'", i.name)
+	svc, _ := i.K8sClient.GetService(ctx, i.name)
 	if svc == nil {
 		if err := i.deployService(ctx, portsTCP, portsUDP); err != nil {
-			return ErrDeployingServiceForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDeployingServiceForInstance.WithParams(i.name).Wrap(err)
 		}
 		return nil
 	}
 
 	if err := i.patchService(ctx, portsTCP, portsUDP); err != nil {
-		return ErrPatchingServiceForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrPatchingServiceForInstance.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -232,19 +232,19 @@ func (i *Instance) deployVolume(ctx context.Context) error {
 	for _, volume := range i.volumes {
 		totalSize.Add(volume.Size)
 	}
-	i.K8sClient.CreatePersistentVolumeClaim(ctx, i.k8sName, i.getLabels(), totalSize)
-	i.Logger.Debugf("Deployed persistent volume '%s'", i.k8sName)
+	i.K8sClient.CreatePersistentVolumeClaim(ctx, i.name, i.getLabels(), totalSize)
+	i.Logger.Debugf("Deployed persistent volume '%s'", i.name)
 
 	return nil
 }
 
 // destroyVolume destroys the volume for the instance
 func (i *Instance) destroyVolume(ctx context.Context) error {
-	err := i.K8sClient.DeletePersistentVolumeClaim(ctx, i.k8sName)
+	err := i.K8sClient.DeletePersistentVolumeClaim(ctx, i.name)
 	if err != nil {
 		return ErrFailedToDeletePersistentVolumeClaim.Wrap(err)
 	}
-	i.Logger.Debugf("Destroyed persistent volume '%s'", i.k8sName)
+	i.Logger.Debugf("Destroyed persistent volume '%s'", i.name)
 	return nil
 }
 
@@ -274,22 +274,22 @@ func (i *Instance) deployFiles(ctx context.Context) error {
 	}
 
 	// create configmap
-	if _, err := i.K8sClient.CreateConfigMap(ctx, i.k8sName, i.getLabels(), data); err != nil {
+	if _, err := i.K8sClient.CreateConfigMap(ctx, i.name, i.getLabels(), data); err != nil {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
-	i.Logger.Debugf("Deployed configmap '%s'", i.k8sName)
+	i.Logger.Debugf("Deployed configmap '%s'", i.name)
 
 	return nil
 }
 
 // destroyFiles destroys the files for the instance
 func (i *Instance) destroyFiles(ctx context.Context) error {
-	if err := i.K8sClient.DeleteConfigMap(ctx, i.k8sName); err != nil {
+	if err := i.K8sClient.DeleteConfigMap(ctx, i.name); err != nil {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 
-	i.Logger.Debugf("Destroyed configmap '%s'", i.k8sName)
+	i.Logger.Debugf("Destroyed configmap '%s'", i.name)
 	return nil
 }
 
@@ -311,7 +311,7 @@ func (i *Instance) deployResources(ctx context.Context) error {
 	}
 	if len(i.volumes) != 0 {
 		if err := i.deployVolume(ctx); err != nil {
-			return ErrDeployingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDeployingVolumeForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 	if len(i.files) == 0 {
@@ -319,7 +319,7 @@ func (i *Instance) deployResources(ctx context.Context) error {
 	}
 
 	if err := i.deployFiles(ctx); err != nil {
-		return ErrDeployingFilesForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrDeployingFilesForInstance.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -328,19 +328,19 @@ func (i *Instance) deployResources(ctx context.Context) error {
 func (i *Instance) destroyResources(ctx context.Context) error {
 	if len(i.volumes) != 0 {
 		if err := i.destroyVolume(ctx); err != nil {
-			return ErrDestroyingVolumeForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDestroyingVolumeForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 	if len(i.files) != 0 {
 		err := i.destroyFiles(ctx)
 		if err != nil {
-			return ErrDestroyingFilesForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDestroyingFilesForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 	if i.kubernetesService != nil {
 		err := i.destroyService(ctx)
 		if err != nil {
-			return ErrDestroyingServiceForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrDestroyingServiceForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -348,7 +348,7 @@ func (i *Instance) destroyResources(ctx context.Context) error {
 	if !i.isSidecar {
 		// enable network when network is disabled
 		if err := i.enableNetworkIfDisabled(ctx); err != nil {
-			return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrEnablingNetworkForInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 
@@ -359,23 +359,42 @@ func (i *Instance) enableNetworkIfDisabled(ctx context.Context) error {
 	disableNetwork, err := i.NetworkIsDisabled(ctx)
 	if err != nil {
 		i.Logger.Errorf("error checking network status for instance")
-		return ErrCheckingNetworkStatusForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrCheckingNetworkStatusForInstance.WithParams(i.name).Wrap(err)
 	}
 	if !disableNetwork {
 		return nil
 	}
 	if err := i.EnableNetwork(ctx); err != nil {
 		i.Logger.Errorf("error enabling network for instance")
-		return ErrEnablingNetworkForInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrEnablingNetworkForInstance.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
 
 // cloneWithSuffix clones the instance with a suffix
-func (i *Instance) cloneWithSuffix(suffix string) *Instance {
-	clonedSidecars := make([]*Instance, len(i.sidecars))
+func (i *Instance) cloneWithSuffix(suffix string) (*Instance, error) {
+	if suffix == "" {
+		return nil, ErrEmptySuffix
+	}
+	return i.cloneWithName(i.name + suffix)
+}
+
+func (i *Instance) cloneWithName(name string) (*Instance, error) {
+	name = k8s.SanitizeName(name)
+	if i.SystemDependencies.HasInstanceName(name) {
+		return nil, ErrInstanceNameAlreadyExists.WithParams(name)
+	}
+	i.SystemDependencies.AddInstanceName(name)
+
+	var (
+		clonedSidecars = make([]*Instance, len(i.sidecars))
+		err            error
+	)
 	for i, sidecar := range i.sidecars {
-		clonedSidecars[i] = sidecar.cloneWithSuffix(suffix)
+		clonedSidecars[i], err = sidecar.cloneWithName(name + "-" + sidecar.name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Deep copy of securityContext to ensure cloned instance has its own copy
@@ -385,8 +404,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 	clonedBitTwister.SetClient(nil) // reset client to avoid reusing the same client
 
 	return &Instance{
-		name:                  i.name + suffix,
-		k8sName:               i.k8sName + suffix,
+		name:                  name,
 		imageName:             i.imageName,
 		state:                 i.state,
 		instanceType:          i.instanceType,
@@ -414,7 +432,7 @@ func (i *Instance) cloneWithSuffix(suffix string) *Instance {
 		securityContext:       &clonedSecurityContext,
 		BitTwister:            &clonedBitTwister,
 		SystemDependencies:    i.SystemDependencies,
-	}
+	}, nil
 }
 
 // getFreePort returns a free port
@@ -433,7 +451,7 @@ func getFreePortTCP() (int, error) {
 
 // getBuildDir returns the build directory for the instance
 func (i *Instance) getBuildDir() string {
-	return filepath.Join(buildDirBase, i.k8sName)
+	return filepath.Join(buildDirBase, i.name)
 }
 
 // validateFileArgs validates the file arguments
@@ -495,7 +513,7 @@ func prepareSecurityContext(config *SecurityContext) *v1.SecurityContext {
 // prepareConfig prepares the config for the instance
 func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	containerConfig := k8s.ContainerConfig{
-		Name:            i.k8sName,
+		Name:            i.name,
 		Image:           i.imageName,
 		Command:         i.command,
 		Args:            i.args,
@@ -514,7 +532,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range i.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:            sidecar.k8sName,
+			Name:            sidecar.name,
 			Image:           sidecar.imageName,
 			Command:         sidecar.command,
 			Args:            sidecar.args,
@@ -533,9 +551,9 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 
 	podConfig := k8s.PodConfig{
 		Namespace:          i.K8sClient.Namespace(),
-		Name:               i.k8sName,
+		Name:               i.name,
 		Labels:             i.getLabels(),
-		ServiceAccountName: i.k8sName,
+		ServiceAccountName: i.name,
 		FsGroup:            i.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
@@ -543,7 +561,7 @@ func (i *Instance) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 
 	return k8s.ReplicaSetConfig{
 		Namespace: i.K8sClient.Namespace(),
-		Name:      i.k8sName,
+		Name:      i.name,
 		Labels:    i.getLabels(),
 		Replicas:  1,
 		PodConfig: podConfig,
@@ -570,7 +588,7 @@ func (i *Instance) setImageWithGracePeriod(ctx context.Context, imageName string
 func applyFunctionToInstances(instances []*Instance, function func(sidecar *Instance) error) error {
 	for _, i := range instances {
 		if err := function(i); err != nil {
-			return ErrApplyingFunctionToInstance.WithParams(i.k8sName).Wrap(err)
+			return ErrApplyingFunctionToInstance.WithParams(i.name).Wrap(err)
 		}
 	}
 	return nil
@@ -602,10 +620,10 @@ func (i *Instance) validateStateForObsy(endpoint string) error {
 func (i *Instance) addOtelCollectorSidecar(ctx context.Context) error {
 	otelSidecar, err := i.createOtelCollectorInstance(ctx)
 	if err != nil {
-		return ErrCreatingOtelCollectorInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrCreatingOtelCollectorInstance.WithParams(i.name).Wrap(err)
 	}
 	if err := i.AddSidecar(otelSidecar); err != nil {
-		return ErrAddingOtelCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+		return ErrAddingOtelCollectorSidecar.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -613,10 +631,10 @@ func (i *Instance) addOtelCollectorSidecar(ctx context.Context) error {
 func (i *Instance) addTsharkCollectorSidecar(ctx context.Context) error {
 	tsharkSidecar, err := i.createTsharkCollectorInstance(ctx)
 	if err != nil {
-		return ErrCreatingTsharkCollectorInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrCreatingTsharkCollectorInstance.WithParams(i.name).Wrap(err)
 	}
 	if err := i.AddSidecar(tsharkSidecar); err != nil {
-		return ErrAddingTsharkCollectorSidecar.WithParams(i.k8sName).Wrap(err)
+		return ErrAddingTsharkCollectorSidecar.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }
@@ -635,10 +653,10 @@ func (i *Instance) createBitTwisterInstance(ctx context.Context) (*Instance, err
 	if err := bt.AddPortTCP(i.BitTwister.Port()); err != nil {
 		return nil, ErrAddingBitTwisterPort.Wrap(err)
 	}
-	serviceName := i.k8sName // the main instance name
+	serviceName := i.name // the main instance name
 	btURL, err := i.AddHost(ctx, i.BitTwister.Port())
 	if err != nil {
-		return nil, ErrAddingToProxy.WithParams(bt.k8sName, serviceName).Wrap(err)
+		return nil, ErrAddingToProxy.WithParams(bt.name, serviceName).Wrap(err)
 	}
 	i.Logger.Debugf("BitTwister URL: %s", btURL)
 
@@ -658,19 +676,19 @@ func (i *Instance) createBitTwisterInstance(ctx context.Context) (*Instance, err
 func (i *Instance) addBitTwisterSidecar(ctx context.Context) error {
 	networkConfigSidecar, err := i.createBitTwisterInstance(ctx)
 	if err != nil {
-		return ErrCreatingBitTwisterInstance.WithParams(i.k8sName).Wrap(err)
+		return ErrCreatingBitTwisterInstance.WithParams(i.name).Wrap(err)
 	}
 
 	if err := networkConfigSidecar.SetPrivileged(true); err != nil {
-		return ErrSettingBitTwisterPrivileged.WithParams(i.k8sName).Wrap(err)
+		return ErrSettingBitTwisterPrivileged.WithParams(i.name).Wrap(err)
 	}
 
 	if err := networkConfigSidecar.AddCapability("NET_ADMIN"); err != nil {
-		return ErrAddingBitTwisterCapability.WithParams(i.k8sName).Wrap(err)
+		return ErrAddingBitTwisterCapability.WithParams(i.name).Wrap(err)
 	}
 
 	if err := i.AddSidecar(networkConfigSidecar); err != nil {
-		return ErrAddingBitTwisterSidecar.WithParams(i.k8sName).Wrap(err)
+		return ErrAddingBitTwisterSidecar.WithParams(i.name).Wrap(err)
 	}
 	return nil
 }

@@ -7,5 +7,5 @@ import (
 type Error = errors.Error
 
 var (
-	ErrGeneratingK8sNameForPreloader = errors.New("GeneratingK8sNameForPreloader", "error generating k8s name for preloader")
+	ErrPreloaderNameAlreadyExists = errors.New("PreloaderNameAlreadyExists", "preloader name '%s' already exists")
 )

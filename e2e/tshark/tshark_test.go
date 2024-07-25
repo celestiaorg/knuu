@@ -67,7 +67,7 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error getting S3 (minio) configs")
 
 	var (
-		filename  = target.K8sName() + instance.TsharkCaptureFileExtension + ".tar.gz" // compressed file extension
+		filename  = target.Name() + instance.TsharkCaptureFileExtension + ".tar.gz" // compressed file extension
 		keyPrefix = "tshark/" + scope
 		fileKey   = filepath.Join(keyPrefix, filename)
 	)
