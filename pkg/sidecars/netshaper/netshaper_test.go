@@ -51,7 +51,7 @@ func (s *TestSuite) TearDownTest() {
 	s.mockServer.Close()
 }
 
-func TestBitTwisterTestSuite(t *testing.T) {
+func TestNetShaper(t *testing.T) {
 	suite.Run(t, new(TestSuite))
 }
 

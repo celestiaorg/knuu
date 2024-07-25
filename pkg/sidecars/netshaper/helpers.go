@@ -115,6 +115,12 @@ func (bt *NetShaper) stopIfRunning(
 	statusFunc func() (*api.MetaMessage, error),
 	stopFunc func() error,
 ) error {
+	// if bt.instance == nil, then the service is not running
+	// so we don't need to stop it
+	if bt.instance == nil {
+		return nil
+	}
+
 	status, err := statusFunc()
 	if err != nil {
 		return ErrGettingServiceStatus.WithParams(bt.instance.Name()).Wrap(err)
