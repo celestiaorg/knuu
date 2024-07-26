@@ -15,13 +15,21 @@ func (i *Instance) AddHost(ctx context.Context, port int) (host string, err erro
 		return "", ErrProxyNotInitialized
 	}
 
-	prefix := fmt.Sprintf("%s-%d", i.k8sName, port)
-	if err := i.Proxy.AddHost(ctx, i.k8sName, prefix, port); err != nil {
-		return "", ErrAddingToProxy.WithParams(i.k8sName).Wrap(err)
+	serviceName := i.k8sName
+	if i.isSidecar {
+		// The service is created for the main instance and
+		// named after it which will be the parent instance for sidecars,
+		// so we need to use the parent instance's service name.
+		serviceName = i.parentInstance.k8sName
+	}
+
+	prefix := fmt.Sprintf("%s-%d", serviceName, port)
+	if err := i.Proxy.AddHost(ctx, serviceName, prefix, port); err != nil {
+		return "", ErrAddingToProxy.WithParams(serviceName).Wrap(err)
 	}
 	host, err = i.Proxy.URL(ctx, prefix)
 	if err != nil {
-		return "", ErrGettingProxyURL.WithParams(i.k8sName).Wrap(err)
+		return "", ErrGettingProxyURL.WithParams(serviceName).Wrap(err)
 	}
 	return host, nil
 }

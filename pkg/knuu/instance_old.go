@@ -196,48 +196,8 @@ func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) AddSidecar(sidecar *Instance) error {
-	return i.Instance.AddSidecar(&sidecar.Instance)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetOtelCollectorVersion(version string) error {
-	return i.Instance.SetOtelCollectorVersion(version)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetOtelEndpoint(port int) error {
-	return i.Instance.SetOtelEndpoint(port)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetPrometheusEndpoint(port int, jobName, scapeInterval string) error {
-	return i.Instance.SetPrometheusEndpoint(port, jobName, scapeInterval)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort int) error {
-	return i.Instance.SetJaegerEndpoint(grpcPort, thriftCompactPort, thriftHttpPort)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetOtlpExporter(endpoint, username, password string) error {
-	return i.Instance.SetOtlpExporter(endpoint, username, password)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetJaegerExporter(endpoint string) error {
-	return i.Instance.SetJaegerExporter(endpoint)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetPrometheusExporter(endpoint string) error {
-	return i.Instance.SetPrometheusExporter(endpoint)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetPrometheusRemoteWriteExporter(endpoint string) error {
-	return i.Instance.SetPrometheusRemoteWriteExporter(endpoint)
+func (i *Instance) AddSidecar(ctx context.Context, sc instance.SidecarManager) error {
+	return i.Instance.AddSidecar(ctx, sc)
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -283,21 +243,6 @@ func (i *Instance) WaitInstanceIsRunning() error {
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) DisableNetwork() error {
 	return i.Instance.DisableNetwork(context.Background())
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetBandwidthLimit(limit int64) error {
-	return i.Instance.SetBandwidthLimit(limit)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetLatencyAndJitter(latency, jitter int64) error {
-	return i.Instance.SetLatencyAndJitter(latency, jitter)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) SetPacketLoss(packetLoss int32) error {
-	return i.Instance.SetPacketLoss(packetLoss)
 }
 
 // Deprecated: Use the new package knuu instead.

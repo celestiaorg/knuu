@@ -25,9 +25,9 @@ func (i *Instance) Destroy(ctx context.Context) error {
 		return ErrDestroyingResourcesForInstance.WithParams(i.k8sName).Wrap(err)
 	}
 
-	err := applyFunctionToInstances(i.sidecars, func(sidecar *Instance) error {
-		i.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.k8sName)
-		return sidecar.destroyResources(ctx)
+	err := applyFunctionToSidecars(i.sidecars, func(sidecar SidecarManager) error {
+		logrus.Debugf("Destroying sidecar resources from '%s'", sidecar.Instance().k8sName)
+		return sidecar.Instance().destroyResources(ctx)
 	})
 	if err != nil {
 		return ErrDestroyingResourcesForSidecars.WithParams(i.k8sName).Wrap(err)
