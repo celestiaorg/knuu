@@ -29,10 +29,6 @@ type Executor struct {
 	*Instance
 }
 
-type InstancePool struct {
-	instance.InstancePool
-}
-
 type InstanceState instance.InstanceState
 
 const (
@@ -319,45 +315,6 @@ func BatchDestroy(instances ...*Instance) error {
 		ins[i] = &instance.Instance
 	}
 	return instance.BatchDestroy(context.Background(), ins...)
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *Instance) CreatePool(amount int) (*InstancePool, error) {
-	pool, err := i.Instance.NewPool(amount)
-	if err != nil {
-		return nil, err
-	}
-	return &InstancePool{*pool}, nil
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *InstancePool) StartWithoutWait() error {
-	return i.InstancePool.StartWithoutWait(context.Background())
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *InstancePool) Start() error {
-	return i.InstancePool.Start(context.Background())
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *InstancePool) Destroy() error {
-	return i.InstancePool.Destroy(context.Background())
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *InstancePool) WaitInstancePoolIsRunning() error {
-	return i.InstancePool.WaitInstancePoolIsRunning(context.Background())
-}
-
-// Deprecated: Use the new package knuu instead.
-func (i *InstancePool) Instances() []*Instance {
-	instances := i.InstancePool.Instances()
-	newInstances := make([]*Instance, len(instances))
-	for i, instance := range instances {
-		newInstances[i] = &Instance{*instance}
-	}
-	return newInstances
 }
 
 // Deprecated: Use the new package knuu instead.
