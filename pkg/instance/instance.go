@@ -210,7 +210,7 @@ func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
 // SetCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing'
 func (i *Instance) SetCommand(command ...string) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingCommand.WithParams(i.state.String())
 	}
 	i.command = command
@@ -220,7 +220,7 @@ func (i *Instance) SetCommand(command ...string) error {
 // SetArgs sets the arguments passed to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) SetArgs(args ...string) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingArgsNotAllowed.WithParams(i.state.String())
 	}
 	i.args = args
@@ -230,7 +230,7 @@ func (i *Instance) SetArgs(args ...string) error {
 // AddPortTCP adds a TCP port to the instance
 // This function can be called in the state 'Preparing'
 func (i *Instance) AddPortTCP(port int) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 
@@ -295,7 +295,7 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 // AddPortUDP adds a UDP port to the instance
 // This function can be called in the state 'Preparing'
 func (i *Instance) AddPortUDP(port int) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 
@@ -608,7 +608,7 @@ func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 // AddVolumeWithOwner adds a volume to the instance with the given owner
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
@@ -625,7 +625,7 @@ func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner
 // SetMemory sets the memory of the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) SetMemory(request, limit resource.Quantity) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
@@ -637,7 +637,7 @@ func (i *Instance) SetMemory(request, limit resource.Quantity) error {
 // SetCPU sets the CPU of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetCPU(request resource.Quantity) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
@@ -735,7 +735,7 @@ func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath str
 // AddPolicyRule adds a policy rule to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingPolicyRuleNotAllowed.WithParams(i.state.String())
 	}
 	i.policyRules = append(i.policyRules, rule)
@@ -744,7 +744,7 @@ func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 
 // checkStateForProbe checks if the current state is allowed for setting a probe
 func (i *Instance) checkStateForProbe() error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingProbeNotAllowed.WithParams(i.state.String())
 	}
 	return nil
@@ -823,7 +823,7 @@ func (i *Instance) AddSidecar(ctx context.Context, sc SidecarManager) error {
 // SetPrivileged sets the privileged status for the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) SetPrivileged(privileged bool) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
@@ -834,7 +834,7 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 // AddCapability adds a capability to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddCapability(capability string) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
@@ -845,7 +845,7 @@ func (i *Instance) AddCapability(capability string) error {
 // AddCapabilities adds multiple capabilities to the instance
 // This function can only be called in the state 'Preparing'
 func (i *Instance) AddCapabilities(capabilities []string) error {
-	if !i.IsInState(StatePreparing) {
+	if i.state != StatePreparing {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(i.state.String())
 	}
 	for _, capability := range capabilities {
