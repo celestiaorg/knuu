@@ -208,9 +208,9 @@ func (i *Instance) SetImageInstant(ctx context.Context, image string) error {
 }
 
 // SetCommand sets the command to run in the instance
-// This function can only be called when the instance is in state 'Preparing' or 'Committed'
+// This function can only be called when the instance is in state 'Preparing'
 func (i *Instance) SetCommand(command ...string) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingCommand.WithParams(i.state.String())
 	}
 	i.command = command
@@ -218,9 +218,9 @@ func (i *Instance) SetCommand(command ...string) error {
 }
 
 // SetArgs sets the arguments passed to the instance
-// This function can only be called in the states 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetArgs(args ...string) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingArgsNotAllowed.WithParams(i.state.String())
 	}
 	i.args = args
@@ -228,9 +228,9 @@ func (i *Instance) SetArgs(args ...string) error {
 }
 
 // AddPortTCP adds a TCP port to the instance
-// This function can be called in the states 'Preparing' and 'Committed'
+// This function can be called in the state 'Preparing'
 func (i *Instance) AddPortTCP(port int) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 
@@ -293,9 +293,9 @@ func (i *Instance) PortForwardTCP(ctx context.Context, port int) (int, error) {
 }
 
 // AddPortUDP adds a UDP port to the instance
-// This function can be called in the states 'Preparing' and 'Committed'
+// This function can be called in the state 'Preparing'
 func (i *Instance) AddPortUDP(port int) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingPortNotAllowed.WithParams(i.state.String())
 	}
 
@@ -595,7 +595,7 @@ func (i *Instance) Commit() error {
 
 // AddVolume adds a volume to the instance
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(i.volumes) > 0 {
@@ -606,9 +606,9 @@ func (i *Instance) AddVolume(path string, size resource.Quantity) error {
 }
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingVolumeNotAllowed.WithParams(i.state.String())
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
@@ -623,9 +623,9 @@ func (i *Instance) AddVolumeWithOwner(path string, size resource.Quantity, owner
 }
 
 // SetMemory sets the memory of the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetMemory(request, limit resource.Quantity) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingMemoryNotAllowed.WithParams(i.state.String())
 	}
 	i.memoryRequest = request
@@ -637,7 +637,7 @@ func (i *Instance) SetMemory(request, limit resource.Quantity) error {
 // SetCPU sets the CPU of the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (i *Instance) SetCPU(request resource.Quantity) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingCPUNotAllowed.WithParams(i.state.String())
 	}
 	i.cpuRequest = request
@@ -733,9 +733,9 @@ func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath str
 }
 
 // AddPolicyRule adds a policy rule to the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingPolicyRuleNotAllowed.WithParams(i.state.String())
 	}
 	i.policyRules = append(i.policyRules, rule)
@@ -744,7 +744,7 @@ func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
 
 // checkStateForProbe checks if the current state is allowed for setting a probe
 func (i *Instance) checkStateForProbe() error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingProbeNotAllowed.WithParams(i.state.String())
 	}
 	return nil
@@ -753,7 +753,7 @@ func (i *Instance) checkStateForProbe() error {
 // SetLivenessProbe sets the liveness probe of the instance
 // A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
 		return err
@@ -766,7 +766,7 @@ func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
 // SetReadinessProbe sets the readiness probe of the instance
 // A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
 		return err
@@ -779,7 +779,7 @@ func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
 // SetStartupProbe sets the startup probe of the instance
 // A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
 	if err := i.checkStateForProbe(); err != nil {
 		return err
@@ -821,9 +821,9 @@ func (i *Instance) AddSidecar(ctx context.Context, sc SidecarManager) error {
 }
 
 // SetPrivileged sets the privileged status for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) SetPrivileged(privileged bool) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrSettingPrivilegedNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.privileged = privileged
@@ -832,9 +832,9 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 }
 
 // AddCapability adds a capability to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) AddCapability(capability string) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingCapabilityNotAllowed.WithParams(i.state.String())
 	}
 	i.securityContext.capabilitiesAdd = append(i.securityContext.capabilitiesAdd, capability)
@@ -843,9 +843,9 @@ func (i *Instance) AddCapability(capability string) error {
 }
 
 // AddCapabilities adds multiple capabilities to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing'
 func (i *Instance) AddCapabilities(capabilities []string) error {
-	if !i.IsInState(StatePreparing, StateCommitted) {
+	if !i.IsInState(StatePreparing) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(i.state.String())
 	}
 	for _, capability := range capabilities {
@@ -879,9 +879,6 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 		return ErrStartingNotAllowed.WithParams(i.k8sName, i.state.String())
 	}
 
-	if err := i.verifySidecarsStates(); err != nil {
-		return err
-	}
 	err := applyFunctionToSidecars(i.sidecars, func(sidecar SidecarManager) error {
 		if !sidecar.Instance().IsInState(StateCommitted, StateStopped) {
 			return ErrStartingNotAllowedForSidecar.WithParams(sidecar.Instance().Name(), sidecar.Instance().state.String())
@@ -910,17 +907,6 @@ func (i *Instance) StartAsync(ctx context.Context) error {
 	setStateForSidecars(i.sidecars, StateStarted)
 	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.k8sName, i.state.String())
 
-	return nil
-}
-
-// verifySidecarsStates verifies that all sidecars are in the state 'Committed' or 'Stopped'
-func (i *Instance) verifySidecarsStates() error {
-	for _, sc := range i.sidecars {
-		if !sc.Instance().IsInState(StateCommitted, StateStopped) {
-			return ErrStartingNotAllowedForSidecar.
-				WithParams(sc.Instance().Name(), sc.Instance().state.String())
-		}
-	}
 	return nil
 }
 
