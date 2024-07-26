@@ -101,10 +101,10 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	}
 	inst.SetInstanceType(instance.TimeoutHandlerInstance)
 
-	if err := inst.SetImage(ctx, timeoutHandlerImage); err != nil {
+	if err := inst.Build().SetImage(ctx, timeoutHandlerImage); err != nil {
 		return ErrCannotSetImage.Wrap(err)
 	}
-	if err := inst.Commit(); err != nil {
+	if err := inst.Build().Commit(); err != nil {
 		return ErrCannotCommitInstance.Wrap(err)
 	}
 
@@ -130,7 +130,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	finalCmd := strings.Join(commands, " && ")
 
 	// Run the command
-	if err := inst.SetCommand("sh", "-c", finalCmd); err != nil {
+	if err := inst.Build().SetCommand("sh", "-c", finalCmd); err != nil {
 		k.Logger.Debugf("The full command generated is [%s]", finalCmd)
 		return ErrCannotSetCommand.Wrap(err)
 	}
@@ -141,10 +141,10 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 		Resources: []string{"*"},
 	}
 
-	if err := inst.AddPolicyRule(rule); err != nil {
+	if err := inst.Resources().AddPolicyRule(rule); err != nil {
 		return ErrCannotAddPolicyRule.Wrap(err)
 	}
-	if err := inst.Start(ctx); err != nil {
+	if err := inst.Execution().Start(ctx); err != nil {
 		return ErrCannotStartInstance.Wrap(err)
 	}
 

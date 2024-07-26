@@ -68,7 +68,7 @@ func TestProbe(t *testing.T) {
 
 	t.Cleanup(func() {
 		// after refactor, we can use instance.BatchDestroy for simplicity
-		err := executor.Destroy(ctx)
+		err := executor.Execution().Destroy(ctx)
 		if err != nil {
 			t.Logf("Error destroying instance: %v", err)
 		}
@@ -95,7 +95,7 @@ func TestProbe(t *testing.T) {
 		t.Fatalf("Error waiting for instance to be running: %v", err)
 	}
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}

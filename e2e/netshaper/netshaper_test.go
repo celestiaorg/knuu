@@ -33,10 +33,10 @@ func (s *Suite) TestNetShaperBandwidth() {
 	iperfMother, err := s.Knuu.NewInstance("iperf")
 	s.Require().NoError(err)
 
-	s.Require().NoError(iperfMother.SetImage(ctx, iperfImage))
-	s.Require().NoError(iperfMother.SetCommand("iperf3", "-s"))
-	s.Require().NoError(iperfMother.AddPortTCP(iperfPort))
-	s.Require().NoError(iperfMother.Commit())
+	s.Require().NoError(iperfMother.Build().SetImage(ctx, iperfImage))
+	s.Require().NoError(iperfMother.Build().SetCommand("iperf3", "-s"))
+	s.Require().NoError(iperfMother.Network().AddPortTCP(iperfPort))
+	s.Require().NoError(iperfMother.Build().Commit())
 
 	iperfServer, err := iperfMother.CloneWithName("iperf-server")
 	s.Require().NoError(err)
@@ -45,7 +45,7 @@ func (s *Suite) TestNetShaperBandwidth() {
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
-	s.Require().NoError(iperfServer.AddSidecar(ctx, btSidecar))
+	s.Require().NoError(iperfServer.Sidecars().Add(ctx, btSidecar))
 
 	s.T().Cleanup(func() {
 		s.T().Log("Tearing down TestNetShaperBandwidth test...")
@@ -57,12 +57,12 @@ func (s *Suite) TestNetShaperBandwidth() {
 
 	// Prepare iperf client & server
 
-	s.Require().NoError(iperfServer.Start(ctx))
+	s.Require().NoError(iperfServer.Execution().Start(ctx))
 	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(iperfClient.Start(ctx))
+	s.Require().NoError(iperfClient.Execution().Start(ctx))
 
-	iperfServerIP, err := iperfServer.GetIP(ctx)
+	iperfServerIP, err := iperfServer.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	// Perform the test
@@ -94,7 +94,7 @@ func (s *Suite) TestNetShaperBandwidth() {
 
 			s.T().Log("Starting bandwidth test. It takes a while.")
 			startTime := time.Now()
-			output, err := iperfClient.ExecuteCommand(ctx,
+			output, err := iperfClient.Execution().ExecuteCommand(ctx,
 				"iperf3", "-c", iperfServerIP,
 				"-t", fmt.Sprint(int64(iperfTestDuration.Seconds())),
 				"-P", fmt.Sprint(iperfParallelClients), "--json")
@@ -138,20 +138,20 @@ func (s *Suite) TestNetShaperPacketloss() {
 	mother, err := s.Knuu.NewInstance("mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit())
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
-	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
@@ -166,10 +166,10 @@ func (s *Suite) TestNetShaperPacketloss() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 	type testCase struct {
@@ -189,7 +189,7 @@ func (s *Suite) TestNetShaperPacketloss() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -202,7 +202,7 @@ func (s *Suite) TestNetShaperPacketloss() {
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx, "goping", "ping", "-q",
+			output, err := executor.Execution().ExecuteCommand(ctx, "goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				"-t", packetTimeout.String(),
 				"-m", "packetloss",
@@ -241,20 +241,20 @@ func (s *Suite) TestNetShaperLatency() {
 	mother, err := s.Knuu.NewInstance("mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit())
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
-	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
@@ -269,10 +269,10 @@ func (s *Suite) TestNetShaperLatency() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 
@@ -296,7 +296,7 @@ func (s *Suite) TestNetShaperLatency() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -311,7 +311,7 @@ func (s *Suite) TestNetShaperLatency() {
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx,
+			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond
@@ -351,20 +351,20 @@ func (s *Suite) TestNetShaperJitter() {
 	mother, err := s.Knuu.NewInstance("mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit())
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
 	target, err := mother.CloneWithName("target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
-	s.Require().NoError(target.AddSidecar(ctx, btSidecar))
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
@@ -379,10 +379,10 @@ func (s *Suite) TestNetShaperJitter() {
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 
@@ -400,7 +400,7 @@ func (s *Suite) TestNetShaperJitter() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -415,7 +415,7 @@ func (s *Suite) TestNetShaperJitter() {
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx,
+			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond

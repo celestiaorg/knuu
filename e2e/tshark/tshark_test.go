@@ -55,8 +55,8 @@ func TestTshark(t *testing.T) {
 	target, err := kn.NewInstance("busybox")
 	require.NoError(t, err, "error creating instance")
 
-	require.NoError(t, target.SetImage(ctx, "busybox"))
-	require.NoError(t, target.SetCommand("sleep", "infinity"))
+	require.NoError(t, target.Build().SetImage(ctx, "busybox"))
+	require.NoError(t, target.Build().SetCommand("sleep", "infinity"))
 
 	t.Log("getting minio configs")
 	minioConf, err := kn.MinioClient.GetConfigs(ctx)
@@ -76,21 +76,21 @@ func TestTshark(t *testing.T) {
 		UploadInterval: 1 * time.Second, // for sake of the test we keep this short
 	}
 
-	require.NoError(t, target.AddSidecar(ctx, tsc))
+	require.NoError(t, target.Sidecars().Add(ctx, tsc))
 	var (
 		filename = tsc.Instance().K8sName() + tshark.TsharkCaptureFileExtension
 		fileKey  = filepath.Join(keyPrefix, filename)
 	)
 
-	require.NoError(t, target.Commit())
+	require.NoError(t, target.Build().Commit())
 
 	// Test logic
 
 	t.Log("starting target instance")
-	require.NoError(t, target.Start(ctx))
+	require.NoError(t, target.Execution().Start(ctx))
 
 	// Perform a ping to do generate network traffic to allow tshark to capture it
-	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
+	_, err = target.Execution().ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
 	require.NoError(t, err, "error executing command")
 
 	url, err := kn.MinioClient.GetURL(ctx, fileKey, s3BucketName)

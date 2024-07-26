@@ -31,11 +31,11 @@ func TestStartWithCallback(t *testing.T) {
 	target, err := kn.NewInstance(callbackName)
 	require.NoError(t, err, "Error creating instance")
 
-	require.NoError(t, target.SetImage(ctx, nginxImage))
+	require.NoError(t, target.Build().SetImage(ctx, nginxImage))
 
 	// This probe is used to make sure the instance will not be ready for a second so the
 	// second execute command must fail and the first one with callback must succeed
-	err = target.SetReadinessProbe(&corev1.Probe{
+	err = target.Monitoring().SetReadinessProbe(&corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: "/",
@@ -45,7 +45,7 @@ func TestStartWithCallback(t *testing.T) {
 	})
 	require.NoError(t, err, "Error setting readiness probe")
 
-	err = target.SetCommand([]string{"sleep", sleepTimeBeforeReady, "&&", nginxCommand}...)
+	err = target.Build().SetCommand([]string{"sleep", sleepTimeBeforeReady, "&&", nginxCommand}...)
 	require.NoError(t, err, "Error setting command")
 
 	t.Cleanup(func() {
@@ -54,20 +54,20 @@ func TestStartWithCallback(t *testing.T) {
 		}
 	})
 
-	require.NoError(t, target.Commit())
+	require.NoError(t, target.Build().Commit())
 
 	wg := sync.WaitGroup{}
-	require.NoError(t, target.StartWithCallback(ctx, func() {
+	require.NoError(t, target.Execution().StartWithCallback(ctx, func() {
 		wg.Add(1)
 		defer wg.Done()
 		// This should Not fail as the instance will be ready when this is called
-		out, err := target.ExecuteCommand(ctx, "curl", "-s", "http://localhost")
+		out, err := target.Execution().ExecuteCommand(ctx, "curl", "-s", "http://localhost")
 		assert.NoError(t, err, "Error executing command")
 		assert.Contains(t, out, "Welcome to nginx")
 	}))
 
 	// This should fail as the instance is not ready yet
-	out, err := target.ExecuteCommand(ctx, "curl", "-s", "http://localhost")
+	out, err := target.Execution().ExecuteCommand(ctx, "curl", "-s", "http://localhost")
 	assert.Error(t, err, "Error executing command")
 	assert.Empty(t, out, "Output should be empty")
 

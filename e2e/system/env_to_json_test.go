@@ -40,22 +40,22 @@ func (s *Suite) TestEnvToJSON() {
 		name := fmt.Sprintf("%s-web%d", namePrefix, i+1)
 
 		ins := s.createNginxInstance(ctx, name)
-		s.Require().NoError(ins.Commit())
-		s.Require().NoError(ins.Start(ctx))
+		s.Require().NoError(ins.Build().Commit())
+		s.Require().NoError(ins.Execution().Start(ctx))
 
-		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
+		_, err = ins.Execution().ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
 		s.Require().NoError(err)
 
 		s.T().Logf("Writing JSON to instance '%v': %v", name, jsonString)
-		_, err = ins.ExecuteCommand(ctx, "mkdir", "-p", "/opt/env")
+		_, err = ins.Execution().ExecuteCommand(ctx, "mkdir", "-p", "/opt/env")
 		s.Require().NoError(err)
 
 		// write the json file to the instance
-		_, err = ins.ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", "/opt/env/env.json")
+		_, err = ins.Execution().ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", "/opt/env/env.json")
 		s.Require().NoError(err)
 
 		// for testing it, we also add it as index.html to the nginx server
-		_, err = ins.ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", nginxHTMLPath+"/index.html")
+		_, err = ins.Execution().ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", nginxHTMLPath+"/index.html")
 		s.Require().NoError(err, "writing JSON to instance '%v': %v", name, err)
 
 		instances[i] = ins
@@ -71,10 +71,10 @@ func (s *Suite) TestEnvToJSON() {
 
 	// Test logic
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		webIP, err := i.Network().GetIP(ctx)
 		s.Require().NoError(err)
 
-		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 		s.Require().NoError(err)
 
 		expectedBytes, err := json.Marshal(envVars)

@@ -78,24 +78,24 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 	if err != nil {
 		return ErrCreatingTsharkCollectorInstance.Wrap(err)
 	}
-	t.instance.SetIsSidecar(true)
+	t.instance.Sidecars().SetIsSidecar(true)
 
-	if err := t.instance.SetImage(ctx, t.Image); err != nil {
+	if err := t.instance.Build().SetImage(ctx, t.Image); err != nil {
 		return ErrSettingTsharkCollectorImage.Wrap(err)
 	}
 
-	if err := t.instance.Commit(); err != nil {
+	if err := t.instance.Build().Commit(); err != nil {
 		return ErrCommittingTsharkCollectorInstance.Wrap(err)
 	}
 
-	if err := t.instance.SetCPU(tsharkCollectorCPU); err != nil {
+	if err := t.instance.Resources().SetCPU(tsharkCollectorCPU); err != nil {
 		return ErrSettingTsharkCollectorCPU.Wrap(err)
 	}
 
-	if err := t.instance.SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
+	if err := t.instance.Resources().SetMemory(tsharkCollectorMemory, tsharkCollectorMemory); err != nil {
 		return ErrSettingTsharkCollectorMemory.Wrap(err)
 	}
-	if err := t.instance.AddVolume(tsharkCollectorVolumePath, t.VolumeSize); err != nil {
+	if err := t.instance.Storage().AddVolume(tsharkCollectorVolumePath, t.VolumeSize); err != nil {
 		return ErrAddingTsharkCollectorVolume.Wrap(err)
 	}
 
@@ -112,11 +112,11 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 	}
 
 	for key, value := range envVars {
-		if err := t.instance.SetEnvironmentVariable(key, value); err != nil {
+		if err := t.instance.Build().SetEnvironmentVariable(key, value); err != nil {
 			return ErrSettingTsharkCollectorEnv.Wrap(err)
 		}
 	}
-	if err := t.instance.AddCapability(netAdminCapability); err != nil {
+	if err := t.instance.Security().AddCapability(netAdminCapability); err != nil {
 		return ErrAddingTsharkCollectorCapability.Wrap(err)
 	}
 	return nil

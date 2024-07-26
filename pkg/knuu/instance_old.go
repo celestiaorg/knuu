@@ -60,209 +60,209 @@ func (i *Instance) SetImage(image string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), tmpKnuu.timeout)
 	defer cancel()
-	return i.Instance.SetImage(ctx, image)
+	return i.Instance.Build().SetImage(ctx, image)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
-	return i.Instance.SetGitRepo(ctx, gitContext)
+	return i.Instance.Build().SetGitRepo(ctx, gitContext)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetImageInstant(image string) error {
-	return i.Instance.SetImageInstant(context.Background(), image)
+	return i.Instance.Build().SetImageInstant(context.Background(), image)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetCommand(command ...string) error {
-	return i.Instance.SetCommand(command...)
+	return i.Instance.Build().SetCommand(command...)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetArgs(args ...string) error {
-	return i.Instance.SetArgs(args...)
+	return i.Instance.Build().SetArgs(args...)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddPortTCP(port int) error {
-	return i.Instance.AddPortTCP(port)
+	return i.Instance.Network().AddPortTCP(port)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) PortForwardTCP(port int) (int, error) {
-	return i.Instance.PortForwardTCP(context.Background(), port)
+	return i.Instance.Network().PortForwardTCP(context.Background(), port)
 }
 
 // AddPortUDP adds a UDP port to the instance
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddPortUDP(port int) error {
-	return i.Instance.AddPortUDP(port)
+	return i.Instance.Network().AddPortUDP(port)
 }
 
 // Deprecated: Use the new package knuu instead.
 // ExecuteCommand executes a command in the instance
 func (i *Instance) ExecuteCommand(command ...string) (string, error) {
-	return i.Instance.ExecuteCommand(context.Background(), command...)
+	return i.Instance.Execution().ExecuteCommand(context.Background(), command...)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
-	return i.Instance.ExecuteCommand(ctx, command...)
+	return i.Instance.Execution().ExecuteCommand(ctx, command...)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddFile(srcPath, dstPath string, chown string) error {
-	return i.Instance.AddFile(srcPath, dstPath, chown)
+	return i.Instance.Storage().AddFile(srcPath, dstPath, chown)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddFolder(srcPath, dstPath string, chown string) error {
-	return i.Instance.AddFolder(srcPath, dstPath, chown)
+	return i.Instance.Storage().AddFolder(srcPath, dstPath, chown)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddFileBytes(bytes []byte, dest string, chown string) error {
-	return i.Instance.AddFileBytes(bytes, dest, chown)
+	return i.Instance.Storage().AddFileBytes(bytes, dest, chown)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetUser(user string) error {
-	return i.Instance.SetUser(user)
+	return i.Instance.Build().SetUser(user)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Commit() error {
-	return i.Instance.Commit()
+	return i.Instance.Build().Commit()
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddVolume(path, size string) error {
-	return i.Instance.AddVolume(path, resource.MustParse(size))
+	return i.Instance.Storage().AddVolume(path, resource.MustParse(size))
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddVolumeWithOwner(path, size string, owner int64) error {
-	return i.Instance.AddVolumeWithOwner(path, resource.MustParse(size), owner)
+	return i.Instance.Storage().AddVolumeWithOwner(path, resource.MustParse(size), owner)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetMemory(request, limit string) error {
-	return i.Instance.SetMemory(resource.MustParse(request), resource.MustParse(limit))
+	return i.Instance.Resources().SetMemory(resource.MustParse(request), resource.MustParse(limit))
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetCPU(request string) error {
-	return i.Instance.SetCPU(resource.MustParse(request))
+	return i.Instance.Resources().SetCPU(resource.MustParse(request))
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetEnvironmentVariable(key, value string) error {
-	return i.Instance.SetEnvironmentVariable(key, value)
+	return i.Instance.Build().SetEnvironmentVariable(key, value)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) GetIP() (string, error) {
-	return i.Instance.GetIP(context.Background())
+	return i.Instance.Network().GetIP(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) GetFileBytes(file string) ([]byte, error) {
-	return i.Instance.GetFileBytes(context.Background(), file)
+	return i.Instance.Storage().GetFileBytes(context.Background(), file)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath string) (io.ReadCloser, error) {
-	return i.Instance.ReadFileFromRunningInstance(ctx, filePath)
+	return i.Instance.Storage().ReadFileFromRunningInstance(ctx, filePath)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	return i.Instance.AddPolicyRule(rule)
+	return i.Instance.Resources().AddPolicyRule(rule)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetLivenessProbe(livenessProbe *v1.Probe) error {
-	return i.Instance.SetLivenessProbe(livenessProbe)
+	return i.Instance.Monitoring().SetLivenessProbe(livenessProbe)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetReadinessProbe(readinessProbe *v1.Probe) error {
-	return i.Instance.SetReadinessProbe(readinessProbe)
+	return i.Instance.Monitoring().SetReadinessProbe(readinessProbe)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetStartupProbe(startupProbe *v1.Probe) error {
-	return i.Instance.SetStartupProbe(startupProbe)
+	return i.Instance.Monitoring().SetStartupProbe(startupProbe)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddSidecar(ctx context.Context, sc instance.SidecarManager) error {
-	return i.Instance.AddSidecar(ctx, sc)
+	return i.Instance.Sidecars().Add(ctx, sc)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) SetPrivileged(privileged bool) error {
-	return i.Instance.SetPrivileged(privileged)
+	return i.Instance.Security().SetPrivileged(privileged)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddCapability(capability string) error {
-	return i.Instance.AddCapability(capability)
+	return i.Instance.Security().AddCapability(capability)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddCapabilities(capabilities []string) error {
-	return i.Instance.AddCapabilities(capabilities)
+	return i.Instance.Security().AddCapabilities(capabilities)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) StartAsync() error {
-	return i.Instance.StartAsync(context.Background())
+	return i.Instance.Execution().StartAsync(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) StartWithoutWait() error {
-	return i.Instance.StartAsync(context.Background())
+	return i.Instance.Execution().StartAsync(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Start() error {
-	return i.Instance.Start(context.Background())
+	return i.Instance.Execution().Start(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) IsRunning() (bool, error) {
-	return i.Instance.IsRunning(context.Background())
+	return i.Instance.Execution().IsRunning(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) WaitInstanceIsRunning() error {
-	return i.Instance.WaitInstanceIsRunning(context.Background())
+	return i.Instance.Execution().WaitInstanceIsRunning(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) DisableNetwork() error {
-	return i.Instance.DisableNetwork(context.Background())
+	return i.Instance.Network().Disable(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) EnableNetwork() error {
-	return i.Instance.EnableNetwork(context.Background())
+	return i.Instance.Network().Enable(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) NetworkIsDisabled() (bool, error) {
-	return i.Instance.NetworkIsDisabled(context.Background())
+	return i.Instance.Network().IsDisabled(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) WaitInstanceIsStopped() error {
-	return i.Instance.WaitInstanceIsStopped(context.Background())
+	return i.Instance.Execution().WaitInstanceIsStopped(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Stop() error {
-	return i.Instance.Stop(context.Background())
+	return i.Instance.Execution().Stop(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -285,12 +285,12 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) CreateCustomResource(gvr *schema.GroupVersionResource, obj *map[string]interface{}) error {
-	return i.Instance.CreateCustomResource(context.Background(), gvr, obj)
+	return i.Instance.Resources().CreateCustomResource(context.Background(), gvr, obj)
 }
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) CustomResourceDefinitionExists(gvr *schema.GroupVersionResource) (bool, error) {
-	return i.Instance.CustomResourceDefinitionExists(context.Background(), gvr)
+	return i.Instance.Resources().CustomResourceDefinitionExists(context.Background(), gvr)
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -305,7 +305,7 @@ func (e *Executor) Destroy() error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Destroy() error {
-	return i.Instance.Destroy(context.Background())
+	return i.Instance.Execution().Destroy(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -319,7 +319,7 @@ func BatchDestroy(instances ...*Instance) error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Labels() map[string]string {
-	return i.Instance.Labels()
+	return i.Instance.Execution().Labels()
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -332,6 +332,6 @@ func (i *Instance) IsInState(states ...InstanceState) bool {
 }
 
 func (i *Instance) AddHost(port int) (err error, host string) {
-	host, err = i.Instance.AddHost(context.Background(), port)
+	host, err = i.Instance.Network().AddHost(context.Background(), port)
 	return err, host
 }

@@ -67,8 +67,8 @@ func (s *TestSuite) TestInitialize() {
 	err := s.bt.Initialize(s.ctx, s.sysDeps)
 	s.Require().NoError(err)
 	s.Assert().NotNil(s.bt.Instance())
-	s.Assert().Equal(DefaultImage, s.bt.Instance().ImageName())
-	s.Assert().True(s.bt.Instance().IsSidecar())
+	s.Assert().Equal(DefaultImage, s.bt.Instance().Build().ImageName())
+	s.Assert().True(s.bt.Instance().Sidecars().IsSidecar())
 }
 
 func (s *TestSuite) TestPreStart() {
@@ -89,7 +89,7 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	s.Assert().Equal(s.bt.networkInterface, clonedBt.networkInterface)
 	s.Assert().Nil(clonedBt.client)
 	// we can't compare the instances as they are different, but some of their fields are the same
-	s.Assert().Equal(s.bt.instance.ImageName(), clonedBt.instance.ImageName())
+	s.Assert().Equal(s.bt.Instance().Build().ImageName(), clonedBt.Instance().Build().ImageName())
 }
 
 func (s *TestSuite) TestSetters() {
