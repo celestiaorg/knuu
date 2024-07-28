@@ -286,10 +286,15 @@ func (b *build) clone() *build {
 	}
 
 	var imageCacheClone sync.Map
-	b.imageCache.Range(func(key, value interface{}) bool {
-		imageCacheClone.Store(key, value)
-		return true
-	})
+	// Clone the imageCache if it exists
+	if b.imageCache != nil {
+		b.imageCache.Range(func(key, value interface{}) bool {
+			// Copy each key-value pair to the new imageCacheClone
+			// This ensures a deep copy of the map structure, but not of the values themselves
+			imageCacheClone.Store(key, value)
+			return true
+		})
+	}
 
 	// Return the deep copied build
 	return &build{

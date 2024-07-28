@@ -163,8 +163,8 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 // cloneWithSuffix clones the instance with a suffix
 func (i *Instance) CloneWithSuffix(suffix string) *Instance {
 	newInstance := &Instance{
-		name:               i.name + suffix,
-		k8sName:            i.k8sName + suffix,
+		name:               i.name + "-" + suffix,
+		k8sName:            i.k8sName + "-" + suffix,
 		SystemDependencies: i.SystemDependencies,
 
 		build:      i.build.clone(),

@@ -78,18 +78,52 @@ func (s *TestSuite) TestPreStart() {
 func (s *TestSuite) TestCloneWithSuffix() {
 	err := s.bt.Initialize(s.ctx, s.sysDeps)
 	s.Require().NoError(err)
+	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
 
 	clone := s.bt.CloneWithSuffix("test")
 	s.Assert().NotNil(clone)
 
 	clonedBt, ok := clone.(*NetShaper)
 	s.Assert().True(ok)
+
 	s.Assert().Equal(s.bt.port, clonedBt.port)
 	s.Assert().Equal(s.bt.image, clonedBt.image)
 	s.Assert().Equal(s.bt.networkInterface, clonedBt.networkInterface)
 	s.Assert().Nil(clonedBt.client)
-	// we can't compare the instances as they are different, but some of their fields are the same
-	s.Assert().Equal(s.bt.Instance().Build().ImageName(), clonedBt.Instance().Build().ImageName())
+	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
+	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
+	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
+	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+	clonedBt.SetPort(9090)
+	s.Assert().NotEqual(s.bt.port, clonedBt.port)
+}
+
+func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
+	err := s.bt.Initialize(s.ctx, s.sysDeps)
+	s.Require().NoError(err)
+	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
+
+	s.bt.SetPort(8080)
+	s.bt.SetImage("nginx")
+	s.bt.SetNetworkInterface("eth0")
+
+	clone := s.bt.CloneWithSuffix("test")
+	s.Assert().NotNil(clone)
+
+	clonedBt, ok := clone.(*NetShaper)
+	s.Assert().True(ok)
+
+	s.Assert().Equal(s.bt.port, clonedBt.port)
+	s.Assert().Equal(s.bt.image, clonedBt.image)
+	s.Assert().Equal(s.bt.networkInterface, clonedBt.networkInterface)
+	s.Assert().Nil(clonedBt.client)
+	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
+	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
+	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
+	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+
+	clonedBt.SetPort(9090)
+	s.Assert().NotEqual(s.bt.port, clonedBt.port)
 }
 
 func (s *TestSuite) TestSetters() {
