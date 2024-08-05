@@ -55,9 +55,6 @@ func (s *security) AddCapabilities(capabilities []string) error {
 // prepareSecurityContext creates a v1.SecurityContext from the security configs
 func (s *security) prepareSecurityContext() *v1.SecurityContext {
 	sc := &v1.SecurityContext{}
-	if s == nil {
-		return sc
-	}
 
 	if s.privileged {
 		sc.Privileged = &s.privileged
@@ -79,10 +76,6 @@ func (s *security) prepareSecurityContext() *v1.SecurityContext {
 }
 
 func (s *security) clone() *security {
-	if s == nil {
-		return nil
-	}
-
 	capabilitiesAddCopy := make([]string, len(s.capabilitiesAdd))
 	copy(capabilitiesAddCopy, s.capabilitiesAdd)
 
