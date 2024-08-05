@@ -266,6 +266,14 @@ func (e *execution) Destroy(ctx context.Context) error {
 	return nil
 }
 
+func (e *execution) UpgradeImage(ctx context.Context, image string) error {
+	if !e.instance.IsInState(StateStarted) {
+		return ErrUpgradingImageNotAllowed.WithParams(e.instance.state.String())
+	}
+
+	return e.instance.build.setImageWithGracePeriod(ctx, image, nil)
+}
+
 // BatchDestroy destroys a list of instances.
 func BatchDestroy(ctx context.Context, instances ...*Instance) error {
 	if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
@@ -313,8 +321,8 @@ func (e *execution) deployPod(ctx context.Context) error {
 	}
 
 	// create a role and role binding for the pod if there are policy rules
-	if len(e.instance.resources.policyRules) > 0 {
-		if err := e.instance.K8sClient.CreateRole(ctx, e.instance.k8sName, labels, e.instance.resources.policyRules); err != nil {
+	if len(e.instance.security.policyRules) > 0 {
+		if err := e.instance.K8sClient.CreateRole(ctx, e.instance.k8sName, labels, e.instance.security.policyRules); err != nil {
 			return ErrFailedToCreateRole.Wrap(err)
 		}
 		if err := e.instance.K8sClient.CreateRoleBinding(ctx, e.instance.k8sName, labels, e.instance.k8sName, e.instance.k8sName); err != nil {
@@ -352,7 +360,7 @@ func (e *execution) destroyPod(ctx context.Context) error {
 	}
 
 	// Delete the role and role binding for the pod if there are policy rules
-	if len(e.instance.resources.policyRules) == 0 {
+	if len(e.instance.security.policyRules) == 0 {
 		return nil
 	}
 

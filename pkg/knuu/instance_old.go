@@ -177,7 +177,7 @@ func (i *Instance) ReadFileFromRunningInstance(ctx context.Context, filePath str
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	return i.Instance.Resources().AddPolicyRule(rule)
+	return i.Instance.Security().AddPolicyRule(rule)
 }
 
 // Deprecated: Use the new package knuu instead.

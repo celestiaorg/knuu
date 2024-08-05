@@ -1,6 +1,9 @@
 package instance
 
-import v1 "k8s.io/api/core/v1"
+import (
+	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+)
 
 // represents the security settings for a container
 type security struct {
@@ -11,10 +14,23 @@ type security struct {
 
 	// CapabilitiesAdd is the list of capabilities to add to the container
 	capabilitiesAdd []string
+
+	// PolicyRules is the list of policy rules to add to the instance
+	policyRules []rbacv1.PolicyRule
 }
 
 func (i *Instance) Security() *security {
 	return i.security
+}
+
+// AddPolicyRule adds a policy rule to the instance
+// This function can only be called in the states 'Preparing' and 'Committed'
+func (s *security) AddPolicyRule(rule rbacv1.PolicyRule) error {
+	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+		return ErrAddingPolicyRuleNotAllowed.WithParams(s.instance.state.String())
+	}
+	s.policyRules = append(s.policyRules, rule)
+	return nil
 }
 
 // SetPrivileged sets the privileged status for the instance
@@ -79,9 +95,13 @@ func (s *security) clone() *security {
 	capabilitiesAddCopy := make([]string, len(s.capabilitiesAdd))
 	copy(capabilitiesAddCopy, s.capabilitiesAdd)
 
+	policyRulesCopy := make([]rbacv1.PolicyRule, len(s.policyRules))
+	copy(policyRulesCopy, s.policyRules)
+
 	return &security{
 		instance:        nil,
 		privileged:      s.privileged,
 		capabilitiesAdd: capabilitiesAddCopy,
+		policyRules:     policyRulesCopy,
 	}
 }

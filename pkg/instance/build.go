@@ -33,18 +33,13 @@ func (b *build) ImageName() string {
 }
 
 // SetImage sets the image of the instance.
-// When calling in state 'Started', make sure to call AddVolume() before.
-// It is only allowed in the 'None' and 'Started' states.
+// It is only allowed in the 'None' and 'Preparing' states.
 func (b *build) SetImage(ctx context.Context, image string) error {
-	if !b.instance.IsInState(StateNone, StateStarted) {
+	if !b.instance.IsInState(StateNone, StatePreparing) {
 		if b.instance.sidecars.IsSidecar() {
 			return ErrSettingImageNotAllowedForSidecarsStarted
 		}
 		return ErrSettingImageNotAllowed.WithParams(b.instance.state.String())
-	}
-
-	if b.instance.state == StateStarted {
-		return b.setImageWithGracePeriod(ctx, image, nil)
 	}
 
 	// Use the builder to build a new image

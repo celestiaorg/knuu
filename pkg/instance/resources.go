@@ -3,14 +3,12 @@ package instance
 import (
 	"context"
 
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type resources struct {
 	instance      *Instance
-	policyRules   []rbacv1.PolicyRule
 	memoryRequest resource.Quantity
 	memoryLimit   resource.Quantity
 	cpuRequest    resource.Quantity
@@ -18,16 +16,6 @@ type resources struct {
 
 func (i *Instance) Resources() *resources {
 	return i.resources
-}
-
-// AddPolicyRule adds a policy rule to the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
-func (r *resources) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	if !r.instance.IsInState(StatePreparing, StateCommitted) {
-		return ErrAddingPolicyRuleNotAllowed.WithParams(r.instance.state.String())
-	}
-	r.policyRules = append(r.policyRules, rule)
-	return nil
 }
 
 // SetMemory sets the memory of the instance
@@ -76,18 +64,18 @@ func (r *resources) CustomResourceDefinitionExists(ctx context.Context, gvr *sch
 func (r *resources) deployResources(ctx context.Context) error {
 	// only a non-sidecar instance should deploy a service, all sidecars will use the parent instance's service
 	if !r.instance.sidecars.isSidecar {
-		portsTCP := r.instance.network.portsTCP
-		portsUDP := r.instance.network.portsUDP
-		for _, sidecar := range r.instance.sidecars.sidecars {
-			portsTCP = append(portsTCP, sidecar.Instance().network.portsTCP...)
-			portsUDP = append(portsUDP, sidecar.Instance().network.portsUDP...)
-		}
-		if len(portsTCP) != 0 || len(portsUDP) != 0 {
-			if err := r.instance.network.deployOrPatchService(ctx, portsTCP, portsUDP); err != nil {
-				return ErrFailedToDeployOrPatchService.Wrap(err)
-			}
+		if err := r.deployService(ctx); err != nil {
+			return err
 		}
 	}
+
+	if err := r.deployStorage(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *resources) deployStorage(ctx context.Context) error {
 	if len(r.instance.storage.volumes) != 0 {
 		if err := r.instance.storage.deployVolume(ctx); err != nil {
 			return ErrDeployingVolumeForInstance.WithParams(r.instance.k8sName).Wrap(err)
@@ -99,6 +87,21 @@ func (r *resources) deployResources(ctx context.Context) error {
 
 	if err := r.instance.storage.deployFiles(ctx); err != nil {
 		return ErrDeployingFilesForInstance.WithParams(r.instance.k8sName).Wrap(err)
+	}
+	return nil
+}
+
+func (r *resources) deployService(ctx context.Context) error {
+	portsTCP := r.instance.network.portsTCP
+	portsUDP := r.instance.network.portsUDP
+	for _, sidecar := range r.instance.sidecars.sidecars {
+		portsTCP = append(portsTCP, sidecar.Instance().network.portsTCP...)
+		portsUDP = append(portsUDP, sidecar.Instance().network.portsUDP...)
+	}
+	if len(portsTCP) != 0 || len(portsUDP) != 0 {
+		if err := r.instance.network.deployOrPatchService(ctx, portsTCP, portsUDP); err != nil {
+			return ErrFailedToDeployOrPatchService.Wrap(err)
+		}
 	}
 	return nil
 }
@@ -140,16 +143,12 @@ func (r *resources) clone() *resources {
 		return nil
 	}
 
-	policyRulesCopy := make([]rbacv1.PolicyRule, len(r.policyRules))
-	copy(policyRulesCopy, r.policyRules)
-
 	memoryRequestCopy := r.memoryRequest.DeepCopy()
 	memoryLimitCopy := r.memoryLimit.DeepCopy()
 	cpuRequestCopy := r.cpuRequest.DeepCopy()
 
 	return &resources{
 		instance:      nil,
-		policyRules:   policyRulesCopy,
 		memoryRequest: memoryRequestCopy,
 		memoryLimit:   memoryLimitCopy,
 		cpuRequest:    cpuRequestCopy,

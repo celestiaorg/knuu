@@ -68,7 +68,6 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 	i.execution = &execution{instance: i}
 	i.resources = &resources{
 		instance:      i,
-		policyRules:   make([]rbacv1.PolicyRule, 0),
 		memoryRequest: resource.Quantity{},
 		memoryLimit:   resource.Quantity{},
 		cpuRequest:    resource.Quantity{},
@@ -95,6 +94,7 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 		instance:        i,
 		privileged:      false,
 		capabilitiesAdd: make([]string, 0),
+		policyRules:     make([]rbacv1.PolicyRule, 0),
 	}
 
 	i.sidecars = &sidecars{

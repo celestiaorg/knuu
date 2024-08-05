@@ -141,7 +141,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 		Resources: []string{"*"},
 	}
 
-	if err := inst.Resources().AddPolicyRule(rule); err != nil {
+	if err := inst.Security().AddPolicyRule(rule); err != nil {
 		return ErrCannotAddPolicyRule.Wrap(err)
 	}
 	if err := inst.Execution().Start(ctx); err != nil {
