@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -78,21 +79,6 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) e
 	b.instance.SetState(StatePreparing)
 
 	return b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
-}
-
-// SetImageInstant sets the image of the instance without a grace period.
-// Instant means that the pod is replaced without a grace period of 1 second.
-// It is only allowed in the 'Running' state.
-func (b *build) SetImageInstant(ctx context.Context, image string) error {
-	if !b.instance.IsState(StateStarted) {
-		return ErrSettingImageNotAllowedForSidecarsStarted.WithParams(b.instance.state.String())
-	}
-
-	if b.instance.sidecars.IsSidecar() {
-		return ErrSettingImageNotAllowedForSidecars
-	}
-
-	return b.setImageWithGracePeriod(ctx, image, nil)
 }
 
 // SetCommand sets the command to run in the instance
@@ -236,10 +222,15 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 }
 
 // setImageWithGracePeriod sets the image of the instance with a grace period
-func (b *build) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod *int64) error {
+func (b *build) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod time.Duration) error {
 	b.imageName = imageName
 
-	_, err := b.instance.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, b.instance.execution.prepareReplicaSetConfig(), gracePeriod)
+	var gracePeriodInSecondsPtr *int64
+	if gracePeriod != 0 {
+		gpInSeconds := int64(gracePeriod.Seconds())
+		gracePeriodInSecondsPtr = &gpInSeconds
+	}
+	_, err := b.instance.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, b.instance.execution.prepareReplicaSetConfig(), gracePeriodInSecondsPtr)
 	if err != nil {
 		return ErrReplacingPod.Wrap(err)
 	}
