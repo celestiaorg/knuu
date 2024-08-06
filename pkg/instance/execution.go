@@ -33,7 +33,7 @@ func (i *Instance) Execution() *execution {
 // ExecuteCommand executes the given command in the instance
 // This function can only be called in the states 'Started'
 func (e *execution) ExecuteCommand(ctx context.Context, command ...string) (string, error) {
-	if !e.instance.IsInState(StateStarted) {
+	if e.instance.state != StateStarted {
 		return "", ErrExecutingCommandNotAllowed.WithParams(e.instance.state.String())
 	}
 

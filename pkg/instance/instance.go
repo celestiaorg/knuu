@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"sync"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -59,10 +60,11 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 	}
 
 	i.build = &build{
-		instance: i,
-		command:  make([]string, 0),
-		args:     make([]string, 0),
-		env:      make(map[string]string),
+		instance:   i,
+		command:    make([]string, 0),
+		args:       make([]string, 0),
+		env:        make(map[string]string),
+		imageCache: &sync.Map{},
 	}
 
 	i.execution = &execution{instance: i}
@@ -175,6 +177,9 @@ func (i *Instance) CloneWithSuffix(suffix string) *Instance {
 		monitoring: i.monitoring.clone(),
 		security:   i.security.clone(),
 		sidecars:   i.sidecars.cloneWithSuffix(suffix),
+
+		state:        i.state,
+		instanceType: i.instanceType,
 	}
 
 	// Need to set all the parent references to the newly created instance

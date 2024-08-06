@@ -104,8 +104,8 @@ func (b *build) SetArgs(args ...string) error {
 // ExecuteCommand executes the given command in the instance once it starts
 // This function can only be called in the states 'Preparing'
 func (b *build) ExecuteCommand(command ...string) error {
-	if !b.instance.IsInState(StatePreparing) {
-		return ErrExecutingCommandNotAllowed.WithParams(b.instance.state.String())
+	if b.instance.state != StatePreparing {
+		return ErrAddingCommandNotAllowed.WithParams(b.instance.state.String())
 	}
 
 	_, err := b.builderFactory.ExecuteCmdInBuilder(command)
@@ -246,8 +246,12 @@ func (b *build) setImageWithGracePeriod(ctx context.Context, imageName string, g
 
 // checkImageHashInCache checks if the given image hash exists in the cache.
 func (b *build) checkImageHashInCache(imageHash string) (string, bool) {
-	imageName, exists := b.imageCache.Load(imageHash)
-	return imageName.(string), exists
+	value, exists := b.imageCache.Load(imageHash)
+	imageName, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	return imageName, exists
 }
 
 // updateImageCacheWithHash adds or updates the image cache with the given hash and image name.

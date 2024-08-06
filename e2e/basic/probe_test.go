@@ -36,7 +36,7 @@ func TestProbe(t *testing.T) {
 		t.Fatalf("Error setting image '%v':", err)
 	}
 	web.AddPortTCP(80)
-	_, err = web.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
+	err = web.AddExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
 	if err != nil {
 		t.Fatalf("Error executing command '%v':", err)
 	}

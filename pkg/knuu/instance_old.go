@@ -106,6 +106,12 @@ func (i *Instance) ExecuteCommand(command ...string) (string, error) {
 }
 
 // Deprecated: Use the new package knuu instead.
+// This function adds a command to the instance while it is in the building phase
+func (i *Instance) AddExecuteCommand(command ...string) error {
+	return i.Instance.Build().ExecuteCommand(command...)
+}
+
+// Deprecated: Use the new package knuu instead.
 func (i *Instance) ExecuteCommandWithContext(ctx context.Context, command ...string) (string, error) {
 	return i.Instance.Execution().ExecuteCommand(ctx, command...)
 }
