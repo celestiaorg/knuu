@@ -18,7 +18,7 @@ func (s *Suite) TestFolder() {
 	require.NoError(s.T(), err)
 
 	web := s.createNginxInstanceWithVolume(ctx, namePrefix)
-	err = web.Storage().AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner)
+	err = web.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
 	require.NoError(s.T(), err)
 
 	require.NoError(s.T(), web.Build().Commit())
