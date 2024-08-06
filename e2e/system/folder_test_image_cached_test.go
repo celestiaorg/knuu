@@ -32,7 +32,7 @@ func (s *Suite) TestFolderCached() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err := i.AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
+			err := i.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
 			s.Require().NoError(err, "adding file to '%v'", i.Name())
 		}(i)
 	}
@@ -49,17 +49,17 @@ func (s *Suite) TestFolderCached() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Commit())
-		s.Require().NoError(i.StartAsync(ctx))
+		s.Require().NoError(i.Build().Commit())
+		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		webIP, err := i.Network().GetIP(ctx)
 		s.Require().NoError(err)
 
-		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
+		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 		s.Require().NoError(err)
 
 		s.Assert().Contains(wget, "Hello World!")

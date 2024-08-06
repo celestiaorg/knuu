@@ -20,7 +20,7 @@ func (s *Suite) TestBuildFromGit() {
 	s.T().Log("Building the image")
 
 	// This is a blocking call which builds the image from git repo
-	err = target.SetGitRepo(ctx, builder.GitContext{
+	err = target.Build().SetGitRepo(ctx, builder.GitContext{
 		Repo:     "https://github.com/celestiaorg/knuu.git",
 		Branch:   "test/build-from-git", // This branch has a Dockerfile and is protected as to not be deleted
 		Username: "",
@@ -31,21 +31,21 @@ func (s *Suite) TestBuildFromGit() {
 	s.T().Log("Image built")
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
-	s.Require().NoError(target.Commit())
+	s.Require().NoError(target.Build().Commit())
 
 	s.T().Logf("Starting instance")
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Logf("Instance started")
 
 	// The file is created by the dockerfile in the repo,
 	// so to make sure it is built correctly, we check the file
-	data, err := target.GetFileBytes(ctx, "/test.txt")
+	data, err := target.Storage().GetFileBytes(ctx, "/test.txt")
 	s.Require().NoError(err)
 
 	data = []byte(strings.TrimSpace(string(data)))
@@ -61,7 +61,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 
 	ctx := context.Background()
 	// This is a blocking call which builds the image from git repo
-	err = target.SetGitRepo(ctx, builder.GitContext{
+	err = target.Build().SetGitRepo(ctx, builder.GitContext{
 		Repo:     "https://github.com/celestiaorg/knuu.git",
 		Branch:   "test/build-from-git", // This branch has a Dockerfile and is protected as to not be deleted
 		Username: "",
@@ -69,22 +69,22 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.SetCommand("sleep", "infinity"))
+	s.Require().NoError(target.Build().SetCommand("sleep", "infinity"))
 
-	err = target.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
+	err = target.Storage().AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	s.Require().NoError(err, "Error adding file")
 
-	s.Require().NoError(target.Commit())
+	s.Require().NoError(target.Build().Commit())
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
-	data, err := target.GetFileBytes(ctx, "/home/hello.txt")
+	data, err := target.Storage().GetFileBytes(ctx, "/home/hello.txt")
 	s.Require().NoError(err, "Error getting file bytes")
 
 	s.Assert().Equal([]byte("Hello, world!"), data, "File bytes do not match")

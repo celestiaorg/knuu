@@ -48,31 +48,31 @@ func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDepend
 	if err != nil {
 		return ErrCreatingBitTwisterInstance.Wrap(err)
 	}
-	bt.instance.SetIsSidecar(true)
+	bt.instance.Sidecars().SetIsSidecar(true)
 
-	if err := bt.instance.SetImage(ctx, bt.image); err != nil {
+	if err := bt.instance.Build().SetImage(ctx, bt.image); err != nil {
 		return ErrSettingBitTwisterImage.Wrap(err)
 	}
 
-	if err := bt.instance.AddPortTCP(bt.port); err != nil {
+	if err := bt.instance.Network().AddPortTCP(bt.port); err != nil {
 		return ErrAddingBitTwisterPort.Wrap(err)
 	}
 
-	if err := bt.instance.Commit(); err != nil {
+	if err := bt.instance.Build().Commit(); err != nil {
 		return ErrCommittingBitTwisterInstance.Wrap(err)
 	}
 
-	if err := bt.instance.SetEnvironmentVariable(
+	if err := bt.instance.Build().SetEnvironmentVariable(
 		envServeAddr, fmt.Sprintf("0.0.0.0:%d", bt.port),
 	); err != nil {
 		return ErrSettingBitTwisterEnv.Wrap(err)
 	}
 
-	if err := bt.instance.SetPrivileged(true); err != nil {
+	if err := bt.instance.Security().SetPrivileged(true); err != nil {
 		return ErrSettingBitTwisterPrivileged.Wrap(err)
 	}
 
-	if err := bt.instance.AddCapability(capabilityNetAdmin); err != nil {
+	if err := bt.instance.Security().AddCapability(capabilityNetAdmin); err != nil {
 		return ErrAddingBitTwisterCapability.Wrap(err)
 	}
 
@@ -86,7 +86,7 @@ func (bt *NetShaper) PreStart(ctx context.Context) error {
 		return ErrBitTwisterNotInitialized
 	}
 
-	btURL, err := bt.instance.AddHost(ctx, bt.port)
+	btURL, err := bt.instance.Network().AddHost(ctx, bt.port)
 	if err != nil {
 		return err
 	}

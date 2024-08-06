@@ -23,10 +23,10 @@ func (s *Suite) TestFile() {
 
 	serverfile := s.createNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
 
-	err = serverfile.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+	err = serverfile.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
-	s.Require().NoError(serverfile.Commit())
+	s.Require().NoError(serverfile.Build().Commit())
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, serverfile, executor)
@@ -37,12 +37,12 @@ func (s *Suite) TestFile() {
 
 	// Test logic
 
-	serverfileIP, err := serverfile.GetIP(ctx)
+	serverfileIP, err := serverfile.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
-	s.Require().NoError(serverfile.Start(ctx))
+	s.Require().NoError(serverfile.Execution().Start(ctx))
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Hello World!")
@@ -57,13 +57,13 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.SetImage(ctx, "alpine:latest"))
-	s.Require().NoError(target.SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Commit())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
@@ -75,10 +75,10 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	)
 
 	// Create a file in the target instance
-	out, err := target.ExecuteCommand(ctx, "echo", "-n", fileContent, ">", filePath)
+	out, err := target.Execution().ExecuteCommand(ctx, "echo", "-n", fileContent, ">", filePath)
 	s.Require().NoError(err, "executing command output: %v", out)
 
-	gotContent, err := target.GetFileBytes(ctx, filePath)
+	gotContent, err := target.Storage().GetFileBytes(ctx, filePath)
 	s.Require().NoError(err, "Error getting file bytes")
 
 	s.Assert().Equal(fileContent, string(gotContent))
@@ -96,13 +96,13 @@ func (s *Suite) TestMinio() {
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.SetImage(ctx, "alpine:latest"))
-	s.Require().NoError(target.SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Commit())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("error destroying instance: %v", err)
 		}
 	})

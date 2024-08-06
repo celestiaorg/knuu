@@ -30,27 +30,27 @@ func (e *Executor) NewInstance(ctx context.Context, name string) (*instance.Inst
 		return nil, err
 	}
 
-	if err := i.SetImage(ctx, executorDefaultImage); err != nil {
+	if err := i.Build().SetImage(ctx, executorDefaultImage); err != nil {
 		return nil, err
 	}
 
-	if err := i.Commit(); err != nil {
+	if err := i.Build().Commit(); err != nil {
 		return nil, err
 	}
 
-	if err := i.SetArgs(sleepCommand, infinityArg); err != nil {
+	if err := i.Build().SetArgs(sleepCommand, infinityArg); err != nil {
 		return nil, err
 	}
 
-	if err := i.SetMemory(executorMemoryLimit, executorMemoryLimit); err != nil {
+	if err := i.Resources().SetMemory(executorMemoryLimit, executorMemoryLimit); err != nil {
 		return nil, err
 	}
 
-	if err := i.SetCPU(executorCpuLimit); err != nil {
+	if err := i.Resources().SetCPU(executorCpuLimit); err != nil {
 		return nil, err
 	}
 
-	if err := i.Start(ctx); err != nil {
+	if err := i.Execution().Start(ctx); err != nil {
 		return nil, err
 	}
 

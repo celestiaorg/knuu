@@ -50,7 +50,7 @@ func (s *TestSuite) TestInitialize() {
 	err := o.Initialize(context.Background(), s.sysDeps)
 	s.Require().NoError(err)
 	s.Assert().NotNil(o.Instance())
-	s.Assert().True(o.Instance().IsSidecar())
+	s.Assert().True(o.Instance().Sidecars().IsSidecar())
 }
 
 func (s *TestSuite) TestPreStart() {

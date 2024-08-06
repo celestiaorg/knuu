@@ -18,10 +18,10 @@ func (s *Suite) TestFolder() {
 	require.NoError(s.T(), err)
 
 	web := s.createNginxInstanceWithVolume(ctx, namePrefix)
-	err = web.AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
+	err = web.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
 	require.NoError(s.T(), err)
 
-	require.NoError(s.T(), web.Commit())
+	require.NoError(s.T(), web.Build().Commit())
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, web, executor)
@@ -31,12 +31,12 @@ func (s *Suite) TestFolder() {
 	})
 
 	// Test logic
-	webIP, err := web.GetIP(ctx)
+	webIP, err := web.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
-	s.Require().NoError(web.Start(ctx))
+	s.Require().NoError(web.Execution().Start(ctx))
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Hello World!")
