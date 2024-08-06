@@ -206,7 +206,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		wgFolders.Add(1)
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			err := s.retryOperation(func() error {
+			err := retryOperation(func() error {
 				err := i.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)

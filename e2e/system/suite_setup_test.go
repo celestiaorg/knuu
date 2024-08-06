@@ -2,7 +2,10 @@ package system
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
@@ -93,4 +96,20 @@ func (s *Suite) createNginxInstanceWithVolume(ctx context.Context, name string) 
 
 	s.Require().NoError(ins.AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner))
 	return ins
+}
+
+func (s *Suite) waitForNginxReady(ctx context.Context, instance *instance.Instance) error {
+	return retryOperation(func() error {
+		ip, err := instance.GetIP(ctx)
+		if err != nil {
+			return err
+		}
+
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", nginxPort)), 5*time.Second)
+		if err != nil {
+			return err
+		}
+		conn.Close()
+		return nil
+	}, 10)
 }

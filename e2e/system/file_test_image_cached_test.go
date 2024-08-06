@@ -40,7 +40,7 @@ func (s *Suite) TestFileCached() {
 		wgFolders.Add(1)
 		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
-			err := s.retryOperation(func() error {
+			err := retryOperation(func() error {
 				return instance.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 			}, maxRetries)
 			s.Require().NoError(err, "adding file to '%v'", instanceName(i))
@@ -58,7 +58,7 @@ func (s *Suite) TestFileCached() {
 
 	// Test logic
 	for _, i := range instances {
-		err := s.retryOperation(func() error {
+		err := retryOperation(func() error {
 			if err := i.Commit(); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}
