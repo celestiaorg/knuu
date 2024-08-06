@@ -76,10 +76,6 @@ func (s *security) prepareSecurityContext() *v1.SecurityContext {
 		sc.Privileged = &s.privileged
 	}
 
-	if len(s.capabilitiesAdd) == 0 {
-		return sc
-	}
-
 	capabilities := make([]v1.Capability, len(s.capabilitiesAdd))
 	for i, cap := range s.capabilitiesAdd {
 		capabilities[i] = v1.Capability(cap)
