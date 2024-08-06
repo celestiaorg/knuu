@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
@@ -13,44 +14,94 @@ import (
 )
 
 func (s *Suite) TestFile() {
-	const namePrefix = "file"
+	const (
+		namePrefix = "file"
+		maxRetries = 3
+	)
 	s.T().Parallel()
+
 	// Setup
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
-	ctx := context.Background()
+	s.T().Log("Creating executor instance")
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
-	s.Require().NoError(err)
+	if err != nil {
+		s.T().Fatalf("Error creating executor instance: %v", err)
+	}
 
+	s.T().Log("Creating nginx instance with volume")
 	serverfile := s.createNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
 
-	err = serverfile.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
-	s.Require().NoError(err)
+	s.T().Log("Adding file to nginx instance")
+	err = retryOperation(func() error {
+		return serverfile.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+	}, maxRetries)
+	if err != nil {
+		s.T().Fatalf("Error adding file to nginx instance: %v", err)
+	}
 
-	s.Require().NoError(serverfile.Commit())
+	s.T().Log("Committing changes")
+	err = retryOperation(func() error {
+		return serverfile.Commit()
+	}, maxRetries)
+	if err != nil {
+		s.T().Fatalf("Error committing changes: %v", err)
+	}
 
 	s.T().Cleanup(func() {
+		s.T().Log("Cleaning up instances")
 		err := instance.BatchDestroy(ctx, serverfile, executor)
 		if err != nil {
-			s.T().Logf("Error destroying instance: %v", err)
+			s.T().Logf("Error destroying instances: %v", err)
 		}
 	})
 
 	// Test logic
+	s.T().Log("Getting server IP")
+	var serverfileIP string
+	err = retryOperation(func() error {
+		var err error
+		serverfileIP, err = serverfile.GetIP(ctx)
+		return err
+	}, maxRetries)
+	if err != nil {
+		s.T().Fatalf("Error getting server IP: %v", err)
+	}
 
-	serverfileIP, err := serverfile.GetIP(ctx)
-	s.Require().NoError(err)
+	s.T().Log("Starting server")
+	err = retryOperation(func() error {
+		return serverfile.Start(ctx)
+	}, maxRetries)
+	if err != nil {
+		s.T().Fatalf("Error starting server: %v", err)
+	}
 
-	s.Require().NoError(serverfile.Start(ctx))
+	s.T().Log("Executing wget command")
+	var wget string
+	err = retryOperation(func() error {
+		var err error
+		wget, err = executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+		return err
+	}, maxRetries)
+	if err != nil {
+		s.T().Fatalf("Error executing wget command: %v", err)
+	}
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
-	s.Require().NoError(err)
+	s.T().Log("Asserting wget output")
+	if !strings.Contains(wget, "Hello World!") {
+		s.T().Fatalf("Expected 'Hello World!' in wget output, but got: %s", wget)
+	}
 
-	s.Assert().Contains(wget, "Hello World!")
+	s.T().Log("Test completed successfully")
 }
 
 func (s *Suite) TestDownloadFileFromRunningInstance() {
-	const namePrefix = "download-file-running"
+	const (
+		namePrefix = "download-file-running"
+	)
 	s.T().Parallel()
+
 	// Setup
 
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")

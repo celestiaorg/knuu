@@ -1,6 +1,7 @@
 package system
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"time"
@@ -13,10 +14,14 @@ func (s *Suite) TestBuildFromGit() {
 	s.T().Parallel()
 
 	// Setup
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
+	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
-	s.Require().NoError(err)
+	if err != nil {
+		s.T().Fatalf("Error creating new instance: %v", err)
+	}
 
 	s.T().Log("Building the image")
 
@@ -27,30 +32,45 @@ func (s *Suite) TestBuildFromGit() {
 		Username: "",
 		Password: "",
 	})
-	s.Require().NoError(err)
+	if err != nil {
+		s.T().Fatalf("Error setting git repo: %v", err)
+	}
 
 	s.T().Log("Image built")
 
 	s.T().Cleanup(func() {
+		s.T().Log("Cleaning up instance")
 		if err := target.Destroy(ctx); err != nil {
 			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
-	s.Require().NoError(target.Commit())
+	s.T().Log("Committing changes")
+	if err := target.Commit(); err != nil {
+		s.T().Fatalf("Error committing changes: %v", err)
+	}
 
-	s.T().Logf("Starting instance")
-	s.Require().NoError(target.Start(ctx))
+	s.T().Log("Starting instance")
+	if err := target.Start(ctx); err != nil {
+		s.T().Fatalf("Error starting instance: %v", err)
+	}
 
-	s.T().Logf("Instance started")
+	s.T().Log("Instance started")
 
+	s.T().Log("Getting file bytes")
 	// The file is created by the dockerfile in the repo,
 	// so to make sure it is built correctly, we check the file
 	data, err := target.GetFileBytes(ctx, "/test.txt")
-	s.Require().NoError(err)
+	if err != nil {
+		s.T().Fatalf("Error getting file bytes: %v", err)
+	}
 
 	data = []byte(strings.TrimSpace(string(data)))
-	s.Assert().Equal([]byte("Hello, World!"), data, "File bytes do not match")
+	if !bytes.Equal([]byte("Hello, World!"), data) {
+		s.T().Fatalf("File bytes do not match. Expected 'Hello, World!', got '%s'", string(data))
+	}
+
+	s.T().Log("Test completed successfully")
 }
 
 func (s *Suite) TestBuildFromGitWithModifications() {
@@ -64,53 +84,78 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
+	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
-	s.Require().NoError(err, "Error creating new instance")
+	if err != nil {
+		s.T().Fatalf("Error creating new instance: %v", err)
+	}
 
-	// This is a blocking call which builds the image from git repo
+	s.T().Log("Setting git repo")
 	err = retryOperation(func() error {
 		return target.SetGitRepo(ctx, builder.GitContext{
 			Repo:     "https://github.com/celestiaorg/knuu.git",
-			Branch:   "test/build-from-git", // This branch has a Dockerfile and is protected as to not be deleted
+			Branch:   "test/build-from-git",
 			Username: "",
 			Password: "",
 		})
 	}, maxRetries)
-	s.Require().NoError(err, "Error setting git repo")
+	if err != nil {
+		s.T().Fatalf("Error setting git repo: %v", err)
+	}
 
+	s.T().Log("Setting command")
 	err = retryOperation(func() error {
 		return target.SetCommand("sleep", "infinity")
 	}, maxRetries)
-	s.Require().NoError(err, "Error setting command")
+	if err != nil {
+		s.T().Fatalf("Error setting command: %v", err)
+	}
 
+	s.T().Log("Adding file")
 	err = retryOperation(func() error {
 		return target.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	}, maxRetries)
-	s.Require().NoError(err, "Error adding file")
+	if err != nil {
+		s.T().Fatalf("Error adding file: %v", err)
+	}
 
+	s.T().Log("Committing changes")
 	err = retryOperation(func() error {
 		return target.Commit()
 	}, maxRetries)
-	s.Require().NoError(err, "Error committing changes")
+	if err != nil {
+		s.T().Fatalf("Error committing changes: %v", err)
+	}
 
 	s.T().Cleanup(func() {
+		s.T().Log("Cleaning up instance")
 		if err := target.Destroy(ctx); err != nil {
 			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
 
+	s.T().Log("Starting instance")
 	err = retryOperation(func() error {
 		return target.Start(ctx)
 	}, maxRetries)
-	s.Require().NoError(err, "Error starting instance")
+	if err != nil {
+		s.T().Fatalf("Error starting instance: %v", err)
+	}
 
+	s.T().Log("Getting file bytes")
 	var data []byte
 	err = retryOperation(func() error {
 		var err error
 		data, err = target.GetFileBytes(ctx, "/home/hello.txt")
 		return err
 	}, maxRetries)
-	s.Require().NoError(err, "Error getting file bytes")
+	if err != nil {
+		s.T().Fatalf("Error getting file bytes: %v", err)
+	}
 
-	s.Assert().Equal([]byte("Hello, world!"), data, "File bytes do not match")
+	if !bytes.Equal([]byte("Hello, world!"), data) {
+		s.T().Fatalf("File bytes do not match. Expected 'Hello, world!', got '%s'", string(data))
+	}
+
+	s.T().Log("Test completed successfully")
 }
