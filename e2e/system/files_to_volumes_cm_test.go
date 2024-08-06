@@ -118,7 +118,7 @@ func (s *Suite) TestNoVolumesOneFile() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = i.Storage().AddFolder(resourcesFileCMToFolder+"/test_1", nginxHTMLPath, "0:0")
+			err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v'", i.Name())
 		}(i)
 	}
@@ -180,7 +180,7 @@ func (s *Suite) TestOneVolumeOneFile() {
 		go func(ins *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = ins.Storage().AddFolder(resourcesFileCMToFolder+"/test_1", nginxHTMLPath, "0:0")
+			err = ins.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v': %v", i.Name())
 		}(i)
 	}
