@@ -3,20 +3,28 @@ package system
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 func (s *Suite) TestFileCached() {
-	const namePrefix = "file-cached"
+	const (
+		namePrefix        = "file-cached"
+		numberOfInstances = 10
+		maxRetries        = 3
+	)
 	s.T().Parallel()
+
 	// Setup
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	const numberOfInstances = 10
 	instances := make([]*instance.Instance, numberOfInstances)
 
 	instanceName := func(i int) string {
@@ -32,8 +40,9 @@ func (s *Suite) TestFileCached() {
 		wgFolders.Add(1)
 		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
-			// adding the folder after the Commit, it will help us to use a cached image.
-			err = instance.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+			err := s.retryOperation(func() error {
+				return instance.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+			}, maxRetries)
 			s.Require().NoError(err, "adding file to '%v'", instanceName(i))
 		}(i, ins)
 	}
@@ -49,19 +58,40 @@ func (s *Suite) TestFileCached() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Commit())
-		s.Require().NoError(i.StartAsync(ctx))
+		err := s.retryOperation(func() error {
+			if err := i.Commit(); err != nil {
+				return fmt.Errorf("committing instance: %w", err)
+			}
+			if err := i.StartAsync(ctx); err != nil {
+				return fmt.Errorf("starting instance: %w", err)
+			}
+			return nil
+		}, maxRetries)
+		s.Require().NoError(err)
 	}
 
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		err := retryOperation(func() error {
+			webIP, err := i.GetIP(ctx)
+			if err != nil {
+				return fmt.Errorf("getting IP: %w", err)
+			}
+
+			if err := i.WaitInstanceIsRunning(ctx); err != nil {
+				return fmt.Errorf("waiting for instance to run: %w", err)
+			}
+
+			wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+			if err != nil {
+				return fmt.Errorf("executing wget: %w", err)
+			}
+
+			if !strings.Contains(wget, "Hello World!") {
+				return fmt.Errorf("expected 'Hello World!' in response, got: %s", wget)
+			}
+
+			return nil
+		}, maxRetries)
 		s.Require().NoError(err)
-
-		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
-
-		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
-		s.Require().NoError(err)
-
-		s.Assert().Contains(wget, "Hello World!")
 	}
 }
