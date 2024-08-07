@@ -9,6 +9,10 @@ import (
 )
 
 func (c *Client) CreateNamespace(ctx context.Context, name string) error {
+	if err := validateNamespace(name); err != nil {
+		return err
+	}
+
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

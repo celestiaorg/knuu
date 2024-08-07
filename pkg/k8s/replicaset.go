@@ -21,6 +21,9 @@ type ReplicaSetConfig struct {
 
 // CreateReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
 func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
+	if err := validateReplicaSetConfig(rsConfig); err != nil {
+		return nil, err
+	}
 	rsConfig.Namespace = c.namespace
 	rs := c.prepareReplicaSet(rsConfig, init)
 

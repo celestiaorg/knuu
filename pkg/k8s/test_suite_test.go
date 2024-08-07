@@ -28,6 +28,10 @@ type TestSuite struct {
 
 var (
 	errInternalServerError = errors.New("internal server error")
+	testContainerConfig    = k8s.ContainerConfig{
+		Image: "test-image",
+		Name:  "test-container",
+	}
 )
 
 func TestKubeManagerTestSuite(t *testing.T) {

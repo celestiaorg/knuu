@@ -23,20 +23,22 @@ func (s *TestSuite) TestDeployPod() {
 		{
 			name: "successful creation",
 			podConfig: k8s.PodConfig{
-				Namespace: s.namespace,
-				Name:      "test-pod",
-				Labels:    map[string]string{"app": "test"},
+				Namespace:       s.namespace,
+				Name:            "test-pod",
+				Labels:          map[string]string{"app": "test"},
+				ContainerConfig: testContainerConfig,
 			},
-			init:        false,
 			setupMock:   func() {},
+			init:        false,
 			expectedErr: nil,
 		},
 		{
 			name: "client error",
 			podConfig: k8s.PodConfig{
-				Namespace: s.namespace,
-				Name:      "error-pod",
-				Labels:    map[string]string{"app": "error"},
+				Namespace:       s.namespace,
+				Name:            "error-pod",
+				Labels:          map[string]string{"app": "error"},
+				ContainerConfig: testContainerConfig,
 			},
 			init: false,
 			setupMock: func() {
@@ -77,9 +79,10 @@ func (s *TestSuite) TestReplacePod() {
 		{
 			name: "successful replacement",
 			podConfig: k8s.PodConfig{
-				Namespace: s.namespace,
-				Name:      "test-pod",
-				Labels:    map[string]string{"app": "test"},
+				Namespace:       s.namespace,
+				Name:            "test-pod",
+				Labels:          map[string]string{"app": "test"},
+				ContainerConfig: testContainerConfig,
 			},
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
@@ -93,9 +96,10 @@ func (s *TestSuite) TestReplacePod() {
 		{
 			name: "client error on deletion",
 			podConfig: k8s.PodConfig{
-				Namespace: s.namespace,
-				Name:      "error-pod",
-				Labels:    map[string]string{"app": "error"},
+				Namespace:       s.namespace,
+				Name:            "error-pod",
+				Labels:          map[string]string{"app": "error"},
+				ContainerConfig: testContainerConfig,
 			},
 			setupMock: func() {
 				err := s.createPod("error-pod")

@@ -24,6 +24,18 @@ func (c *Client) CreateService(
 	portsTCP,
 	portsUDP []int,
 ) (*v1.Service, error) {
+	if err := validateServiceName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateSelectorMap(selectorMap); err != nil {
+		return nil, err
+	}
+	if err := validatePorts(append(portsTCP, portsUDP...)); err != nil {
+		return nil, err
+	}
 	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
 		return nil, ErrPreparingService.WithParams(name).Wrap(err)
@@ -45,6 +57,18 @@ func (c *Client) PatchService(
 	portsTCP,
 	portsUDP []int,
 ) (*v1.Service, error) {
+	if err := validateServiceName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateSelectorMap(selectorMap); err != nil {
+		return nil, err
+	}
+	if err := validatePorts(append(portsTCP, portsUDP...)); err != nil {
+		return nil, err
+	}
 	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
 	if err != nil {
 		return nil, ErrPreparingService.WithParams(name).Wrap(err)
