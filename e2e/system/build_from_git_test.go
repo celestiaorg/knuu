@@ -20,7 +20,7 @@ func (s *Suite) TestBuildFromGit() {
 	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
 	if err != nil {
-		s.T().Fatalf("Error creating new instance: %v", err)
+		s.Require().NoError(err, "Error creating new instance")
 	}
 
 	s.T().Log("Building the image")
@@ -33,7 +33,7 @@ func (s *Suite) TestBuildFromGit() {
 		Password: "",
 	})
 	if err != nil {
-		s.T().Fatalf("Error setting git repo: %v", err)
+		s.Require().NoError(err, "Error setting git repo")
 	}
 
 	s.T().Log("Image built")
@@ -47,12 +47,12 @@ func (s *Suite) TestBuildFromGit() {
 
 	s.T().Log("Committing changes")
 	if err := target.Commit(); err != nil {
-		s.T().Fatalf("Error committing changes: %v", err)
+		s.Require().NoError(err, "Error committing changes")
 	}
 
 	s.T().Log("Starting instance")
 	if err := target.Start(ctx); err != nil {
-		s.T().Fatalf("Error starting instance: %v", err)
+		s.Require().NoError(err, "Error starting instance")
 	}
 
 	s.T().Log("Instance started")
@@ -62,12 +62,12 @@ func (s *Suite) TestBuildFromGit() {
 	// so to make sure it is built correctly, we check the file
 	data, err := target.GetFileBytes(ctx, "/test.txt")
 	if err != nil {
-		s.T().Fatalf("Error getting file bytes: %v", err)
+		s.Require().NoError(err, "Error getting file bytes")
 	}
 
 	data = []byte(strings.TrimSpace(string(data)))
 	if !bytes.Equal([]byte("Hello, World!"), data) {
-		s.T().Fatalf("File bytes do not match. Expected 'Hello, World!', got '%s'", string(data))
+		s.Require().NoError(err, "File bytes do not match. Expected 'Hello, World!', got '%s'", string(data))
 	}
 
 	s.T().Log("Test completed successfully")
@@ -87,7 +87,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
 	if err != nil {
-		s.T().Fatalf("Error creating new instance: %v", err)
+		s.Require().NoError(err, "Error creating new instance")
 	}
 
 	s.T().Log("Setting git repo")
@@ -100,7 +100,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		})
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error setting git repo: %v", err)
+		s.Require().NoError(err, "Error setting git repo")
 	}
 
 	s.T().Log("Setting command")
@@ -108,7 +108,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		return target.SetCommand("sleep", "infinity")
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error setting command: %v", err)
+		s.Require().NoError(err, "Error setting command")
 	}
 
 	s.T().Log("Adding file")
@@ -116,7 +116,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		return target.AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error adding file: %v", err)
+		s.Require().NoError(err, "Error adding file")
 	}
 
 	s.T().Log("Committing changes")
@@ -124,7 +124,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		return target.Commit()
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error committing changes: %v", err)
+		s.Require().NoError(err, "Error committing changes")
 	}
 
 	s.T().Cleanup(func() {
@@ -139,7 +139,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		return target.Start(ctx)
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error starting instance: %v", err)
+		s.Require().NoError(err, "Error starting instance")
 	}
 
 	s.T().Log("Getting file bytes")
@@ -150,11 +150,11 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		return err
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error getting file bytes: %v", err)
+		s.Require().NoError(err, "Error getting file bytes")
 	}
 
 	if !bytes.Equal([]byte("Hello, world!"), data) {
-		s.T().Fatalf("File bytes do not match. Expected 'Hello, world!', got '%s'", string(data))
+		s.Require().NoError(err, "File bytes do not match. Expected 'Hello, world!', got '%s'", string(data))
 	}
 
 	s.T().Log("Test completed successfully")

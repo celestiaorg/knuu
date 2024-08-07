@@ -27,7 +27,7 @@ func (s *Suite) TestFile() {
 	s.T().Log("Creating executor instance")
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	if err != nil {
-		s.T().Fatalf("Error creating executor instance: %v", err)
+		s.Require().NoError(err, "Error creating executor instance")
 	}
 
 	s.T().Log("Creating nginx instance with volume")
@@ -38,7 +38,7 @@ func (s *Suite) TestFile() {
 		return serverfile.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error adding file to nginx instance: %v", err)
+		s.Require().NoError(err, "Error adding file to nginx instance")
 	}
 
 	s.T().Log("Committing changes")
@@ -46,7 +46,7 @@ func (s *Suite) TestFile() {
 		return serverfile.Commit()
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error committing changes: %v", err)
+		s.Require().NoError(err, "Error committing changes")
 	}
 
 	s.T().Cleanup(func() {
@@ -66,7 +66,7 @@ func (s *Suite) TestFile() {
 		return err
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error getting server IP: %v", err)
+		s.Require().NoError(err, "Error getting server IP")
 	}
 
 	s.T().Log("Starting server")
@@ -74,7 +74,7 @@ func (s *Suite) TestFile() {
 		return serverfile.Start(ctx)
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error starting server: %v", err)
+		s.Require().NoError(err, "Error starting server")
 	}
 
 	s.T().Log("Executing wget command")
@@ -85,12 +85,12 @@ func (s *Suite) TestFile() {
 		return err
 	}, maxRetries)
 	if err != nil {
-		s.T().Fatalf("Error executing wget command: %v", err)
+		s.Require().NoError(err, "Error executing wget command")
 	}
 
 	s.T().Log("Asserting wget output")
 	if !strings.Contains(wget, "Hello World!") {
-		s.T().Fatalf("Expected 'Hello World!' in wget output, but got: %s", wget)
+		s.Require().NoError(err, "Expected 'Hello World!' in wget output, but got: %s", wget)
 	}
 
 	s.T().Log("Test completed successfully")
