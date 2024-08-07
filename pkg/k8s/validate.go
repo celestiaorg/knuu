@@ -1,12 +1,13 @@
 package k8s
 
 import (
-	"github.com/celestiaorg/knuu/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation"
+
+	"github.com/celestiaorg/knuu/pkg/errors"
 )
 
 func validateDNS1123Label(name string, err *errors.Error) error {
