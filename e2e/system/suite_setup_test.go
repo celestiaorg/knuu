@@ -27,6 +27,8 @@ const (
 
 	resourcesHTML           = "resources/html"
 	resourcesFileCMToFolder = "resources/file_cm_to_folder"
+
+	maxRetries = 10
 )
 
 type Suite struct {
@@ -111,5 +113,5 @@ func (s *Suite) waitForNginxReady(ctx context.Context, instance *instance.Instan
 		}
 		conn.Close()
 		return nil
-	}, 10)
+	}, maxRetries)
 }
