@@ -130,7 +130,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.T().Cleanup(func() {
 		s.T().Log("Cleaning up instance")
 		if err := target.Destroy(ctx); err != nil {
-			s.T().Logf("Error cleaning up knuu: %v", err)
+			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
