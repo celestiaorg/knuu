@@ -69,7 +69,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.Build().SetCommand("sleep", "infinity"))
+	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
 
 	err = target.Storage().AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	s.Require().NoError(err, "Error adding file")

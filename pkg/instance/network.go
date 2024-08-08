@@ -241,7 +241,7 @@ func (n *network) Enable(ctx context.Context) error {
 	return nil
 }
 
-// NetworkIsDisabled returns true if the network of the instance is disabled
+// IsDisabled returns true if the network of the instance is disabled
 // This function can only be called in the state 'Started'
 func (n *network) IsDisabled(ctx context.Context) (bool, error) {
 	if !n.instance.IsInState(StateStarted) {

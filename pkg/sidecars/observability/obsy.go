@@ -131,7 +131,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 		return ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
-	if err := o.instance.Build().SetCommand(otelCollectorCommand, otelCollectorConfigArg); err != nil {
+	if err := o.instance.Build().SetStartCommand(otelCollectorCommand, otelCollectorConfigArg); err != nil {
 		return ErrSettingOtelAgentCommand.Wrap(err)
 	}
 

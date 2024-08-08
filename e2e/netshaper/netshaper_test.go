@@ -34,7 +34,7 @@ func (s *Suite) TestNetShaperBandwidth() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(iperfMother.Build().SetImage(ctx, iperfImage))
-	s.Require().NoError(iperfMother.Build().SetCommand("iperf3", "-s"))
+	s.Require().NoError(iperfMother.Build().SetStartCommand("iperf3", "-s"))
 	s.Require().NoError(iperfMother.Network().AddPortTCP(iperfPort))
 	s.Require().NoError(iperfMother.Build().Commit())
 
