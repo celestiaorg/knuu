@@ -21,10 +21,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 )
 
-const (
-	DefaultTimeout = 2 * time.Minute
-)
-
 // BuilderFactory is responsible for creating new instances of buildah.Builder
 type BuilderFactory struct {
 	imageNameFrom          string
@@ -166,7 +162,7 @@ func (f *BuilderFactory) Changed() bool {
 
 // PushBuilderImage pushes the image from the given builder to a registry.
 // The image is identified by the provided name.
-func (f *BuilderFactory) PushBuilderImage(imageName string) error {
+func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string) error {
 	if !f.Changed() {
 		logrus.Debugf("No changes made to image %s, skipping push", f.imageNameFrom)
 		return nil
@@ -188,8 +184,6 @@ func (f *BuilderFactory) PushBuilderImage(imageName string) error {
 		return ErrFailedToWriteDockerfile.Wrap(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
-	defer cancel()
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same

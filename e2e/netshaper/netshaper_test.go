@@ -36,7 +36,7 @@ func (s *Suite) TestNetShaperBandwidth() {
 	s.Require().NoError(iperfMother.Build().SetImage(ctx, iperfImage))
 	s.Require().NoError(iperfMother.Build().SetStartCommand("iperf3", "-s"))
 	s.Require().NoError(iperfMother.Network().AddPortTCP(iperfPort))
-	s.Require().NoError(iperfMother.Build().Commit())
+	s.Require().NoError(iperfMother.Build().Commit(ctx))
 
 	iperfServer, err := iperfMother.CloneWithName("iperf-server")
 	s.Require().NoError(err)
@@ -142,7 +142,7 @@ func (s *Suite) TestNetShaperPacketloss() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Build().Commit())
+	s.Require().NoError(mother.Build().Commit(ctx))
 
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
@@ -245,7 +245,7 @@ func (s *Suite) TestNetShaperLatency() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Build().Commit())
+	s.Require().NoError(mother.Build().Commit(ctx))
 
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
@@ -355,7 +355,7 @@ func (s *Suite) TestNetShaperJitter() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Build().Commit())
+	s.Require().NoError(mother.Build().Commit(ctx))
 
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
