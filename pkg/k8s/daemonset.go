@@ -35,6 +35,15 @@ func (c *Client) CreateDaemonSet(
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
+	if err := validateDaemonSetName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateContainers(containers); err != nil {
+		return nil, err
+	}
 	ds := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	created, err := c.clientset.AppsV1().DaemonSets(c.namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil {
@@ -50,6 +59,15 @@ func (c *Client) UpdateDaemonSet(ctx context.Context,
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
+	if err := validateDaemonSetName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateContainers(containers); err != nil {
+		return nil, err
+	}
 	ds := prepareDaemonSet(c.namespace, name, labels, initContainers, containers)
 	updated, err := c.clientset.AppsV1().DaemonSets(c.namespace).Update(ctx, ds, metav1.UpdateOptions{})
 	if err != nil {

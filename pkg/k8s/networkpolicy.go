@@ -14,6 +14,12 @@ func (c *Client) CreateNetworkPolicy(
 	ingressSelectorMap,
 	egressSelectorMap map[string]string,
 ) error {
+	if err := validateNetworkPolicyName(name); err != nil {
+		return err
+	}
+	if err := validateSelectorMap(selectorMap); err != nil {
+		return err
+	}
 	var ingress []v1.NetworkPolicyIngressRule
 	if ingressSelectorMap != nil {
 		ingress = []v1.NetworkPolicyIngressRule{
