@@ -84,7 +84,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 		return ErrSettingTsharkCollectorImage.Wrap(err)
 	}
 
-	if err := t.instance.Build().Commit(); err != nil {
+	if err := t.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingTsharkCollectorInstance.Wrap(err)
 	}
 

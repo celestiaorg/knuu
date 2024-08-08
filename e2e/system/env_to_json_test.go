@@ -40,7 +40,7 @@ func (s *Suite) TestEnvToJSON() {
 		name := fmt.Sprintf("%s-web%d", namePrefix, i+1)
 
 		ins := s.createNginxInstance(ctx, name)
-		s.Require().NoError(ins.Build().Commit())
+		s.Require().NoError(ins.Build().Commit(ctx))
 		s.Require().NoError(ins.Execution().Start(ctx))
 
 		_, err = ins.Execution().ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)

@@ -131,7 +131,7 @@ func (b *build) SetUser(user string) error {
 
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
-func (b *build) Commit() error {
+func (b *build) Commit(ctx context.Context) error {
 	if !b.instance.IsState(StatePreparing) {
 		return ErrCommittingNotAllowed.WithParams(b.instance.state.String())
 	}
@@ -163,7 +163,7 @@ func (b *build) Commit() error {
 		b.instance.Logger.Debugf("Using cached image for instance '%s'", b.instance.name)
 	} else {
 		b.instance.Logger.Debugf("Cannot use any cached image for instance '%s'", b.instance.name)
-		err = b.builderFactory.PushBuilderImage(imageName)
+		err = b.builderFactory.PushBuilderImage(ctx, imageName)
 		if err != nil {
 			return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
 		}

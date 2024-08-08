@@ -110,7 +110,7 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 	if err := o.instance.Resources().SetMemory(otelAgentMemory, otelAgentMemoryLimit); err != nil {
 		return ErrSettingOtelAgentMemory.Wrap(err)
 	}
-	if err := o.instance.Build().Commit(); err != nil {
+	if err := o.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingOtelAgentInstance.Wrap(err)
 	}
 

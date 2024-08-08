@@ -82,7 +82,7 @@ func TestTshark(t *testing.T) {
 		fileKey  = filepath.Join(keyPrefix, filename)
 	)
 
-	require.NoError(t, target.Build().Commit())
+	require.NoError(t, target.Build().Commit(ctx))
 
 	// Test logic
 

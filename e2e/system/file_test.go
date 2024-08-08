@@ -26,7 +26,7 @@ func (s *Suite) TestFile() {
 	err = serverfile.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
-	s.Require().NoError(serverfile.Build().Commit())
+	s.Require().NoError(serverfile.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, serverfile, executor)
@@ -59,7 +59,7 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	ctx := context.Background()
 	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {
@@ -98,7 +98,7 @@ func (s *Suite) TestMinio() {
 	ctx := context.Background()
 	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {

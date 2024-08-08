@@ -104,7 +104,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	if err := inst.Build().SetImage(ctx, timeoutHandlerImage); err != nil {
 		return ErrCannotSetImage.Wrap(err)
 	}
-	if err := inst.Build().Commit(); err != nil {
+	if err := inst.Build().Commit(ctx); err != nil {
 		return ErrCannotCommitInstance.Wrap(err)
 	}
 

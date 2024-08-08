@@ -21,7 +21,7 @@ func (s *Suite) TestFolder() {
 	err = web.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
 	require.NoError(s.T(), err)
 
-	require.NoError(s.T(), web.Build().Commit())
+	require.NoError(s.T(), web.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, web, executor)
