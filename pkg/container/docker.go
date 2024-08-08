@@ -171,10 +171,6 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		return ErrFailedToWriteDockerfile.Wrap(err)
 	}
 
-	// TODO: remove these lines
-	fmt.Printf("f.buildContext: %v\n", f.buildContext)
-	fmt.Printf("dockerFile: `%v`\n", dockerFile)
-
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
