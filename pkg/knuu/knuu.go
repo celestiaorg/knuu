@@ -104,7 +104,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	if err := inst.Build().SetImage(ctx, timeoutHandlerImage); err != nil {
 		return ErrCannotSetImage.Wrap(err)
 	}
-	if err := inst.Build().Commit(); err != nil {
+	if err := inst.Build().Commit(ctx); err != nil {
 		return ErrCannotCommitInstance.Wrap(err)
 	}
 
@@ -130,9 +130,9 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 	finalCmd := strings.Join(commands, " && ")
 
 	// Run the command
-	if err := inst.Build().SetCommand("sh", "-c", finalCmd); err != nil {
+	if err := inst.Build().SetStartCommand("sh", "-c", finalCmd); err != nil {
 		k.Logger.Debugf("The full command generated is [%s]", finalCmd)
-		return ErrCannotSetCommand.Wrap(err)
+		return ErrCannotSetStartCommand.Wrap(err)
 	}
 
 	rule := rbacv1.PolicyRule{

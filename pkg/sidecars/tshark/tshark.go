@@ -84,7 +84,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 		return ErrSettingTsharkCollectorImage.Wrap(err)
 	}
 
-	if err := t.instance.Build().Commit(); err != nil {
+	if err := t.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingTsharkCollectorInstance.Wrap(err)
 	}
 
@@ -116,7 +116,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 			return ErrSettingTsharkCollectorEnv.Wrap(err)
 		}
 	}
-	if err := t.instance.Security().AddCapability(netAdminCapability); err != nil {
+	if err := t.instance.Security().AddKubernetesCapability(netAdminCapability); err != nil {
 		return ErrAddingTsharkCollectorCapability.Wrap(err)
 	}
 	return nil

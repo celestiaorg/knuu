@@ -24,7 +24,7 @@ func (s *Suite) TestNoVolumesNoFiles() {
 	s.Require().NoError(err)
 
 	target := s.createNginxInstance(ctx, namePrefix+"-target")
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	// Cleanup
 	s.T().Cleanup(func() {
@@ -65,7 +65,7 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	err = target.Storage().AddVolumeWithOwner("/opt/vol1", resource.MustParse("1Gi"), 0)
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, executor, target)
@@ -134,7 +134,7 @@ func (s *Suite) TestNoVolumesOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Build().Commit())
+		s.Require().NoError(i.Build().Commit(ctx))
 		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 
@@ -196,7 +196,7 @@ func (s *Suite) TestOneVolumeOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Build().Commit())
+		s.Require().NoError(i.Build().Commit(ctx))
 		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 
@@ -260,7 +260,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Build().Commit())
+		s.Require().NoError(i.Build().Commit(ctx))
 		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 

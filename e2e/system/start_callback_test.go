@@ -45,7 +45,7 @@ func TestStartWithCallback(t *testing.T) {
 	})
 	require.NoError(t, err, "Error setting readiness probe")
 
-	err = target.Build().SetCommand([]string{"sleep", sleepTimeBeforeReady, "&&", nginxCommand}...)
+	err = target.Build().SetStartCommand([]string{"sleep", sleepTimeBeforeReady, "&&", nginxCommand}...)
 	require.NoError(t, err, "Error setting command")
 
 	t.Cleanup(func() {
@@ -54,7 +54,7 @@ func TestStartWithCallback(t *testing.T) {
 		}
 	})
 
-	require.NoError(t, target.Build().Commit())
+	require.NoError(t, target.Build().Commit(ctx))
 
 	wg := sync.WaitGroup{}
 	require.NoError(t, target.Execution().StartWithCallback(ctx, func() {

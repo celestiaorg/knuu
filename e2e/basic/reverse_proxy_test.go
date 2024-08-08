@@ -29,7 +29,7 @@ func TestReverseProxy(t *testing.T) {
 	err = main.SetImage("alpine:latest")
 	require.NoError(t, err, "Error setting image")
 
-	err = main.SetCommand("sleep", "infinite")
+	err = main.SetStartCommand("sleep", "infinite")
 	require.NoError(t, err, "Error executing command")
 
 	require.NoError(t, main.Commit(), "Error committing instance")

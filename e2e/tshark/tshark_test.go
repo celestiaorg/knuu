@@ -56,7 +56,7 @@ func TestTshark(t *testing.T) {
 	require.NoError(t, err, "error creating instance")
 
 	require.NoError(t, target.Build().SetImage(ctx, "busybox"))
-	require.NoError(t, target.Build().SetCommand("sleep", "infinity"))
+	require.NoError(t, target.Build().SetStartCommand("sleep", "infinity"))
 
 	t.Log("getting minio configs")
 	minioConf, err := kn.MinioClient.GetConfigs(ctx)
@@ -82,7 +82,7 @@ func TestTshark(t *testing.T) {
 		fileKey  = filepath.Join(keyPrefix, filename)
 	)
 
-	require.NoError(t, target.Build().Commit())
+	require.NoError(t, target.Build().Commit(ctx))
 
 	// Test logic
 

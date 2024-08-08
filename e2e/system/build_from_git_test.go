@@ -36,7 +36,7 @@ func (s *Suite) TestBuildFromGit() {
 		}
 	})
 
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Logf("Starting instance")
 	s.Require().NoError(target.Execution().Start(ctx))
@@ -69,12 +69,12 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.Build().SetCommand("sleep", "infinity"))
+	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
 
 	err = target.Storage().AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	s.Require().NoError(err, "Error adding file")
 
-	s.Require().NoError(target.Build().Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		if err := target.Execution().Destroy(ctx); err != nil {

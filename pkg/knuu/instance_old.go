@@ -74,8 +74,8 @@ func (i *Instance) SetImageInstant(image string) error {
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) SetCommand(command ...string) error {
-	return i.Instance.Build().SetCommand(command...)
+func (i *Instance) SetStartCommand(command ...string) error {
+	return i.Instance.Build().SetStartCommand(command...)
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -138,7 +138,7 @@ func (i *Instance) SetUser(user string) error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Commit() error {
-	return i.Instance.Build().Commit()
+	return i.Instance.Build().Commit(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.
@@ -212,13 +212,13 @@ func (i *Instance) SetPrivileged(privileged bool) error {
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) AddCapability(capability string) error {
-	return i.Instance.Security().AddCapability(capability)
+func (i *Instance) AddKubernetesCapability(capability string) error {
+	return i.Instance.Security().AddKubernetesCapability(capability)
 }
 
 // Deprecated: Use the new package knuu instead.
-func (i *Instance) AddCapabilities(capabilities []string) error {
-	return i.Instance.Security().AddCapabilities(capabilities)
+func (i *Instance) AddKubernetesCapabilities(capabilities []string) error {
+	return i.Instance.Security().AddKubernetesCapabilities(capabilities)
 }
 
 // Deprecated: Use the new package knuu instead.

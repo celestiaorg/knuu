@@ -58,7 +58,7 @@ func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDepend
 		return ErrAddingBitTwisterPort.Wrap(err)
 	}
 
-	if err := bt.instance.Build().Commit(); err != nil {
+	if err := bt.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingBitTwisterInstance.Wrap(err)
 	}
 
@@ -72,7 +72,7 @@ func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDepend
 		return ErrSettingBitTwisterPrivileged.Wrap(err)
 	}
 
-	if err := bt.instance.Security().AddCapability(capabilityNetAdmin); err != nil {
+	if err := bt.instance.Security().AddKubernetesCapability(capabilityNetAdmin); err != nil {
 		return ErrAddingBitTwisterCapability.Wrap(err)
 	}
 
