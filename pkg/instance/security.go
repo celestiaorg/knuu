@@ -44,9 +44,9 @@ func (s *security) SetPrivileged(privileged bool) error {
 	return nil
 }
 
-// AddCapability adds a capability to the instance
+// AddKubernetesCapability adds a Kubernetes capability to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
-func (s *security) AddCapability(capability string) error {
+func (s *security) AddKubernetesCapability(capability string) error {
 	if !s.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilityNotAllowed.WithParams(s.instance.state.String())
 	}
@@ -55,9 +55,9 @@ func (s *security) AddCapability(capability string) error {
 	return nil
 }
 
-// AddCapabilities adds multiple capabilities to the instance
+// AddKubernetesCapabilities adds multiple Kubernetes capabilities to the instance
 // This function can only be called in the state 'Preparing' or 'Committed'
-func (s *security) AddCapabilities(capabilities []string) error {
+func (s *security) AddKubernetesCapabilities(capabilities []string) error {
 	if !s.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(s.instance.state.String())
 	}

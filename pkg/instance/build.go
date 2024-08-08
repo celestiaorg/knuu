@@ -81,9 +81,9 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) e
 	return b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
 }
 
-// SetCommand sets the command to run in the instance
+// SetStartCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
-func (b *build) SetCommand(command ...string) error {
+func (b *build) SetStartCommand(command ...string) error {
 	if !b.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingCommand.WithParams(b.instance.state.String())
 	}

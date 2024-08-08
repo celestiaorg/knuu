@@ -75,7 +75,7 @@ scrape_configs:
 	err = target.SetImage(targetImage)
 	require.NoError(t, err, "Error setting target image")
 
-	err = target.SetCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
+	err = target.SetStartCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
 	require.NoError(t, err, "Error setting target command")
 
 	require.NoError(t, target.AddSidecar(context.Background(), observabilitySidecar))

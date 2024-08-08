@@ -187,7 +187,7 @@ var (
 	ErrCannotCreateInstance                      = errors.New("Cannot Create Instance", "cannot create instance")
 	ErrCannotSetImage                            = errors.New("Cannot Set Image", "cannot set image")
 	ErrCannotCommitInstance                      = errors.New("Cannot Commit Instance", "cannot commit instance")
-	ErrCannotSetCommand                          = errors.New("Cannot Set Command", "cannot set command")
+	ErrCannotSetStartCommand                     = errors.New("Cannot Set Start Command", "cannot set start command")
 	ErrCannotAddPolicyRule                       = errors.New("Cannot Add Policy Rule", "cannot add policy rule")
 	ErrCannotStartInstance                       = errors.New("Cannot Start Instance", "cannot start instance")
 	ErrMinioNotInitialized                       = errors.New("MinioNotInitialized", "minio not initialized")
