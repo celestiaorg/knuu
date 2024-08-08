@@ -49,7 +49,7 @@ func (s *Suite) TestFolderCached() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Build().Commit())
+		s.Require().NoError(i.Build().Commit(ctx))
 		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 

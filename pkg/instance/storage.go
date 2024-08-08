@@ -46,7 +46,8 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 
 	switch s.instance.state {
 	case StatePreparing:
-		return s.instance.build.addFileToBuilder(src, dest, chown)
+		s.instance.build.addFileToBuilder(src, dest, chown)
+		return nil
 	case StateCommitted:
 		return s.addFileToInstance(dstPath, dest, chown)
 	}

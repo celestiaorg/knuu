@@ -108,10 +108,7 @@ func (b *build) ExecuteCommand(command ...string) error {
 		return ErrAddingCommandNotAllowed.WithParams(b.instance.state.String())
 	}
 
-	_, err := b.builderFactory.ExecuteCmdInBuilder(command)
-	if err != nil {
-		return ErrExecutingCommandInInstance.WithParams(command, b.instance.name).Wrap(err)
-	}
+	b.builderFactory.AddCmdToBuilder(command)
 	return nil
 }
 
@@ -122,16 +119,14 @@ func (b *build) SetUser(user string) error {
 		return ErrSettingUserNotAllowed.WithParams(b.instance.state.String())
 	}
 
-	if err := b.builderFactory.SetUser(user); err != nil {
-		return ErrSettingUser.WithParams(user, b.instance.name).Wrap(err)
-	}
+	b.builderFactory.SetUser(user)
 	b.instance.Logger.Debugf("Set user '%s' for instance '%s'", user, b.instance.name)
 	return nil
 }
 
 // Commit commits the instance
 // This function can only be called in the state 'Preparing'
-func (b *build) Commit() error {
+func (b *build) Commit(ctx context.Context) error {
 	if !b.instance.IsState(StatePreparing) {
 		return ErrCommittingNotAllowed.WithParams(b.instance.state.String())
 	}
@@ -163,7 +158,7 @@ func (b *build) Commit() error {
 		b.instance.Logger.Debugf("Using cached image for instance '%s'", b.instance.name)
 	} else {
 		b.instance.Logger.Debugf("Cannot use any cached image for instance '%s'", b.instance.name)
-		err = b.builderFactory.PushBuilderImage(imageName)
+		err = b.builderFactory.PushBuilderImage(ctx, imageName)
 		if err != nil {
 			return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
 		}
@@ -196,14 +191,10 @@ func (b *build) getBuildDir() string {
 }
 
 // addFileToBuilder adds a file to the builder
-func (b *build) addFileToBuilder(src, dest, chown string) error {
-	_ = src
+func (b *build) addFileToBuilder(src, dest, chown string) {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
-	err := b.builderFactory.AddToBuilder(dest, dest, chown)
-	if err != nil {
-		return ErrAddingFileToInstance.WithParams(dest, b.instance.name).Wrap(err)
-	}
-	return nil
+	src = dest
+	b.builderFactory.AddToBuilder(src, dest, chown)
 }
 
 // SetEnvironmentVariable sets the given environment variable in the instance
@@ -214,7 +205,8 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 	}
 	b.instance.Logger.Debugf("Setting environment variable '%s' in instance '%s'", key, b.instance.name)
 	if b.instance.state == StatePreparing {
-		return b.builderFactory.SetEnvVar(key, value)
+		b.builderFactory.SetEnvVar(key, value)
+		return nil
 	}
 
 	b.env[key] = value

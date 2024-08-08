@@ -138,7 +138,7 @@ func (i *Instance) SetUser(user string) error {
 
 // Deprecated: Use the new package knuu instead.
 func (i *Instance) Commit() error {
-	return i.Instance.Build().Commit()
+	return i.Instance.Build().Commit(context.Background())
 }
 
 // Deprecated: Use the new package knuu instead.

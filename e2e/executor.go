@@ -34,7 +34,7 @@ func (e *Executor) NewInstance(ctx context.Context, name string) (*instance.Inst
 		return nil, err
 	}
 
-	if err := i.Build().Commit(); err != nil {
+	if err := i.Build().Commit(ctx); err != nil {
 		return nil, err
 	}
 

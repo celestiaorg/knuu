@@ -54,7 +54,7 @@ func TestStartWithCallback(t *testing.T) {
 		}
 	})
 
-	require.NoError(t, target.Build().Commit())
+	require.NoError(t, target.Build().Commit(ctx))
 
 	wg := sync.WaitGroup{}
 	require.NoError(t, target.Execution().StartWithCallback(ctx, func() {

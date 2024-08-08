@@ -58,7 +58,7 @@ func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDepend
 		return ErrAddingBitTwisterPort.Wrap(err)
 	}
 
-	if err := bt.instance.Build().Commit(); err != nil {
+	if err := bt.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingBitTwisterInstance.Wrap(err)
 	}
 

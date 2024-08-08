@@ -41,7 +41,7 @@ func (s *Suite) TestExternalFile() {
 	err = server.Storage().AddFile(htmlTmpPath, nginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
-	s.Require().NoError(server.Build().Commit())
+	s.Require().NoError(server.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, executor, server)
