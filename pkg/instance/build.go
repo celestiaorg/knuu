@@ -193,8 +193,8 @@ func (b *build) getBuildDir() string {
 // addFileToBuilder adds a file to the builder
 func (b *build) addFileToBuilder(src, dest, chown string) {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
-	src = dest
-	b.builderFactory.AddToBuilder(src, dest, chown)
+	_ = src
+	b.builderFactory.AddToBuilder(dest, dest, chown)
 }
 
 // SetEnvironmentVariable sets the given environment variable in the instance
