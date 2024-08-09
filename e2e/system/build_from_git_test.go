@@ -35,7 +35,6 @@ func (s *Suite) TestBuildFromGit() {
 			s.T().Logf("Error cleaning up knuu: %v", err)
 		}
 	})
-
 	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Logf("Starting instance")
