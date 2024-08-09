@@ -16,6 +16,16 @@ func (c *Client) CreatePersistentVolumeClaim(
 	labels map[string]string,
 	size resource.Quantity,
 ) error {
+	if err := validatePVCName(name); err != nil {
+		return err
+	}
+	if err := validatePVCSize(size); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: c.namespace,

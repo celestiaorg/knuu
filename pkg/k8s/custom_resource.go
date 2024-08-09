@@ -17,6 +17,15 @@ func (c *Client) CreateCustomResource(
 	gvr *schema.GroupVersionResource,
 	obj *map[string]interface{},
 ) error {
+	if err := validateCustomResourceName(name); err != nil {
+		return err
+	}
+	if err := validateGroupVersionResource(gvr); err != nil {
+		return err
+	}
+	if err := validateCustomResourceObject(obj); err != nil {
+		return err
+	}
 	res := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.GroupVersion().String(),
