@@ -87,10 +87,6 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 	}
 
 	dockerFile := strings.Join(f.dockerFileInstructions, "\n")
-
-	fmt.Printf("dockerFilePath: %v\n", dockerFilePath)
-	fmt.Printf("dockerFile: %v\n", dockerFile)
-
 	err := os.WriteFile(dockerFilePath, []byte(dockerFile), 0644)
 	if err != nil {
 		return ErrFailedToWriteDockerfile.Wrap(err)
