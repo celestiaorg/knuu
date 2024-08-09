@@ -83,6 +83,40 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 
 	s.Assert().Equal(fileContent, string(gotContent))
 }
+func (s *Suite) TestDownloadFileFromBuilder() {
+	const namePrefix = "download-file-builder"
+	s.T().Parallel()
+	// Setup
+
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
+
+	ctx := context.Background()
+	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+
+	s.T().Cleanup(func() {
+		if err := target.Execution().Destroy(ctx); err != nil {
+			s.T().Logf("error destroying instance: %v", err)
+		}
+	})
+
+	// Test logic
+	const (
+		fileContent = "Hello World!"
+		filePath    = "/hello.txt"
+	)
+
+	s.Require().NoError(target.Storage().AddFileBytes([]byte(fileContent), filePath, "0:0"))
+
+	// The commit is required to make the changes persistent to the image
+	s.Require().NoError(target.Build().Commit(ctx))
+
+	// Now test if the file can be downloaded correctly from the built image
+	gotContent, err := target.Storage().GetFileBytes(ctx, filePath)
+	s.Require().NoError(err, "Error getting file bytes")
+
+	s.Assert().Equal(fileContent, string(gotContent))
+}
 
 func (s *Suite) TestMinio() {
 	const (
