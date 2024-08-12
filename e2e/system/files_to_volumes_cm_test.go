@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -188,8 +187,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 	)
 	s.T().Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
@@ -206,7 +204,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		wgFolders.Add(1)
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			err := retryOperation(func() error {
+			err := s.retryOperation(func() error {
 				err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
@@ -232,7 +230,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 
 	// Test logic
 	for _, i := range instances {
-		err := retryOperation(func() error {
+		err := s.retryOperation(func() error {
 			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}

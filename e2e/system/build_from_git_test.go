@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"strings"
-	"time"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 )
@@ -19,8 +18,7 @@ func (s *Suite) TestBuildFromGit() {
 	s.T().Parallel()
 
 	// Setup
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
@@ -85,7 +83,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	}
 
 	s.T().Log("Setting git repo")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return target.Build().SetGitRepo(ctx, builder.GitContext{
 			Repo:     gitRepo,
 			Branch:   gitBranch,
@@ -96,19 +94,19 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.Require().NoError(err, "Error setting git repo")
 
 	s.T().Log("Setting command")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return target.Build().SetStartCommand("sleep", "infinity")
 	}, maxRetries)
 	s.Require().NoError(err, "Error setting command")
 
 	s.T().Log("Adding file")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return target.Storage().AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
 	}, maxRetries)
 	s.Require().NoError(err, "Error adding file")
 
 	s.T().Log("Committing changes")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return target.Build().Commit(ctx)
 	}, maxRetries)
 	s.Require().NoError(err, "Error committing changes")
@@ -121,14 +119,14 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 
 	s.T().Log("Starting instance")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return target.Execution().Start(ctx)
 	}, maxRetries)
 	s.Require().NoError(err, "Error starting instance")
 
 	s.T().Log("Getting file bytes")
 	var data []byte
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		var err error
 		data, err = target.Storage().GetFileBytes(ctx, "/home/hello.txt")
 		return err

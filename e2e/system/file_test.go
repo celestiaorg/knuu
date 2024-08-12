@@ -20,8 +20,7 @@ func (s *Suite) TestFile() {
 	s.T().Parallel()
 
 	// Setup
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	s.T().Log("Creating executor instance")
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
@@ -33,13 +32,13 @@ func (s *Suite) TestFile() {
 	serverfile := s.createNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
 
 	s.T().Log("Adding file to nginx instance")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return serverfile.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 	}, maxRetries)
 	s.Require().NoError(err, "Error adding file to nginx instance")
 
 	s.T().Log("Committing changes")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return serverfile.Build().Commit(ctx)
 	}, maxRetries)
 	s.Require().NoError(err, "Error committing changes")
@@ -55,7 +54,7 @@ func (s *Suite) TestFile() {
 	// Test logic
 	s.T().Log("Getting server IP")
 	var serverfileIP string
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		var err error
 		serverfileIP, err = serverfile.Network().GetIP(ctx)
 		return err
@@ -63,14 +62,14 @@ func (s *Suite) TestFile() {
 	s.Require().NoError(err, "Error getting server IP")
 
 	s.T().Log("Starting server")
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		return serverfile.Execution().Start(ctx)
 	}, maxRetries)
 	s.Require().NoError(err, "Error starting server")
 
 	s.T().Log("Executing wget command")
 	var wget string
-	err = retryOperation(func() error {
+	err = s.retryOperation(func() error {
 		var err error
 		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
 		return err

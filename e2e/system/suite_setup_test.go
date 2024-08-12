@@ -28,7 +28,8 @@ const (
 	resourcesHTML           = "resources/html"
 	resourcesFileCMToFolder = "resources/file_cm_to_folder"
 
-	maxRetries = 10
+	maxRetries  = 10
+	dialTimeout = 5 * time.Second
 )
 
 type Suite struct {
@@ -101,17 +102,39 @@ func (s *Suite) createNginxInstanceWithVolume(ctx context.Context, name string) 
 }
 
 func (s *Suite) waitForNginxReady(ctx context.Context, instance *instance.Instance) error {
-	return retryOperation(func() error {
-		ip, err := instance.GetIP(ctx)
+	return s.retryOperation(func() error {
+		ip, err := instance.Network().GetIP(ctx)
 		if err != nil {
 			return err
 		}
 
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", nginxPort)), 5*time.Second)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", nginxPort)), dialTimeout)
 		if err != nil {
 			return err
 		}
 		conn.Close()
 		return nil
 	}, maxRetries)
+}
+
+func (s *Suite) retryOperation(operation func() error, maxRetries int) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		s.T().Logf("Retrying operation (%d/%d)...", i+1, maxRetries)
+		if err = operation(); err == nil {
+			return nil
+		}
+		time.Sleep(time.Second * time.Duration(i+1))
+	}
+	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, err)
+}
+
+func (s *Suite) executeWget(ctx context.Context, executor *instance.Instance, url string) (string, error) {
+	var output string
+	err := s.retryOperation(func() error {
+		var err error
+		output, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", url)
+		return err
+	}, 5)
+	return output, err
 }

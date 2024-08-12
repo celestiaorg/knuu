@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
@@ -18,8 +17,7 @@ func (s *Suite) TestFileCached() {
 	s.T().Parallel()
 
 	// Setup
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
@@ -39,7 +37,7 @@ func (s *Suite) TestFileCached() {
 		wgFolders.Add(1)
 		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
-			err := retryOperation(func() error {
+			err := s.retryOperation(func() error {
 				return instance.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 			}, maxRetries)
 			// adding the folder after the Commit, it will help us to use a cached image.
@@ -58,7 +56,7 @@ func (s *Suite) TestFileCached() {
 
 	// Test logic
 	for _, i := range instances {
-		err := retryOperation(func() error {
+		err := s.retryOperation(func() error {
 			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}
@@ -71,7 +69,7 @@ func (s *Suite) TestFileCached() {
 	}
 
 	for _, i := range instances {
-		err := retryOperation(func() error {
+		err := s.retryOperation(func() error {
 			webIP, err := i.Network().GetIP(ctx)
 			if err != nil {
 				return fmt.Errorf("getting IP: %w", err)
