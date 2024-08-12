@@ -324,6 +324,10 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 		return ErrMinioClientNotInitialized
 	}
 
+	if m.muMap == nil {
+		m.muMap = make(map[string]*sync.Mutex)
+	}
+
 	mu, ok := m.muMap[bucketName]
 	if !ok {
 		mu = &sync.Mutex{}
