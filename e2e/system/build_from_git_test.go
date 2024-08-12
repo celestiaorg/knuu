@@ -99,9 +99,14 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	}, maxRetries)
 	s.Require().NoError(err, "Error setting command")
 
+	const (
+		filePath = "/home/hello.txt"
+		fileData = "Hello, world!"
+	)
+
 	s.T().Log("Adding file")
 	err = s.retryOperation(func() error {
-		return target.Storage().AddFileBytes([]byte("Hello, world!"), "/home/hello.txt", "root:root")
+		return target.Storage().AddFileBytes([]byte(fileData), filePath, "root:root")
 	}, maxRetries)
 	s.Require().NoError(err, "Error adding file")
 
@@ -128,10 +133,10 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	var data []byte
 	err = s.retryOperation(func() error {
 		var err error
-		data, err = target.Storage().GetFileBytes(ctx, "/home/hello.txt")
+		data, err = target.Storage().GetFileBytes(ctx, filePath)
 		return err
 	}, maxRetries)
 
 	s.Require().NoError(err, "Error getting file bytes")
-	s.Assert().Equal([]byte("Hello, world!"), data, "file bytes do not match.")
+	s.Assert().Equal([]byte(fileData), data, "file bytes do not match.")
 }
