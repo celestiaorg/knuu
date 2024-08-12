@@ -33,6 +33,16 @@ func (c *Client) CreateConfigMap(
 	ctx context.Context, name string,
 	labels, data map[string]string,
 ) (*v1.ConfigMap, error) {
+	if err := validateConfigMapName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateConfigMapKeys(data); err != nil {
+		return nil, err
+	}
+
 	exists, err := c.ConfigMapExists(ctx, name)
 	if err != nil {
 		return nil, err

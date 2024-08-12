@@ -29,7 +29,7 @@ func TestReverseProxy(t *testing.T) {
 	err = main.SetImage("alpine:latest")
 	require.NoError(t, err, "Error setting image")
 
-	err = main.SetCommand("sleep", "infinite")
+	err = main.SetStartCommand("sleep", "infinite")
 	require.NoError(t, err, "Error executing command")
 
 	require.NoError(t, main.Commit(), "Error committing instance")
@@ -110,7 +110,7 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 		return strings.Contains(string(bodyBytes), "Welcome to nginx!"), nil
 	}
 
-	host, err := target.AddHostWithReadyCheck(ctx, port, checkFunc)
+	host, err := target.Network().AddHostWithReadyCheck(ctx, port, checkFunc)
 	require.NoError(t, err, "error adding host with ready check")
 	assert.NotEmpty(t, host, "host should not be empty")
 

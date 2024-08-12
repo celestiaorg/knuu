@@ -84,8 +84,8 @@ func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.
 	ins, err := s.Knuu.NewInstance(name)
 	s.Require().NoError(err)
 
-	s.Require().NoError(ins.SetImage(ctx, nginxImage))
-	s.Require().NoError(ins.AddPortTCP(nginxPort))
+	s.Require().NoError(ins.Build().SetImage(ctx, nginxImage))
+	s.Require().NoError(ins.Network().AddPortTCP(nginxPort))
 
 	return ins
 }
@@ -93,10 +93,10 @@ func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.
 func (s *Suite) createNginxInstanceWithVolume(ctx context.Context, name string) *instance.Instance {
 	ins := s.createNginxInstance(ctx, name)
 
-	_, err := ins.ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
+	err := ins.Build().ExecuteCommand("mkdir", "-p", nginxHTMLPath)
 	s.Require().NoError(err)
 
-	s.Require().NoError(ins.AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner))
+	s.Require().NoError(ins.Storage().AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner))
 	return ins
 }
 

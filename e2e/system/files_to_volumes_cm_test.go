@@ -26,10 +26,10 @@ func (s *Suite) TestOneVolumeNoFiles() {
 
 	target := s.createNginxInstance(ctx, namePrefix+"-target")
 
-	err = target.AddVolumeWithOwner("/opt/vol1", resource.MustParse("1Gi"), 0)
+	err = target.Storage().AddVolumeWithOwner("/opt/vol1", resource.MustParse("1Gi"), 0)
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.Commit())
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, executor, target)
@@ -39,14 +39,14 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	})
 
 	// Test logic
-	s.Require().NoError(target.StartAsync(ctx))
+	s.Require().NoError(target.Execution().StartAsync(ctx))
 
-	webIP, err := target.GetIP(ctx)
+	webIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.WaitInstanceIsRunning(ctx))
+	s.Require().NoError(target.Execution().WaitInstanceIsRunning(ctx))
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Welcome to nginx!")
@@ -82,7 +82,7 @@ func (s *Suite) TestNoVolumesOneFile() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = i.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v'", i.Name())
 		}(i)
 	}
@@ -98,18 +98,18 @@ func (s *Suite) TestNoVolumesOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Commit())
-		s.Require().NoError(i.StartAsync(ctx))
+		s.Require().NoError(i.Build().Commit(ctx))
+		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		webIP, err := i.Network().GetIP(ctx)
 		s.Require().NoError(err)
 
-		err = i.WaitInstanceIsRunning(ctx)
+		err = i.Execution().WaitInstanceIsRunning(ctx)
 		s.Require().NoError(err)
 
-		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
@@ -144,7 +144,7 @@ func (s *Suite) TestOneVolumeOneFile() {
 		go func(ins *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = ins.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			err = ins.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v': %v", i.Name())
 		}(i)
 	}
@@ -160,16 +160,16 @@ func (s *Suite) TestOneVolumeOneFile() {
 
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Commit())
-		s.Require().NoError(i.StartAsync(ctx))
+		s.Require().NoError(i.Build().Commit(ctx))
+		s.Require().NoError(i.Execution().StartAsync(ctx))
 	}
 
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		webIP, err := i.Network().GetIP(ctx)
 		s.Require().NoError(err)
-		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
+		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
@@ -207,11 +207,11 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			err := retryOperation(func() error {
-				err := i.AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+				err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
 				}
-				err = i.AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
+				err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
 				}
@@ -233,10 +233,10 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 	// Test logic
 	for _, i := range instances {
 		err := retryOperation(func() error {
-			if err := i.Commit(); err != nil {
+			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}
-			if err := i.StartAsync(ctx); err != nil {
+			if err := i.Execution().StartAsync(ctx); err != nil {
 				return fmt.Errorf("starting instance: %w", err)
 			}
 			return nil
@@ -245,17 +245,17 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 	}
 
 	for _, i := range instances {
-		webIP, err := i.GetIP(ctx)
+		webIP, err := i.Network().GetIP(ctx)
 		s.Require().NoError(err)
-		s.Require().NoError(i.WaitInstanceIsRunning(ctx))
+		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wgetIndex, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wgetIndex, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 		s.Require().NoError(err)
 		wgetIndex = strings.TrimSpace(wgetIndex)
 		s.Assert().Equal("hello from 1", wgetIndex)
 
 		webIP2 := webIP + "/index-2.html"
-		wgetIndex2, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP2)
+		wgetIndex2, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP2)
 		s.Require().NoError(err)
 		wgetIndex2 = strings.TrimSpace(wgetIndex2)
 		s.Assert().Equal("hello from 2", wgetIndex2)

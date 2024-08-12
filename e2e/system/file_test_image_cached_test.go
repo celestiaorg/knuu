@@ -3,7 +3,6 @@ package system
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,8 +40,9 @@ func (s *Suite) TestFileCached() {
 		go func(i int, instance *instance.Instance) {
 			defer wgFolders.Done()
 			err := retryOperation(func() error {
-				return instance.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+				return instance.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 			}, maxRetries)
+			// adding the folder after the Commit, it will help us to use a cached image.
 			s.Require().NoError(err, "adding file to '%v'", instanceName(i))
 		}(i, ins)
 	}
@@ -59,10 +59,10 @@ func (s *Suite) TestFileCached() {
 	// Test logic
 	for _, i := range instances {
 		err := retryOperation(func() error {
-			if err := i.Commit(); err != nil {
+			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}
-			if err := i.StartAsync(ctx); err != nil {
+			if err := i.Execution().StartAsync(ctx); err != nil {
 				return fmt.Errorf("starting instance: %w", err)
 			}
 			return nil
@@ -72,24 +72,21 @@ func (s *Suite) TestFileCached() {
 
 	for _, i := range instances {
 		err := retryOperation(func() error {
-			webIP, err := i.GetIP(ctx)
+			webIP, err := i.Network().GetIP(ctx)
 			if err != nil {
 				return fmt.Errorf("getting IP: %w", err)
 			}
 
-			if err := i.WaitInstanceIsRunning(ctx); err != nil {
+			if err := i.Execution().WaitInstanceIsRunning(ctx); err != nil {
 				return fmt.Errorf("waiting for instance to run: %w", err)
 			}
 
-			wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+			wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 			if err != nil {
 				return fmt.Errorf("executing wget: %w", err)
 			}
 
-			if !strings.Contains(wget, "Hello World!") {
-				return fmt.Errorf("expected 'Hello World!' in response, got: %s", wget)
-			}
-
+			s.Assert().Contains(wget, "Hello World!")
 			return nil
 		}, maxRetries)
 		s.Require().NoError(err)

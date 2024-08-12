@@ -20,18 +20,18 @@ func (ts *TestSuite) TestBasic() {
 	target, err := ts.Knuu.NewInstance("alpine")
 	ts.Require().NoError(err)
 
-	ts.Require().NoError(target.SetImage(ctx, testImage))
-	ts.Require().NoError(target.SetCommand("sleep", "infinity"))
-	ts.Require().NoError(target.Commit())
+	ts.Require().NoError(target.Build().SetImage(ctx, testImage))
+	ts.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
+	ts.Require().NoError(target.Build().Commit(ctx))
 
 	ts.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			ts.T().Logf("error destroying instance: %v", err)
 		}
 	})
 
 	// Test Logic
-	ts.Require().NoError(target.Start(ctx))
+	ts.Require().NoError(target.Execution().Start(ctx))
 
 	// Perform the test
 	tt := []struct {
@@ -43,7 +43,7 @@ func (ts *TestSuite) TestBasic() {
 	for _, tc := range tt {
 		tc := tc
 		ts.Run(tc.name, func() {
-			output, err := target.ExecuteCommand(ctx, "echo", tc.name)
+			output, err := target.Execution().ExecuteCommand(ctx, "echo", tc.name)
 			ts.Require().NoError(err)
 
 			output = strings.TrimSpace(output)

@@ -75,6 +75,10 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
+	if err := validatePodConfig(podConfig); err != nil {
+		return nil, err
+	}
+
 	pod := c.preparePod(podConfig, init)
 	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
@@ -166,6 +170,16 @@ func (c *Client) RunCommandInPod(
 	containerName string,
 	cmd []string,
 ) (string, error) {
+	if err := validatePodName(podName); err != nil {
+		return "", err
+	}
+	if err := validateContainerName(containerName); err != nil {
+		return "", err
+	}
+	if err := validateCommand(cmd); err != nil {
+		return "", err
+	}
+
 	_, err := c.getPod(ctx, podName)
 	if err != nil {
 		return "", ErrGettingPod.WithParams(podName).Wrap(err)
@@ -245,6 +259,16 @@ func (c *Client) PortForwardPod(
 	localPort,
 	remotePort int,
 ) error {
+	if err := validatePodName(podName); err != nil {
+		return err
+	}
+	if err := validatePort(localPort); err != nil {
+		return err
+	}
+	if err := validatePort(remotePort); err != nil {
+		return err
+	}
+
 	if _, err := c.getPod(ctx, podName); err != nil {
 		return ErrGettingPod.WithParams(podName).Wrap(err)
 	}

@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
@@ -35,19 +34,15 @@ func (s *Suite) TestFile() {
 
 	s.T().Log("Adding file to nginx instance")
 	err = retryOperation(func() error {
-		return serverfile.AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+		return serverfile.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
 	}, maxRetries)
-	if err != nil {
-		s.Require().NoError(err, "Error adding file to nginx instance")
-	}
+	s.Require().NoError(err, "Error adding file to nginx instance")
 
 	s.T().Log("Committing changes")
 	err = retryOperation(func() error {
-		return serverfile.Commit()
+		return serverfile.Build().Commit(ctx)
 	}, maxRetries)
-	if err != nil {
-		s.Require().NoError(err, "Error committing changes")
-	}
+	s.Require().NoError(err, "Error committing changes")
 
 	s.T().Cleanup(func() {
 		s.T().Log("Cleaning up instances")
@@ -62,38 +57,28 @@ func (s *Suite) TestFile() {
 	var serverfileIP string
 	err = retryOperation(func() error {
 		var err error
-		serverfileIP, err = serverfile.GetIP(ctx)
+		serverfileIP, err = serverfile.Network().GetIP(ctx)
 		return err
 	}, maxRetries)
-	if err != nil {
-		s.Require().NoError(err, "Error getting server IP")
-	}
+	s.Require().NoError(err, "Error getting server IP")
 
 	s.T().Log("Starting server")
 	err = retryOperation(func() error {
-		return serverfile.Start(ctx)
+		return serverfile.Execution().Start(ctx)
 	}, maxRetries)
-	if err != nil {
-		s.Require().NoError(err, "Error starting server")
-	}
+	s.Require().NoError(err, "Error starting server")
 
 	s.T().Log("Executing wget command")
 	var wget string
 	err = retryOperation(func() error {
 		var err error
-		wget, err = executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
 		return err
 	}, maxRetries)
-	if err != nil {
-		s.Require().NoError(err, "Error executing wget command")
-	}
+	s.Require().NoError(err, "Error executing wget command")
 
 	s.T().Log("Asserting wget output")
-	if !strings.Contains(wget, "Hello World!") {
-		s.Require().NoError(err, "Expected 'Hello World!' in wget output, but got: %s", wget)
-	}
-
-	s.T().Log("Test completed successfully")
+	s.Assert().Contains(wget, "Hello World!")
 }
 
 func (s *Suite) TestDownloadFileFromRunningInstance() {
@@ -108,13 +93,13 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.SetImage(ctx, "alpine:latest"))
-	s.Require().NoError(target.SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Commit())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("error destroying instance: %v", err)
 		}
 	})
@@ -126,10 +111,10 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	)
 
 	// Create a file in the target instance
-	out, err := target.ExecuteCommand(ctx, "echo", "-n", fileContent, ">", filePath)
+	out, err := target.Execution().ExecuteCommand(ctx, "echo", "-n", fileContent, ">", filePath)
 	s.Require().NoError(err, "executing command output: %v", out)
 
-	gotContent, err := target.GetFileBytes(ctx, filePath)
+	gotContent, err := target.Storage().GetFileBytes(ctx, filePath)
 	s.Require().NoError(err, "Error getting file bytes")
 
 	s.Assert().Equal(fileContent, string(gotContent))
@@ -147,13 +132,13 @@ func (s *Suite) TestMinio() {
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.SetImage(ctx, "alpine:latest"))
-	s.Require().NoError(target.SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Commit())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	s.T().Cleanup(func() {
-		if err := target.Destroy(ctx); err != nil {
+		if err := target.Execution().Destroy(ctx); err != nil {
 			s.T().Logf("error destroying instance: %v", err)
 		}
 	})

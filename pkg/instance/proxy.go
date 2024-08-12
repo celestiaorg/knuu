@@ -10,33 +10,33 @@ const (
 	proxyWaitCheckInterval = 500 * time.Millisecond
 )
 
-func (i *Instance) AddHost(ctx context.Context, port int) (host string, err error) {
-	if i.Proxy == nil {
+func (n *network) AddHost(ctx context.Context, port int) (host string, err error) {
+	if n.instance.Proxy == nil {
 		return "", ErrProxyNotInitialized
 	}
 
-	serviceName := i.k8sName
-	if i.isSidecar {
+	serviceName := n.instance.k8sName
+	if n.instance.sidecars.IsSidecar() {
 		// The service is created for the main instance and
 		// named after it which will be the parent instance for sidecars,
 		// so we need to use the parent instance's service name.
-		serviceName = i.parentInstance.k8sName
+		serviceName = n.instance.parentInstance.k8sName
 	}
 
 	prefix := fmt.Sprintf("%s-%d", serviceName, port)
-	if err := i.Proxy.AddHost(ctx, serviceName, prefix, port); err != nil {
+	if err := n.instance.Proxy.AddHost(ctx, serviceName, prefix, port); err != nil {
 		return "", ErrAddingToProxy.WithParams(serviceName).Wrap(err)
 	}
-	host, err = i.Proxy.URL(ctx, prefix)
+	host, err = n.instance.Proxy.URL(ctx, prefix)
 	if err != nil {
 		return "", ErrGettingProxyURL.WithParams(serviceName).Wrap(err)
 	}
 	return host, nil
 }
 
-func (i *Instance) AddHostWithReadyCheck(ctx context.Context, port int,
+func (n *network) AddHostWithReadyCheck(ctx context.Context, port int,
 	checkFunc func(host string) (bool, error)) (host string, err error) {
-	host, err = i.AddHost(ctx, port)
+	host, err = n.AddHost(ctx, port)
 	if err != nil {
 		return "", err
 	}

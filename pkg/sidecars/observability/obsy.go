@@ -92,25 +92,25 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 	if err != nil {
 		return ErrCreatingOtelAgentInstance.Wrap(err)
 	}
-	o.instance.SetIsSidecar(true)
+	o.instance.Sidecars().SetIsSidecar(true)
 
-	err = o.instance.SetImage(ctx, o.image)
+	err = o.instance.Build().SetImage(ctx, o.image)
 	if err != nil {
 		return ErrSettingOtelAgentImage.Wrap(err)
 	}
-	if err := o.instance.AddPortTCP(DefaultOtelOtlpPort); err != nil {
+	if err := o.instance.Network().AddPortTCP(DefaultOtelOtlpPort); err != nil {
 		return ErrAddingOtelAgentPort.Wrap(err)
 	}
-	if err := o.instance.AddPortTCP(DefaultOtelMetricsPort); err != nil {
+	if err := o.instance.Network().AddPortTCP(DefaultOtelMetricsPort); err != nil {
 		return ErrAddingOtelAgentPort.Wrap(err)
 	}
-	if err := o.instance.SetCPU(otelAgentCPU); err != nil {
+	if err := o.instance.Resources().SetCPU(otelAgentCPU); err != nil {
 		return ErrSettingOtelAgentCPU.Wrap(err)
 	}
-	if err := o.instance.SetMemory(otelAgentMemory, otelAgentMemoryLimit); err != nil {
+	if err := o.instance.Resources().SetMemory(otelAgentMemory, otelAgentMemoryLimit); err != nil {
 		return ErrSettingOtelAgentMemory.Wrap(err)
 	}
-	if err := o.instance.Commit(); err != nil {
+	if err := o.instance.Build().Commit(ctx); err != nil {
 		return ErrCommittingOtelAgentInstance.Wrap(err)
 	}
 
@@ -127,11 +127,11 @@ func (o *Obsy) Initialize(ctx context.Context, sysDeps system.SystemDependencies
 		return ErrMarshalingYAML.Wrap(err)
 	}
 
-	if err := o.instance.AddFileBytes(bytes, otelAgentConfigFile, otelAgentConfigFilePermissions); err != nil {
+	if err := o.instance.Storage().AddFileBytes(bytes, otelAgentConfigFile, otelAgentConfigFilePermissions); err != nil {
 		return ErrAddingOtelAgentConfigFile.Wrap(err)
 	}
 
-	if err := o.instance.SetCommand(otelCollectorCommand, otelCollectorConfigArg); err != nil {
+	if err := o.instance.Build().SetStartCommand(otelCollectorCommand, otelCollectorConfigArg); err != nil {
 		return ErrSettingOtelAgentCommand.Wrap(err)
 	}
 

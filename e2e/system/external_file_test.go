@@ -38,10 +38,10 @@ func (s *Suite) TestExternalFile() {
 	// Ensure that the copy is successful by syncing the written data to the disk
 	s.Require().NoError(dstFile.Sync())
 
-	err = server.AddFile(htmlTmpPath, nginxHTMLPath+"/index.html", "0:0")
+	err = server.Storage().AddFile(htmlTmpPath, nginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
-	s.Require().NoError(server.Commit())
+	s.Require().NoError(server.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		err := instance.BatchDestroy(ctx, executor, server)
@@ -51,12 +51,12 @@ func (s *Suite) TestExternalFile() {
 	})
 
 	// Test logic
-	serverIP, err := server.GetIP(ctx)
+	serverIP, err := server.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
-	s.Require().NoError(server.Start(ctx))
+	s.Require().NoError(server.Execution().Start(ctx))
 
-	wget, err := executor.ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverIP)
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Hello World!")

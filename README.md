@@ -120,7 +120,7 @@ Simple example:
         if err != nil {
             t.Fatalf("Error setting image: %v", err)
         }
-        err = instance.SetCommand("sleep", "infinity")
+        err = instance.SetStartCommand("sleep", "infinity")
         if err != nil {
             t.Fatalf("Error setting command: %v", err)
         }
