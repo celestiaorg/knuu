@@ -218,12 +218,12 @@ func (c *Client) RunCommandInPod(
 	})
 
 	if err != nil {
-		return "", ErrExecutingCommand.Wrap(err)
+		return "", ErrExecutingCommand.WithParams(stdout.String(), stderr.String()).Wrap(err)
 	}
 
 	// Check if there were any errors on the error stream
 	if stderr.Len() != 0 {
-		return "", ErrCommandExecution.WithParams(stderr.String())
+		return "", ErrCommandExecution.WithParams(stdout.String(), stderr.String())
 	}
 
 	return stdout.String(), nil

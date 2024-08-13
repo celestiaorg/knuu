@@ -30,7 +30,7 @@ var (
 	ErrDeployingPod                    = errors.New("ErrorDeployingPod", "failed to deploy pod")
 	ErrGettingK8sConfig                = errors.New("ErrorGettingK8sConfig", "failed to get k8s config")
 	ErrCreatingExecutor                = errors.New("ErrorCreatingExecutor", "failed to create Executor")
-	ErrExecutingCommand                = errors.New("ErrorExecutingCommand", "failed to execute command")
+	ErrExecutingCommand                = errors.New("ErrorExecutingCommand", "failed to execute command, stdout: `%v`, stderr: `%v`")
 	ErrCommandExecution                = errors.New("ErrorCommandExecution", "error while executing command")
 	ErrDeletingPodFailed               = errors.New("ErrorDeletingPodFailed", "failed to delete pod %s")
 	ErrParsingMemoryRequest            = errors.New("ErrorParsingMemoryRequest", "failed to parse memory request quantity '%s'")

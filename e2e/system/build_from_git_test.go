@@ -93,28 +93,18 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	}, maxRetries)
 	s.Require().NoError(err, "Error setting git repo")
 
-	s.T().Log("Setting command")
-	err = s.retryOperation(func() error {
-		return target.Build().SetStartCommand("sleep", "infinity")
-	}, maxRetries)
-	s.Require().NoError(err, "Error setting command")
+	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
 
 	const (
 		filePath = "/home/hello.txt"
 		fileData = "Hello, world!"
 	)
 
-	s.T().Log("Adding file")
-	err = s.retryOperation(func() error {
-		return target.Storage().AddFileBytes([]byte(fileData), filePath, "root:root")
-	}, maxRetries)
+	err = target.Storage().AddFileBytes([]byte(fileData), filePath, "root:root")
 	s.Require().NoError(err, "Error adding file")
 
 	s.T().Log("Committing changes")
-	err = s.retryOperation(func() error {
-		return target.Build().Commit(ctx)
-	}, maxRetries)
-	s.Require().NoError(err, "Error committing changes")
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
 		s.T().Log("Cleaning up instance")
@@ -124,12 +114,8 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 
 	s.T().Log("Starting instance")
-	err = s.retryOperation(func() error {
-		return target.Execution().Start(ctx)
-	}, maxRetries)
-	s.Require().NoError(err, "Error starting instance")
+	s.Require().NoError(target.Execution().Start(ctx))
 
-	s.T().Log("Getting file bytes")
 	var data []byte
 	err = s.retryOperation(func() error {
 		var err error
