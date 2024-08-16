@@ -42,7 +42,7 @@ func (f *BuilderFactory) ImageNameFrom() string {
 	return f.imageNameFrom
 }
 
-// AddCmdToBuilder runs the provided command in the context of the given builder.
+// AddCmdToBuilder adds the provided command to be run in the context of the builder.
 func (f *BuilderFactory) AddCmdToBuilder(command []string) {
 	f.dockerFileInstructions = append(f.dockerFileInstructions, "RUN "+strings.Join(command, " "))
 }
