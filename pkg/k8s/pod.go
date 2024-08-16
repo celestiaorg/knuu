@@ -37,6 +37,7 @@ const (
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
 	Image           string              // Name of the container image to use for the container
+	ImagePullPolicy v1.PullPolicy       // Image pull policy for the container
 	Command         []string            // Command to run in the container
 	Args            []string            // Arguments to pass to the command in the container
 	Env             map[string]string   // Environment variables to set in the container
@@ -512,6 +513,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 	return v1.Container{
 		Name:            config.Name,
 		Image:           config.Image,
+		ImagePullPolicy: config.ImagePullPolicy,
 		Command:         config.Command,
 		Args:            config.Args,
 		Env:             buildEnv(config.Env),

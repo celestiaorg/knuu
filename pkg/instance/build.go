@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
@@ -16,13 +17,14 @@ import (
 const buildDirBase = "/tmp/knuu"
 
 type build struct {
-	instance       *Instance
-	imageName      string
-	builderFactory *container.BuilderFactory
-	command        []string
-	args           []string
-	env            map[string]string
-	imageCache     *sync.Map
+	instance        *Instance
+	imageName       string
+	imagePullPolicy v1.PullPolicy
+	builderFactory  *container.BuilderFactory
+	command         []string
+	args            []string
+	env             map[string]string
+	imageCache      *sync.Map
 }
 
 func (i *Instance) Build() *build {
@@ -31,6 +33,14 @@ func (i *Instance) Build() *build {
 
 func (b *build) ImageName() string {
 	return b.imageName
+}
+
+func (b *build) ImagePullPolicy() v1.PullPolicy {
+	return b.imagePullPolicy
+}
+
+func (b *build) SetImagePullPolicy(pullPolicy v1.PullPolicy) {
+	b.imagePullPolicy = pullPolicy
 }
 
 // SetImage sets the image of the instance.
@@ -144,16 +154,15 @@ func (b *build) Commit(ctx context.Context) error {
 		return nil
 	}
 
-	//TODO: To speed up the process, the image name could be dependent on the hash of the image
-	imageName, err := b.getImageRegistry()
-	if err != nil {
-		return ErrGettingImageRegistry.Wrap(err)
-	}
-
 	// Generate a hash for the current image
 	imageHash, err := b.builderFactory.GenerateImageHash()
 	if err != nil {
 		return ErrGeneratingImageHash.Wrap(err)
+	}
+
+	imageName, err := getImageRegistry(imageHash)
+	if err != nil {
+		return ErrGettingImageRegistry.Wrap(err)
 	}
 
 	// Check if the generated image hash already exists in the cache, otherwise, we build it.
@@ -177,17 +186,16 @@ func (b *build) Commit(ctx context.Context) error {
 }
 
 // getImageRegistry returns the name of the temporary image registry
-func (b *build) getImageRegistry() (string, error) {
-	if b.imageName != "" {
-		return b.imageName, nil
+func getImageRegistry(imageName string) (string, error) {
+	if imageName == "" {
+		// If not already set, generate a random name using ttl.sh
+		uuid, err := uuid.NewRandom()
+		if err != nil {
+			return "", fmt.Errorf("error generating UUID: %w", err)
+		}
+		imageName = uuid.String()
 	}
-	// If not already set, generate a random name using ttl.sh
-	uuid, err := uuid.NewRandom()
-	if err != nil {
-		return "", fmt.Errorf("error generating UUID: %w", err)
-	}
-	imageName := fmt.Sprintf("ttl.sh/%s:24h", uuid.String())
-	return imageName, nil
+	return fmt.Sprintf("ttl.sh/%s:24h", imageName), nil
 }
 
 // getBuildDir returns the build directory for the instance

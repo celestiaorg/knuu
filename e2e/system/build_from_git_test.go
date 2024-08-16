@@ -1,7 +1,6 @@
 package system
 
 import (
-	"bytes"
 	"context"
 	"strings"
 
@@ -22,9 +21,7 @@ func (s *Suite) TestBuildFromGit() {
 
 	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
-	if err != nil {
-		s.Require().NoError(err, "Error creating new instance")
-	}
+	s.Require().NoError(err, "Error creating new instance")
 
 	s.T().Log("Building the image")
 
@@ -59,11 +56,7 @@ func (s *Suite) TestBuildFromGit() {
 	s.Require().NoError(err)
 
 	data = []byte(strings.TrimSpace(string(data)))
-	if !bytes.Equal([]byte("Hello, World!"), data) {
-		s.Require().NoError(err, "File bytes do not match. Expected 'Hello, World!', got '%s'", string(data))
-	}
-
-	s.T().Log("Test completed successfully")
+	s.Assert().Equal([]byte("Hello, World!"), data, "file bytes do not match.")
 }
 
 func (s *Suite) TestBuildFromGitWithModifications() {
@@ -78,9 +71,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 
 	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
-	if err != nil {
-		s.Require().NoError(err, "Error creating new instance")
-	}
+	s.Require().NoError(err)
 
 	s.T().Log("Setting git repo")
 	err = s.retryOperation(func() error {
@@ -91,19 +82,18 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 			Password: "",
 		})
 	}, maxRetries)
-	s.Require().NoError(err, "Error setting git repo")
+	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
 
 	const (
-		filePath = "/home/hello.txt"
-		fileData = "Hello, world!"
+		filePath     = "/home/hello.txt"
+		expectedData = "Hello, world!"
 	)
 
-	err = target.Storage().AddFileBytes([]byte(fileData), filePath, "root:root")
-	s.Require().NoError(err, "Error adding file")
+	err = target.Storage().AddFileBytes([]byte(expectedData), filePath, "root:root")
+	s.Require().NoError(err)
 
-	s.T().Log("Committing changes")
 	s.Require().NoError(target.Build().Commit(ctx))
 
 	s.T().Cleanup(func() {
@@ -113,16 +103,10 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		}
 	})
 
-	s.T().Log("Starting instance")
 	s.Require().NoError(target.Execution().Start(ctx))
 
-	var data []byte
-	err = s.retryOperation(func() error {
-		var err error
-		data, err = target.Storage().GetFileBytes(ctx, filePath)
-		return err
-	}, maxRetries)
+	gotData, err := target.Storage().GetFileBytes(ctx, filePath)
+	s.Require().NoError(err)
 
-	s.Require().NoError(err, "Error getting file bytes")
-	s.Assert().Equal([]byte(fileData), data, "file bytes do not match.")
+	s.Assert().Equal([]byte(expectedData), gotData, "file bytes do not match.")
 }

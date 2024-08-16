@@ -383,6 +383,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	containerConfig := k8s.ContainerConfig{
 		Name:            e.instance.k8sName,
 		Image:           e.instance.build.imageName,
+		ImagePullPolicy: e.instance.build.imagePullPolicy,
 		Command:         e.instance.build.command,
 		Args:            e.instance.build.args,
 		Env:             e.instance.build.env,
