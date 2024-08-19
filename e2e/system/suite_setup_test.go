@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +33,9 @@ type Suite struct {
 	suite.Suite
 	Knuu     *knuu.Knuu
 	Executor e2e.Executor
+
+	wg            sync.WaitGroup
+	knuuCleanupMu sync.Mutex
 }
 
 var (
@@ -63,15 +67,35 @@ func (s *Suite) SetupSuite() {
 	s.Executor.Kn = s.Knuu
 }
 
-func (s *Suite) TearDownSuite() {
-	logrus.Info("Tearing down test suite...")
+// SetupTest is a test setup function that is called before each test is run.
+func (s *Suite) SetupTest() {
+	s.T().Parallel()
+	s.wg.Add(1)
+}
+
+// TearDownTest is a test teardown function that is called after each test is run.
+func (s *Suite) TearDownTest() {
+	s.wg.Done()
+	s.wg.Wait() // let's wait for all tests to finish
+
+	// The cleanup must be executed only once
+	s.knuuCleanupMu.Lock()
+	defer s.knuuCleanupMu.Unlock()
+
+	// use knuu obj as a flag to avoid cleaning up knuu multiple times
+	if s.Knuu == nil {
+		return
+	}
+
+	s.T().Logf("Cleaning up knuu...")
 	if err := s.Knuu.CleanUp(context.Background()); err != nil {
 		s.T().Logf("Error cleaning up test suite: %v", err)
 	}
+	s.T().Logf("Knuu is cleaned up")
+	s.Knuu = nil
 }
 
 func TestRunSuite(t *testing.T) {
-	t.Parallel()
 	suite.Run(t, new(Suite))
 }
 

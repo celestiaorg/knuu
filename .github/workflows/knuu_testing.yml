@@ -16,7 +16,7 @@ jobs:
           - pkg: "./pkg/..."
             timeout: 10m
           - pkg: "./e2e/basic"
-            timeout: 30m
+            timeout: 15m
           - pkg: "./e2e/system"
             timeout: 15m
           - pkg: "./e2e/netshaper"
