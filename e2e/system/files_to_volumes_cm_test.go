@@ -16,7 +16,6 @@ import (
 // mkdir -p /knuu && if [ -d /opt/vol1 ] && [ \"$(ls -A /opt/vol1)\" ]; then cp -r /opt/vol1/* /knuu//opt/vol1 && chown -R 0:0 /knuu/* ;fi
 func (s *Suite) TestOneVolumeNoFiles() {
 	const namePrefix = "one-volume-no-files"
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -29,13 +28,6 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	s.Require().NoError(target.Execution().StartAsync(ctx))
@@ -60,7 +52,6 @@ func (s *Suite) TestNoVolumesOneFile() {
 		numberOfInstances = 2
 	)
 
-	s.T().Parallel()
 	// Setup
 	ctx := context.Background()
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
@@ -86,14 +77,6 @@ func (s *Suite) TestNoVolumesOneFile() {
 		}(i)
 	}
 	wgFolders.Wait()
-
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {
@@ -124,7 +107,6 @@ func (s *Suite) TestOneVolumeOneFile() {
 		namePrefix        = "one-volume-one-file"
 		numberOfInstances = 2
 	)
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -148,14 +130,6 @@ func (s *Suite) TestOneVolumeOneFile() {
 		}(i)
 	}
 	wgFolders.Wait()
-
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {
@@ -185,7 +159,6 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		numberOfInstances = 2
 		maxRetries        = 3
 	)
-	s.T().Parallel()
 
 	ctx := context.Background()
 
@@ -219,14 +192,6 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		}(i)
 	}
 	wgFolders.Wait()
-
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {

@@ -47,6 +47,10 @@ func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*C
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
 	}
 
+	// Set custom QPS and Burst to avoid client rate limit errors
+	config.QPS = CustomQPS
+	config.Burst = CustomBurst
+
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, ErrCreatingClientset.Wrap(err)

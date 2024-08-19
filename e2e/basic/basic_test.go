@@ -24,12 +24,6 @@ func (ts *TestSuite) TestBasic() {
 	ts.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
 	ts.Require().NoError(target.Build().Commit(ctx))
 
-	ts.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			ts.T().Logf("error destroying instance: %v", err)
-		}
-	})
-
 	// Test Logic
 	ts.Require().NoError(target.Execution().Start(ctx))
 

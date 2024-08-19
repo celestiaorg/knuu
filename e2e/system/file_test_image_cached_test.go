@@ -14,7 +14,6 @@ func (s *Suite) TestFileCached() {
 		numberOfInstances = 10
 		maxRetries        = 3
 	)
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -46,16 +45,9 @@ func (s *Suite) TestFileCached() {
 	}
 	wgFolders.Wait()
 
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
-
 	// Test logic
 	for _, i := range instances {
+		i := i
 		err := s.retryOperation(func() error {
 			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)

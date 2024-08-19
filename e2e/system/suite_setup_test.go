@@ -64,16 +64,14 @@ func (s *Suite) SetupSuite() {
 }
 
 func (s *Suite) TearDownSuite() {
-	s.T().Cleanup(func() {
-		logrus.Info("Tearing down test suite...")
-		err := s.Knuu.CleanUp(context.Background())
-		if err != nil {
-			s.T().Logf("Error cleaning up test suite: %v", err)
-		}
-	})
+	logrus.Info("Tearing down test suite...")
+	if err := s.Knuu.CleanUp(context.Background()); err != nil {
+		s.T().Logf("Error cleaning up test suite: %v", err)
+	}
 }
 
 func TestRunSuite(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(Suite))
 }
 
@@ -83,7 +81,6 @@ func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.
 
 	s.Require().NoError(ins.Build().SetImage(ctx, nginxImage))
 	s.Require().NoError(ins.Network().AddPortTCP(nginxPort))
-
 	return ins
 }
 

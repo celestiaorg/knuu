@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
@@ -46,14 +45,6 @@ func (s *Suite) TestNetShaperBandwidth() {
 
 	btSidecar := netshaper.New()
 	s.Require().NoError(iperfServer.Sidecars().Add(ctx, btSidecar))
-
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestNetShaperBandwidth test...")
-		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
 
 	// Prepare iperf client & server
 
@@ -156,14 +147,6 @@ func (s *Suite) TestNetShaperPacketloss() {
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
 
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestNetShaperPacketloss test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
-
 	// Prepare ping executor & target
 
 	s.Require().NoError(target.Execution().Start(ctx))
@@ -258,14 +241,6 @@ func (s *Suite) TestNetShaperLatency() {
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
-
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestNetShaperLatency test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
 
 	// Prepare ping executor & target
 
@@ -368,14 +343,6 @@ func (s *Suite) TestNetShaperJitter() {
 
 	executor, err := mother.CloneWithName("executor")
 	s.Require().NoError(err)
-
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestNetShaperJitter test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
 
 	// Prepare ping executor & target
 

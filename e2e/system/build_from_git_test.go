@@ -14,7 +14,6 @@ const (
 
 func (s *Suite) TestBuildFromGit() {
 	const namePrefix = "build-from-git"
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -33,14 +32,7 @@ func (s *Suite) TestBuildFromGit() {
 		Password: "",
 	})
 	s.Require().NoError(err, "Error setting git repo")
-
 	s.T().Log("Image built")
-
-	s.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("Error cleaning up knuu: %v", err)
-		}
-	})
 
 	s.Require().NoError(target.Build().Commit(ctx))
 
@@ -64,7 +56,6 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		namePrefix = "build-from-git-with-modifications"
 		maxRetries = 3
 	)
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -95,13 +86,6 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		s.T().Log("Cleaning up instance")
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	s.Require().NoError(target.Execution().Start(ctx))
 

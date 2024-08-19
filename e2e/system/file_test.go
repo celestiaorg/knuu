@@ -7,8 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
-
 	"github.com/google/uuid"
 )
 
@@ -17,7 +15,6 @@ func (s *Suite) TestFile() {
 		namePrefix = "file"
 		maxRetries = 3
 	)
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -42,14 +39,6 @@ func (s *Suite) TestFile() {
 		return serverfile.Build().Commit(ctx)
 	}, maxRetries)
 	s.Require().NoError(err, "Error committing changes")
-
-	s.T().Cleanup(func() {
-		s.T().Log("Cleaning up instances")
-		err := instance.BatchDestroy(ctx, serverfile, executor)
-		if err != nil {
-			s.T().Logf("Error destroying instances: %v", err)
-		}
-	})
 
 	// Test logic
 	s.T().Log("Getting server IP")
@@ -84,7 +73,6 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	const (
 		namePrefix = "download-file-running"
 	)
-	s.T().Parallel()
 
 	// Setup
 
@@ -96,12 +84,6 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
-
-	s.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	const (
@@ -125,7 +107,6 @@ func (s *Suite) TestMinio() {
 		minioBucketName  = "knuu-e2e-test"
 		minioPushTimeout = 1 * time.Minute
 	)
-	s.T().Parallel()
 	// Setup
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
 	s.Require().NoError(err)
@@ -135,12 +116,6 @@ func (s *Suite) TestMinio() {
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
-
-	s.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	var (
 		fileContent = "Hello World!"
