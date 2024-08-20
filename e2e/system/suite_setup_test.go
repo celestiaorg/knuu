@@ -3,6 +3,8 @@ package system
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -65,12 +67,18 @@ func (s *Suite) SetupSuite() {
 	s.Knuu.HandleStopSignal(ctx)
 
 	s.Executor.Kn = s.Knuu
+
+	// Since the SetupTest is called when the test is going to actually running i.e. `CONT`,
+	// which is called sometimes after some other tests are already finished,
+	// it calls the cleanup function prematurely; therefore, We need to count the number of
+	// all tests in advance and add them to the wait group.
+	// This way we can be sure that the teardown will be executed only after all tests are finished.
+	s.wg.Add(s.countTests())
 }
 
 // SetupTest is a test setup function that is called before each test is run.
 func (s *Suite) SetupTest() {
 	s.T().Parallel()
-	s.wg.Add(1)
 }
 
 // TearDownTest is a test teardown function that is called after each test is run.
@@ -128,4 +136,20 @@ func (s *Suite) retryOperation(operation func() error, maxRetries int) error {
 		time.Sleep(time.Second * time.Duration(i+1))
 	}
 	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, err)
+}
+
+// A little bit of a hack to count the number of tests in the suite.
+// We need to know the number of tests in advance to be able to call the teardown function only after all tests are finished.
+func (s *Suite) countTests() int {
+	var (
+		methodFinder = reflect.TypeOf(s)
+		numOfTests   = 0
+	)
+	for i := 0; i < methodFinder.NumMethod(); i++ {
+		method := methodFinder.Method(i)
+		if strings.HasPrefix(method.Name, "Test") {
+			numOfTests++
+		}
+	}
+	return numOfTests
 }
