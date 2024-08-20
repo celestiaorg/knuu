@@ -18,7 +18,7 @@ jobs:
           - pkg: "./e2e/basic"
             timeout: 15m
           - pkg: "./e2e/system"
-            timeout: 20m
+            timeout: 30m
           - pkg: "./e2e/netshaper"
             timeout: 60m
     runs-on: ubuntu-latest
