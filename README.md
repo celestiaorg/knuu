@@ -22,19 +22,18 @@ Knuu is designed around `Instances`, which you can create, start, control, commu
 
 Some of the features of Knuu are:
 
-- Initialize an Instance from a Container/Docker image
+- Initialize an Instance from a Container/Docker image or a git repository
 - Configure startup commands
 - Configure Networking
   - What ports to expose
+  - Shape the network traffic
   - Disable networking to simulate network outages
 - Configure Storage
 - Execute Commands
 - Configure HW resources
-- Create a pool of Instances and control them as a group
 - Allow AddFile after Commit via ConfigMap
 - Implement a TTL value for Pod cleanup
 - Add a timeout variable
-- See this issue for more upcoming features: [#91](https://github.com/celestiaorg/knuu/issues/91)
 
 > If you have feedback on the framework, want to report a bug, or suggest an improvement, please create an issue [here](https://github.com/celestiaorg/knuu/issues/new/choose).
 
@@ -48,123 +47,18 @@ This section will guide you on how to set up and run **Knuu**.
 
 ### Prerequisites
 
-1. **Kubernetes cluster**: Set up access to a Kubernetes cluster using a `kubeconfig`.
+- **Kubernetes cluster**: Set up access to a Kubernetes cluster using a `kubeconfig`.
    > In case you have no Kubernetes cluster running yet, you can get more information [here](https://kubernetes.io/docs/setup/).
 
-2. **Docker**: Knuu uses Docker by default. If `KNUU_BUILDER` is not explicitly set to `kubernetes`, Docker is required to run Knuu.
-   > You can install Docker by following the instructions [here](https://docs.docker.com/get-docker/).
 
 ### Writing Tests
 
-The documentation you can find [here](https://pkg.go.dev/github.com/celestiaorg/knuu).
+More details and examples on the new knuu can be found [here](./docs/knuu-new.md)
 
-Simple example:
+And some more real-world examples can be found in the following repositories:
 
-1. Add the following to your `go.mod` file:
-
-    ```go
-    require (
-        github.com/celestiaorg/knuu v0.8.2
-        github.com/stretchr/testify v1.8.4
-    )
-    ```
-
-2. Run `go mod tidy` to download the dependencies.
-
-3. Create a file called `main_test.go` with the following content to initialize Knuu:
-
-    ```go
-    package main
-
-    import (
-        "fmt"
-        "os"
-        "testing"
-        "time"
-
-        "github.com/celestiaorg/knuu/pkg/knuu"
-    )
-
-    func TestMain(m *testing.M) {
-        err := knuu.Initialize()
-        if err != nil {
-           log.Fatalf("Error initializing knuu: %v:", err)
-        }
-        exitVal := m.Run()
-        os.Exit(exitVal)
-    }
-    ```
-
-4. Create a file called `example_test.go` with the following content:
-
-    ```go
-   package main
-
-    import (
-        "os"
-        "testing"
-
-        "github.com/celestiaorg/knuu/pkg/knuu"
-        "github.com/stretchr/testify/assert"
-    )
-
-    func TestBasic(t *testing.T) {
-        t.Parallel()
-        // Setup
-
-        instance, err := knuu.NewInstance("alpine")
-        if err != nil {
-            t.Fatalf("Error creating instance '%v':", err)
-        }
-        err = instance.SetImage("docker.io/alpine:latest")
-        if err != nil {
-            t.Fatalf("Error setting image: %v", err)
-        }
-        err = instance.SetStartCommand("sleep", "infinity")
-        if err != nil {
-            t.Fatalf("Error setting command: %v", err)
-        }
-        err = instance.Commit()
-        if err != nil {
-            t.Fatalf("Error committing instance: %v", err)
-        }
-
-        t.Cleanup(func() {
-            // Cleanup
-            if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-                t.Log("Skipping cleanup")
-                return
-            }
-
-            err = instance.Destroy()
-            if err != nil {
-                t.Fatalf("Error destroying instance: %v", err)
-            }
-        })
-
-        // Test logic
-
-        err = instance.Start()
-        if err != nil {
-            t.Fatalf("Error starting instance: %v", err)
-        }
-        err = instance.WaitInstanceIsRunning()
-        if err != nil {
-            t.Fatalf("Error waiting for instance to be running: %v", err)
-        }
-        wget, err := instance.ExecuteCommand("echo", "Hello World!")
-        if err != nil {
-            t.Fatalf("Error executing command '%v':", err)
-        }
-
-        assert.Contains(t, wget, "Hello World!")
-    }
-    ```
-
-You can find more examples in the following repositories:
-
-- [celestiaorg/knuu](https://github.com/celestiaorg/knuu/tree/main/e2e)
-- [celestiaorg/celestia-app](https://github.com/celestiaorg/celestia-app/tree/main/test/e2e)
+- [celestiaorg/knuu e2e tests](https://github.com/celestiaorg/knuu/tree/main/e2e)
+- [celestiaorg/celestia-app e2e tests](https://github.com/celestiaorg/celestia-app/tree/main/test/e2e)
 
 ---
 
@@ -175,12 +69,14 @@ You can use the built-in `go test` command to run the tests.
 To run all tests in the current directory, you can run:
 
 ```shell
-go test -v ./...
+go test -v ./... -timeout=<timeout>m
 ```
+
+**Note:** The timeout is set to 10 minutes by default. Make sure to set a timeout that is long enough to complete the test.
 
 #### Environment Variables
 
-You can set the following environment variables to change the behavior of knuu:
+You can set the following environment variable to change the behavior of knuu:
 
 | Environment Variable | Description | Possible Values | Default |
 | --- | --- | --- | --- |
@@ -190,17 +86,14 @@ You can set the following environment variables to change the behavior of knuu:
 
 ---
 
+
 # E2E
 
 In the folder `e2e`, you will find some examples of how to use the [knuu](https://github.com/celestiaorg/knuu) Integration Test Framework.
 
 ## Setup
 
-1. Install [Docker](https://docs.docker.com/get-docker/).
-
-2. Set up access to a Kubernetes cluster using your `kubeconfig` and create the `test` namespace.
-
-> **Note:** The used namespace can be changed by setting the `KNUU_NAMESPACE` environment variable.
+Set up access to a Kubernetes cluster using your `kubeconfig` and create the `test` namespace.
 
 ## Write Tests
 
