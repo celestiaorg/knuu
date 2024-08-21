@@ -3,9 +3,8 @@ package system
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,12 +35,18 @@ type Suite struct {
 	Knuu     *knuu.Knuu
 	Executor e2e.Executor
 
-	wg sync.WaitGroup
+	cleanupMu     sync.Mutex
+	totalTests    atomic.Int32
+	finishedTests int32
 }
 
 var (
 	nginxVolume = resource.MustParse("1Gi")
 )
+
+func TestRunSuite(t *testing.T) {
+	suite.Run(t, new(Suite))
+}
 
 func (s *Suite) SetupSuite() {
 	var (
@@ -66,42 +71,32 @@ func (s *Suite) SetupSuite() {
 	s.Knuu.HandleStopSignal(ctx)
 
 	s.Executor.Kn = s.Knuu
-
-	// Since the SetupTest is called when the test is going to actually running i.e. `CONT`,
-	// which is called sometimes after some other tests are already finished,
-	// it calls the cleanup function prematurely; therefore, We need to count the number of
-	// all tests in advance and add them to the wait group.
-	// This way we can be sure that the teardown will be executed only after all tests are finished.
-	s.wg.Add(s.countTests())
 }
 
 // SetupTest is a test setup function that is called before each test is run.
 func (s *Suite) SetupTest() {
+	s.totalTests.Add(1)
 	s.T().Parallel()
 }
 
 // TearDownTest is a test teardown function that is called after each test is run.
 func (s *Suite) TearDownTest() {
-	s.wg.Done()
+	s.cleanupMu.Lock()
+	defer s.cleanupMu.Unlock()
+	s.finishedTests++
+
+	// if I am the last test to finish, I need to clean up the suite
+	if s.finishedTests == s.totalTests.Load() {
+		s.cleanupSuite()
+	}
 }
 
-func (s *Suite) TearDownSuite() {
-	// We have to use a goroutine because for some strange reasons the tests
-	// are waiting for this function to finish and therefore we are in a deadlock
-	go func() {
-		// we need to handle it because of the parallelism, the TearDownSuite() is called prematurely
-		s.wg.Wait()
-
-		s.T().Logf("Cleaning up knuu...")
-		if err := s.Knuu.CleanUp(context.Background()); err != nil {
-			s.T().Logf("Error cleaning up test suite: %v", err)
-		}
-		s.T().Logf("Knuu is cleaned up")
-	}()
-}
-
-func TestRunSuite(t *testing.T) {
-	suite.Run(t, new(Suite))
+func (s *Suite) cleanupSuite() {
+	s.T().Logf("Cleaning up knuu...")
+	if err := s.Knuu.CleanUp(context.Background()); err != nil {
+		s.T().Logf("Error cleaning up test suite: %v", err)
+	}
+	s.T().Logf("Knuu is cleaned up")
 }
 
 func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.Instance {
@@ -133,20 +128,4 @@ func (s *Suite) retryOperation(operation func() error, maxRetries int) error {
 		time.Sleep(time.Second * time.Duration(i+1))
 	}
 	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, err)
-}
-
-// A little bit of a hack to count the number of tests in the suite.
-// We need to know the number of tests in advance to be able to call the teardown function only after all tests are finished.
-func (s *Suite) countTests() int {
-	var (
-		methodFinder = reflect.TypeOf(s)
-		numOfTests   = 0
-	)
-	for i := 0; i < methodFinder.NumMethod(); i++ {
-		method := methodFinder.Method(i)
-		if strings.HasPrefix(method.Name, "Test") {
-			numOfTests++
-		}
-	}
-	return numOfTests
 }
