@@ -7,9 +7,7 @@ The `knuu` package is a powerful and flexible test framework designed to simplif
 - [Installation](#installation)
 - [Creating a `Knuu` Object](#creating-a-knuu-object)
 - [Handling Stop Signals](#handling-stop-signals)
-- [Managing Timeouts](#managing-timeouts)
 - [Cleaning Up Resources](#cleaning-up-resources)
-- [Code Examples](#code-examples)
 
 ## Installation
 
