@@ -84,23 +84,21 @@ func (s *Suite) SetupTest() {
 // TearDownTest is a test teardown function that is called after each test is run.
 func (s *Suite) TearDownTest() {
 	s.wg.Done()
-	s.wg.Wait() // let's wait for all tests to finish
+}
 
-	// The cleanup must be executed only once
-	s.knuuCleanupMu.Lock()
-	defer s.knuuCleanupMu.Unlock()
+func (s *Suite) TearDownSuite() {
+	// We have to use a goroutine because for some strange reasons the tests
+	// are waiting for this function to finish and therefore we are in a deadlock
+	go func() {
+		// we need to handle it because of the parallelism, the TearDownSuite() is called prematurely
+		s.wg.Wait()
 
-	// use knuu obj as a flag to avoid cleaning up knuu multiple times
-	if s.Knuu == nil {
-		return
-	}
-
-	s.T().Logf("Cleaning up knuu...")
-	if err := s.Knuu.CleanUp(context.Background()); err != nil {
-		s.T().Logf("Error cleaning up test suite: %v", err)
-	}
-	s.T().Logf("Knuu is cleaned up")
-	s.Knuu = nil
+		s.T().Logf("Cleaning up knuu...")
+		if err := s.Knuu.CleanUp(context.Background()); err != nil {
+			s.T().Logf("Error cleaning up test suite: %v", err)
+		}
+		s.T().Logf("Knuu is cleaned up")
+	}()
 }
 
 func TestRunSuite(t *testing.T) {
