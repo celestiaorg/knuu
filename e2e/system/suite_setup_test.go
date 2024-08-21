@@ -36,8 +36,7 @@ type Suite struct {
 	Knuu     *knuu.Knuu
 	Executor e2e.Executor
 
-	wg            sync.WaitGroup
-	knuuCleanupMu sync.Mutex
+	wg sync.WaitGroup
 }
 
 var (
