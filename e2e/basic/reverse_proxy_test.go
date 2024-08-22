@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -47,7 +48,7 @@ func (s *Suite) TestReverseProxyTMP() {
 	s.Assert().NotEmpty(out[0].Name)
 
 	// assert that the BitTwister running in a sidecar is accessible
-	s.Assert().NoError(btSidecar.SetBandwidthLimit(1000))
+	s.Assert().NoError(btSidecar.SetBandwidthLimit(1000_000_000))
 }
 
 func (s *Suite) TestReverseProxy() {
@@ -77,7 +78,7 @@ func (s *Suite) TestReverseProxy() {
 
 	// Just to be on the safe side so the proxy setting is ready to be used
 	// The best way is ot use the AddHostWithReadyCheck, but that is out of the scope of this test
-	time.Sleep(1 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	resp, err := http.Get(host)
 	s.Require().NoError(err)
@@ -88,6 +89,18 @@ func (s *Suite) TestReverseProxy() {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	s.Require().NoError(err)
 	s.Assert().Contains(string(bodyBytes), "Welcome to nginx!")
+
+	// Perform a POST request
+	postBody := `{"key": "value"}`
+	resp, err = http.Post(host, "application/json", bytes.NewBuffer([]byte(postBody)))
+	s.Require().NoError(err)
+
+	defer resp.Body.Close()
+	s.Assert().Equal(http.StatusOK, resp.StatusCode)
+
+	bodyBytes, err = io.ReadAll(resp.Body)
+	s.Require().NoError(err)
+	s.Assert().Contains(string(bodyBytes), "expected response content")
 }
 
 func (s *Suite) TestAddHostWithReadyCheck() {
