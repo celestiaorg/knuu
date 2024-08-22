@@ -117,6 +117,9 @@ func (s *Suite) TestAddHostWithReadyCheck() {
 	// checkFunc verifies the proxy is serving the nginx page
 	checkFunc := func(host string) (bool, error) {
 		resp, err := http.Get(host)
+		fmt.Printf("\n\nresp.StatusCode: %v\n", resp.StatusCode)
+		fmt.Printf("resp: %v\n", resp)
+		fmt.Printf("err: %v\n\n", err)
 		if err != nil {
 			return false, err
 		}
