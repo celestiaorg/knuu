@@ -13,6 +13,34 @@ import (
 
 // TestOneVolumeNoFiles tests the scenario where we have one volume and no files.
 // the initContainer command that it generates looks like:
+// no initContainer command, as there is no volumes, nor files.
+func (s *Suite) TestNoVolumesNoFiles() {
+	const namePrefix = "no-volumes-no-files"
+	// Setup
+
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
+
+	target := s.createNginxInstance(ctx, namePrefix+"-target")
+	s.Require().NoError(target.Build().Commit(ctx))
+
+	// Test logic
+	s.Require().NoError(target.Execution().StartAsync(ctx))
+
+	webIP, err := target.Network().GetIP(ctx)
+	s.Require().NoError(err)
+
+	s.Require().NoError(target.Execution().WaitInstanceIsRunning(ctx))
+
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	s.Require().NoError(err)
+
+	s.Assert().Contains(wget, "Welcome to nginx!")
+}
+
+// TestOneVolumeNoFiles tests the scenario where we have one volume and no files.
+// the initContainer command that it generates looks like:
 // mkdir -p /knuu && if [ -d /opt/vol1 ] && [ \"$(ls -A /opt/vol1)\" ]; then cp -r /opt/vol1/* /knuu//opt/vol1 && chown -R 0:0 /knuu/* ;fi
 func (s *Suite) TestOneVolumeNoFiles() {
 	const namePrefix = "one-volume-no-files"
