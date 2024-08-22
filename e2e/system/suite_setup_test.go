@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	testTimeout = time.Minute * 15 // the same time that is used in the ci/cd pipeline
+
 	nginxImage       = "docker.io/nginx:latest"
 	nginxVolumeOwner = 0
 	nginxPort        = 80
@@ -64,6 +66,7 @@ func (s *Suite) SetupSuite() {
 		ProxyEnabled: true,
 		K8sClient:    k8sClient,
 		MinioClient:  minioClient, // needed for build from git tests
+		Timeout:      testTimeout,
 	})
 	s.Require().NoError(err)
 

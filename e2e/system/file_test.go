@@ -21,9 +21,7 @@ func (s *Suite) TestFile() {
 
 	s.T().Log("Creating executor instance")
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
-	if err != nil {
-		s.Require().NoError(err, "Error creating executor instance")
-	}
+	s.Require().NoError(err)
 
 	s.T().Log("Creating nginx instance with volume")
 	serverfile := s.createNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
