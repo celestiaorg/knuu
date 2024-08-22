@@ -1,67 +1,43 @@
 package basic
 
 import (
-	"testing"
+	"context"
+	"strings"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/rbac/v1"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestRBAC(t *testing.T) {
-	t.Parallel()
-	// Setup
+const (
+	kubectlImage = "docker.io/bitnami/kubectl:latest"
+)
 
-	instance, err := knuu.NewInstance("kubectl")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = instance.SetImage("docker.io/bitnami/kubectl:latest")
-	if err != nil {
-		t.Fatalf("Error setting image: %v", err)
-	}
-	err = instance.SetStartCommand("sleep", "infinity")
-	if err != nil {
-		t.Fatalf("Error setting command: %v", err)
-	}
-	err = instance.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+func (s *Suite) TestRBAC() {
+	const namePrefix = "rbac"
+	ctx := context.Background()
+
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
+	s.Require().NoError(target.Build().SetImage(ctx, kubectlImage))
+	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
+	s.Require().NoError(target.Build().Commit(ctx))
+
 	policyRule := v1.PolicyRule{
 		Verbs:     []string{"get", "list", "watch"},
 		APIGroups: []string{""},
 		Resources: []string{"pods"},
 	}
-	err = instance.AddPolicyRule(policyRule)
-	if err != nil {
-		t.Fatalf("Error adding policy rule: %v", err)
-	}
-
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(instance))
-	})
+	s.Require().NoError(target.Security().AddPolicyRule(policyRule))
 
 	// Test logic
 
-	err = instance.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = instance.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
-	_, err = instance.ExecuteCommand("kubectl", "get", "pods")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-	exitCode, err := instance.ExecuteCommand("echo", "$?")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
+	s.Require().NoError(target.Execution().Start(ctx))
 
-	assert.Equal(t, "0\n", exitCode)
+	_, err = target.Execution().ExecuteCommand(ctx, "kubectl", "get", "pods")
+	s.Require().NoError(err)
+
+	exitCode, err := target.Execution().ExecuteCommand(ctx, "echo", "$?")
+	s.Require().NoError(err)
+
+	exitCode = strings.TrimSpace(exitCode)
+	s.Assert().Equal("0", exitCode)
 }

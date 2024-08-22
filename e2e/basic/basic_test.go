@@ -7,31 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	testImage = "alpine:latest"
-)
-
-func (ts *TestSuite) TestBasic() {
-	ts.T().Parallel()
-	// Setup
-
+func (s *Suite) TestBasic() {
+	const namePrefix = "basic"
 	ctx := context.Background()
 
-	target, err := ts.Knuu.NewInstance("alpine")
-	ts.Require().NoError(err)
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
 
-	ts.Require().NoError(target.Build().SetImage(ctx, testImage))
-	ts.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
-	ts.Require().NoError(target.Build().Commit(ctx))
-
-	ts.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			ts.T().Logf("error destroying instance: %v", err)
-		}
-	})
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
+	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
+	s.Require().NoError(target.Build().Commit(ctx))
 
 	// Test Logic
-	ts.Require().NoError(target.Execution().Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	// Perform the test
 	tt := []struct {
@@ -42,12 +30,12 @@ func (ts *TestSuite) TestBasic() {
 
 	for _, tc := range tt {
 		tc := tc
-		ts.Run(tc.name, func() {
+		s.Run(tc.name, func() {
 			output, err := target.Execution().ExecuteCommand(ctx, "echo", tc.name)
-			ts.Require().NoError(err)
+			s.Require().NoError(err)
 
 			output = strings.TrimSpace(output)
-			assert.Contains(ts.T(), output, tc.name)
+			assert.Contains(s.T(), output, tc.name)
 		})
 	}
 }

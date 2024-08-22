@@ -3,15 +3,10 @@ package basic
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"os"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/celestiaorg/knuu/pkg/sidecars/observability"
 )
 
@@ -21,26 +16,27 @@ const (
 	prometheusConfig = "/etc/prometheus/prometheus.yml"
 	prometheusArgs   = "--config.file=/etc/prometheus/prometheus.yml"
 
-	targetImage = "curlimages/curl:latest"
-	otlpPort    = observability.DefaultOtelOtlpPort
+	curlImage = "curlimages/curl:latest"
+	otlpPort  = observability.DefaultOtelOtlpPort
 )
 
 // TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
-func TestObservabilityCollector(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestObservabilityCollector() {
+	const namePrefix = "observability"
+	ctx := context.Background()
 
 	// Setup Prometheus
-	prometheus, err := knuu.NewInstance("prometheus")
-	require.NoError(t, err)
+	prometheus, err := s.Knuu.NewInstance(namePrefix + "-prometheus")
+	s.Require().NoError(err)
 
-	require.NoError(t, prometheus.SetImage(prometheusImage))
-	require.NoError(t, prometheus.AddPortTCP(prometheusPort))
+	s.Require().NoError(prometheus.Build().SetImage(ctx, prometheusImage))
+	s.Require().NoError(prometheus.Network().AddPortTCP(prometheusPort))
 
 	// enable proxy for this port
-	err, prometheusEndpoint := prometheus.AddHost(prometheusPort)
-	require.NoError(t, err)
+	prometheusEndpoint, err := prometheus.Network().AddHost(ctx, prometheusPort)
+	s.Require().NoError(err)
 
-	require.NoError(t, prometheus.Commit())
+	s.Require().NoError(prometheus.Build().Commit(ctx))
 
 	// Add Prometheus config file
 	prometheusConfigContent := fmt.Sprintf(`
@@ -51,51 +47,34 @@ scrape_configs:
     static_configs:
       - targets: ['otel-collector:%d']
 `, otlpPort)
-	require.NoError(t, prometheus.AddFileBytes([]byte(prometheusConfigContent), prometheusConfig, "0:0"))
+	s.Require().NoError(prometheus.Storage().AddFileBytes([]byte(prometheusConfigContent), prometheusConfig, "0:0"))
 
-	require.NoError(t, prometheus.SetArgs(prometheusArgs))
-	require.NoError(t, prometheus.Start())
+	s.Require().NoError(prometheus.Build().SetArgs(prometheusArgs))
+	s.Require().NoError(prometheus.Execution().Start(ctx))
 
 	// Setup observabilitySidecar collector
 	observabilitySidecar := observability.New()
 
-	require.NoError(t, observabilitySidecar.SetOtelEndpoint(4318))
-
-	err = observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", knuu.Scope()), "10s")
-	require.NoError(t, err)
-
-	require.NoError(t, observabilitySidecar.SetJaegerEndpoint(14250, 6831, 14268))
-
-	require.NoError(t, observabilitySidecar.SetOtlpExporter("prometheus:9090", "", ""))
+	s.Require().NoError(observabilitySidecar.SetOtelEndpoint(4318))
+	s.Require().NoError(observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", s.Knuu.Scope), "10s"))
+	s.Require().NoError(observabilitySidecar.SetJaegerEndpoint(14250, 6831, 14268))
+	s.Require().NoError(observabilitySidecar.SetOtlpExporter("prometheus:9090", "", ""))
 
 	// Create and start a target pod and configure it to use the obsySidecar to push metrics
-	target, err := knuu.NewInstance("target")
-	require.NoError(t, err, "Error creating target instance")
+	target, err := s.Knuu.NewInstance(namePrefix + "target")
+	s.Require().NoError(err)
 
-	err = target.SetImage(targetImage)
-	require.NoError(t, err, "Error setting target image")
+	s.Require().NoError(target.Build().SetImage(ctx, curlImage))
 
-	err = target.SetStartCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
-	require.NoError(t, err, "Error setting target command")
+	err = target.Build().SetStartCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
+	s.Require().NoError(err)
 
-	require.NoError(t, target.AddSidecar(context.Background(), observabilitySidecar))
-
-	require.NoError(t, target.Commit(), "Error committing target instance")
-
-	require.NoError(t, target.Start(), "Error starting target instance")
-
-	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-		err := knuu.BatchDestroy(prometheus, target)
-		if err != nil {
-			t.Log("Error destroying instances: ", err)
-		}
-	})
+	s.Require().NoError(target.Sidecars().Add(ctx, observabilitySidecar))
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	// Wait for the target pod to push data to the otel collector
+	s.T().Log("Waiting one minute for the target pod to push data to the otel collector")
 	time.Sleep(1 * time.Minute)
 
 	// Verify that data has been pushed to Prometheus
@@ -105,16 +84,16 @@ scrape_configs:
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", prometheusURL, nil)
-	require.NoError(t, err)
+	s.Require().NoError(err)
 
 	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	require.Equal(t, 200, resp.StatusCode, "Prometheus API is not accessible")
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, resp.StatusCode, "Prometheus API is not accessible")
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "otel-collector", "otel-collector data source not found in Prometheus")
+	body, err := io.ReadAll(resp.Body)
+	s.Require().NoError(err)
+	s.Require().Contains(string(body), "otel-collector", "otel-collector data source not found in Prometheus")
 
-	t.Log("otel-collector data source is available in Prometheus")
+	s.T().Log("otel-collector data source is available in Prometheus")
 }
