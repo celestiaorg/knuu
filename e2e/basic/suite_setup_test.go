@@ -7,15 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
-	"github.com/celestiaorg/knuu/pkg/minio"
 )
 
 const (
@@ -52,21 +49,22 @@ func TestRunSuite(t *testing.T) {
 
 func (s *Suite) SetupSuite() {
 	var (
-		ctx    = context.Background()
-		logger = logrus.New()
+		ctx = context.Background()
+		// logger = logrus.New()
+		err error
 	)
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
-	s.Require().NoError(err)
+	// k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
+	// s.Require().NoError(err)
 
-	minioClient, err := minio.New(ctx, k8sClient, logger)
-	s.Require().NoError(err)
+	// minioClient, err := minio.New(ctx, k8sClient, logger)
+	// s.Require().NoError(err)
 
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
 		ProxyEnabled: true,
-		K8sClient:    k8sClient,
-		MinioClient:  minioClient,
-		Timeout:      testTimeout,
+		// K8sClient:    k8sClient,
+		// MinioClient:  minioClient,
+		// Timeout:      testTimeout,
 	})
 	s.Require().NoError(err)
 
