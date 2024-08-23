@@ -69,7 +69,7 @@ scrape_configs:
 
 	s.Require().NoError(target.Build().SetImage(ctx, curlImage))
 
-	err = target.Build().SetStartCommand(targetStartCommand)
+	err = target.Build().SetStartCommand("sh", "-c", targetStartCommand)
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Sidecars().Add(ctx, observabilitySidecar))
