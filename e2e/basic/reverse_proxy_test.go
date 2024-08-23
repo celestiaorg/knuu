@@ -2,6 +2,7 @@ package basic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,6 +118,10 @@ func (s *Suite) TestAddHostWithReadyCheck() {
 		fmt.Printf("\n\nresp: %v\n\terr: %v\n", resp, err)
 		if resp != nil {
 			fmt.Printf("\tresp.StatusCode: %v\n", resp.StatusCode)
+		}
+		if errors.Is(err, io.EOF) {
+			fmt.Printf("\n\nerr is io.EOF\n")
+			return false, nil
 		}
 		if err != nil {
 			return false, err
