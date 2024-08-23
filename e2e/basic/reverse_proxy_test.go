@@ -3,7 +3,6 @@ package basic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -15,7 +14,7 @@ import (
 // TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
 // It mainly tests the ability to reach to a service running in a sidecar like netshaper (BitTwister).
 // It calls an endpoint of the service and checks if the response is as expected.
-func (s *Suite) TestReverseProxyTMP() {
+func (s *Suite) TestReverseProxy() {
 	const namePrefix = "reverse-proxy"
 	ctx := context.Background()
 
@@ -33,14 +32,9 @@ func (s *Suite) TestReverseProxyTMP() {
 
 	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	// // assert that the BitTwister running in a sidecar is accessible
-	// s.Assert().NoError(btSidecar.SetBandwidthLimit(1000))
-
 	// Check if the BitTwister service is set
 	out, err := btSidecar.AllServicesStatus()
 	s.Require().NoError(err)
-
-	fmt.Printf("\n\t\tout: %+v\n", out)
 
 	s.Assert().GreaterOrEqual(len(out), 1)
 	s.Assert().NotEmpty(out[0].Name)
@@ -48,58 +42,6 @@ func (s *Suite) TestReverseProxyTMP() {
 	// assert that the BitTwister running in a sidecar is accessible
 	s.Assert().NoError(btSidecar.SetBandwidthLimit(4_000_000))
 }
-
-// func (s *Suite) TestReverseProxy() {
-// 	const namePrefix = "reverse-proxy"
-// 	ctx := context.Background()
-
-// 	target := s.createNginxInstance(ctx, namePrefix+"-target")
-
-// 	// Make sure it is ready when we want to test the proxy
-// 	livenessProbe := v1.Probe{
-// 		ProbeHandler: v1.ProbeHandler{
-// 			HTTPGet: &v1.HTTPGetAction{
-// 				Path: "/",
-// 				Port: intstr.IntOrString{Type: intstr.Int, IntVal: nginxPort},
-// 			},
-// 		},
-// 		InitialDelaySeconds: 10,
-// 	}
-// 	s.Require().NoError(target.Monitoring().SetLivenessProbe(&livenessProbe))
-
-// 	s.Require().NoError(target.Build().Commit(ctx))
-// 	s.Require().NoError(target.Execution().Start(ctx))
-
-// 	host, err := target.Network().AddHost(ctx, nginxPort)
-// 	s.Require().NoError(err)
-// 	s.Assert().NotEmpty(host)
-
-// 	// Just to be on the safe side so the proxy setting is ready to be used
-// 	// The best way is ot use the AddHostWithReadyCheck, but that is out of the scope of this test
-// 	time.Sleep(10 * time.Second)
-
-// 	resp, err := http.Get(host)
-// 	s.Require().NoError(err)
-
-// 	defer resp.Body.Close()
-// 	s.Assert().Equal(http.StatusOK, resp.StatusCode)
-
-// 	bodyBytes, err := io.ReadAll(resp.Body)
-// 	s.Require().NoError(err)
-// 	s.Assert().Contains(string(bodyBytes), "Welcome to nginx!")
-
-// 	// Perform a POST request
-// 	postBody := `{"key": "value"}`
-// 	resp, err = http.Post(host, "application/json", bytes.NewBuffer([]byte(postBody)))
-// 	s.Require().NoError(err)
-
-// 	defer resp.Body.Close()
-// 	s.Assert().Equal(http.StatusOK, resp.StatusCode)
-
-// 	bodyBytes, err = io.ReadAll(resp.Body)
-// 	s.Require().NoError(err)
-// 	s.Assert().Contains(string(bodyBytes), "expected response content")
-// }
 
 func (s *Suite) TestAddHostWithReadyCheck() {
 	const namePrefix = "add-host-with-ready-check"
@@ -115,15 +57,10 @@ func (s *Suite) TestAddHostWithReadyCheck() {
 	// checkFunc verifies the proxy is serving the nginx page
 	checkFunc := func(host string) (bool, error) {
 		resp, err := http.Get(host)
-		fmt.Printf("\n\nresp: %v\n\terr: %v\n", resp, err)
-		if resp != nil {
-			fmt.Printf("\tresp.StatusCode: %v\n", resp.StatusCode)
-		}
-		if errors.Is(err, io.EOF) {
-			fmt.Printf("\n\nerr is io.EOF\n")
-			return false, nil
-		}
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return false, nil
+			}
 			return false, err
 		}
 		defer resp.Body.Close()
