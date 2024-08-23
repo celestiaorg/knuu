@@ -22,7 +22,10 @@ const (
 
 // TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
 func (s *Suite) TestObservabilityCollector() {
-	const namePrefix = "observability"
+	const (
+		namePrefix         = "observability"
+		targetStartCommand = "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done"
+	)
 	ctx := context.Background()
 
 	// Setup Prometheus
@@ -66,7 +69,7 @@ scrape_configs:
 
 	s.Require().NoError(target.Build().SetImage(ctx, curlImage))
 
-	err = target.Build().SetStartCommand("sh", "-c", "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done")
+	err = target.Build().SetStartCommand(targetStartCommand)
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Sidecars().Add(ctx, observabilitySidecar))
