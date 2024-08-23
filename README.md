@@ -64,7 +64,7 @@ And some more real-world examples can be found in the following repositories:
 
 ### Running Tests
 
-You can use the built-in `go test` command to run the tests.
+Depending on how you write your tests, you can use the built-in `go test` command to run the tests.
 
 To run all tests in the current directory, you can run:
 
@@ -72,7 +72,8 @@ To run all tests in the current directory, you can run:
 go test -v ./... -timeout=<timeout>m
 ```
 
-**Note:** The timeout is set to 10 minutes by default. Make sure to set a timeout that is long enough to complete the test.
+**Note 1:** The timeout is set to 10 minutes by default. Make sure to set a timeout that is long enough to complete the test.
+**Note 2:** Please note that the timeout flag in the example is the go test timeout and not related to the knuu timeout.
 
 #### Environment Variables
 

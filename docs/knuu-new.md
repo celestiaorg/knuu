@@ -54,7 +54,7 @@ func main() {
 
     options := knuu.Options{
         Scope:        "example-scope",
-        Timeout:      30 * time.Minute,
+        Timeout:      30 * time.Minute,   // This is an internal timeout for the knuu object to clean up the resources if the program exits unexpectedly
         Logger:       logrus.New().WithLevel(logrus.ErrorLevel),
     }
 
@@ -72,11 +72,13 @@ func main() {
     }()
 
 
-    sampleInstance, err := kn.NewInstance("alpine")
+    sampleInstance, err := kn.NewInstance("my-builder-instance")
     if err != nil {
         log.Fatalf("Failed to create instance: %v", err)
     }
 
+    // When using a git repo as the builder, the repo is cloned to the builder container and the build is done inside the container
+    // It is expected to have a Dockerfile in the root of the repo
     err = sampleInstance.Build().SetGitRepo(ctx, builder.GitContext{
 		Repo:     "https://github.com/<sample-repo>.git",
 		Branch:   "<desired-branch>",
@@ -88,7 +90,7 @@ func main() {
     }
 
     // optionally can set image directly instead of building from git repo
-    // err = sampleInstance.Build().SetImage(ctx, "docker.io/alpine:latest")
+    // err = sampleInstance.Build().SetImage(ctx, "docker.io/<example-image>:<tag>")
     // if err != nil {
     //     log.Fatalf("Failed to set image: %v", err)
     // }
@@ -116,7 +118,7 @@ func main() {
     }
 
     // Adding file after commit will add it to the deployment of the instance
-    // Therefore the is no image rebuilt, however the file must be very small (config maps are used)
+    // Therefore the is no image rebuilt, however the file must be very small (config maps are used, so a few KBs are fine)
     // and should not be used to transport large files otherwise the deployment will fail
     err = sampleInstance.Storage().AddFile("<source-path>", "<destination-path>", "<permissions>")
     if err != nil {
