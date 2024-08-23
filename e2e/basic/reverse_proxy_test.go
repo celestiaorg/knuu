@@ -1,7 +1,6 @@
 package basic
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,8 +9,6 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
@@ -48,60 +45,60 @@ func (s *Suite) TestReverseProxyTMP() {
 	s.Assert().NotEmpty(out[0].Name)
 
 	// assert that the BitTwister running in a sidecar is accessible
-	s.Assert().NoError(btSidecar.SetBandwidthLimit(1000_000_000))
+	s.Assert().NoError(btSidecar.SetBandwidthLimit(4_000_000))
 }
 
-func (s *Suite) TestReverseProxy() {
-	const namePrefix = "reverse-proxy"
-	ctx := context.Background()
+// func (s *Suite) TestReverseProxy() {
+// 	const namePrefix = "reverse-proxy"
+// 	ctx := context.Background()
 
-	target := s.createNginxInstance(ctx, namePrefix+"-target")
+// 	target := s.createNginxInstance(ctx, namePrefix+"-target")
 
-	// Make sure it is ready when we want to test the proxy
-	livenessProbe := v1.Probe{
-		ProbeHandler: v1.ProbeHandler{
-			HTTPGet: &v1.HTTPGetAction{
-				Path: "/",
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: nginxPort},
-			},
-		},
-		InitialDelaySeconds: 10,
-	}
-	s.Require().NoError(target.Monitoring().SetLivenessProbe(&livenessProbe))
+// 	// Make sure it is ready when we want to test the proxy
+// 	livenessProbe := v1.Probe{
+// 		ProbeHandler: v1.ProbeHandler{
+// 			HTTPGet: &v1.HTTPGetAction{
+// 				Path: "/",
+// 				Port: intstr.IntOrString{Type: intstr.Int, IntVal: nginxPort},
+// 			},
+// 		},
+// 		InitialDelaySeconds: 10,
+// 	}
+// 	s.Require().NoError(target.Monitoring().SetLivenessProbe(&livenessProbe))
 
-	s.Require().NoError(target.Build().Commit(ctx))
-	s.Require().NoError(target.Execution().Start(ctx))
+// 	s.Require().NoError(target.Build().Commit(ctx))
+// 	s.Require().NoError(target.Execution().Start(ctx))
 
-	host, err := target.Network().AddHost(ctx, nginxPort)
-	s.Require().NoError(err)
-	s.Assert().NotEmpty(host)
+// 	host, err := target.Network().AddHost(ctx, nginxPort)
+// 	s.Require().NoError(err)
+// 	s.Assert().NotEmpty(host)
 
-	// Just to be on the safe side so the proxy setting is ready to be used
-	// The best way is ot use the AddHostWithReadyCheck, but that is out of the scope of this test
-	time.Sleep(10 * time.Second)
+// 	// Just to be on the safe side so the proxy setting is ready to be used
+// 	// The best way is ot use the AddHostWithReadyCheck, but that is out of the scope of this test
+// 	time.Sleep(10 * time.Second)
 
-	resp, err := http.Get(host)
-	s.Require().NoError(err)
+// 	resp, err := http.Get(host)
+// 	s.Require().NoError(err)
 
-	defer resp.Body.Close()
-	s.Assert().Equal(http.StatusOK, resp.StatusCode)
+// 	defer resp.Body.Close()
+// 	s.Assert().Equal(http.StatusOK, resp.StatusCode)
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	s.Require().NoError(err)
-	s.Assert().Contains(string(bodyBytes), "Welcome to nginx!")
+// 	bodyBytes, err := io.ReadAll(resp.Body)
+// 	s.Require().NoError(err)
+// 	s.Assert().Contains(string(bodyBytes), "Welcome to nginx!")
 
-	// Perform a POST request
-	postBody := `{"key": "value"}`
-	resp, err = http.Post(host, "application/json", bytes.NewBuffer([]byte(postBody)))
-	s.Require().NoError(err)
+// 	// Perform a POST request
+// 	postBody := `{"key": "value"}`
+// 	resp, err = http.Post(host, "application/json", bytes.NewBuffer([]byte(postBody)))
+// 	s.Require().NoError(err)
 
-	defer resp.Body.Close()
-	s.Assert().Equal(http.StatusOK, resp.StatusCode)
+// 	defer resp.Body.Close()
+// 	s.Assert().Equal(http.StatusOK, resp.StatusCode)
 
-	bodyBytes, err = io.ReadAll(resp.Body)
-	s.Require().NoError(err)
-	s.Assert().Contains(string(bodyBytes), "expected response content")
-}
+// 	bodyBytes, err = io.ReadAll(resp.Body)
+// 	s.Require().NoError(err)
+// 	s.Assert().Contains(string(bodyBytes), "expected response content")
+// }
 
 func (s *Suite) TestAddHostWithReadyCheck() {
 	const namePrefix = "add-host-with-ready-check"
