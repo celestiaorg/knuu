@@ -21,6 +21,9 @@ type ReplicaSetConfig struct {
 
 // CreateReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
 func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateReplicaSetConfig(rsConfig); err != nil {
 		return nil, err
 	}
@@ -117,6 +120,9 @@ func (c *Client) GetFirstPodFromReplicaSet(ctx context.Context, name string) (*v
 }
 
 func (c *Client) getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.AppsV1().ReplicaSets(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 

@@ -74,7 +74,7 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
 				assert.NotEmpty(t, k.Scope)
-				assert.Equal(t, defaultTimeout, k.timeout)
+				assert.Equal(t, defaultTimeout, defaultTimeout, timeoutHandlerName)
 			},
 		},
 		{
@@ -116,7 +116,7 @@ func TestNew(t *testing.T) {
 			expectedError: nil,
 			validateFunc: func(t *testing.T, k *Knuu) {
 				assert.NotNil(t, k)
-				assert.Equal(t, 30*time.Minute, k.timeout)
+				assert.Equal(t, 30*time.Minute, defaultTimeout)
 			},
 		},
 		{

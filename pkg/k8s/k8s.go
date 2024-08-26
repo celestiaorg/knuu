@@ -37,6 +37,7 @@ type Client struct {
 	dynamicClient   dynamic.Interface
 	namespace       string
 	logger          *logrus.Logger
+	terminated      bool // This flag is used to indicate that the process has been terminated by the user
 }
 
 var _ KubeManager = &Client{}
@@ -78,12 +79,17 @@ func NewClientCustom(
 		dynamicClient:   dC,
 		namespace:       namespace,
 		logger:          logger,
+		terminated:      false,
 	}
 	kc.namespace = SanitizeName(namespace)
 	if err := kc.CreateNamespace(ctx, kc.namespace); err != nil {
 		return nil, ErrCreatingNamespace.WithParams(kc.namespace).Wrap(err)
 	}
 	return kc, nil
+}
+
+func (c *Client) Terminate() {
+	c.terminated = true
 }
 
 func (c *Client) Clientset() kubernetes.Interface {

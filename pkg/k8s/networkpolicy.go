@@ -14,6 +14,9 @@ func (c *Client) CreateNetworkPolicy(
 	ingressSelectorMap,
 	egressSelectorMap map[string]string,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateNetworkPolicyName(name); err != nil {
 		return err
 	}

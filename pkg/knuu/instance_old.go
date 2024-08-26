@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -58,7 +59,7 @@ func (i *Instance) SetImage(image string) error {
 	if tmpKnuu == nil {
 		return errors.New("tmpKnuu is not initialized")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), tmpKnuu.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 	return i.Instance.Build().SetImage(ctx, image)
 }

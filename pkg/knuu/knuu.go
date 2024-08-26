@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,12 +30,16 @@ const (
 	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
 	timeoutHandlerImage = "docker.io/bitnami/kubectl:latest"
 
+	timeoutHandlerNameStop = timeoutHandlerName + "-stop"
+	timeoutHandlerTimeout  = 1 * time.Second
+	ExitCodeSIGINT         = 130
+
 	TimeFormat = "20060102T150405Z"
 )
 
 type Knuu struct {
 	system.SystemDependencies
-	timeout time.Duration
+	stopMu sync.Mutex
 }
 
 type Options struct {
@@ -61,11 +66,17 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			Scope:        opts.Scope,
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
-		timeout: opts.Timeout,
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
 		return nil, err
+	}
+
+	if opts.Timeout == 0 {
+		opts.Timeout = defaultTimeout
+	}
+	if err := k.handleTimeout(ctx, opts.Timeout, timeoutHandlerName); err != nil {
+		return nil, ErrHandleTimeout.Wrap(err)
 	}
 
 	if opts.ProxyEnabled {
@@ -87,14 +98,20 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	go func() {
 		<-stop
 		k.Logger.Info("Received signal to stop, cleaning up resources...")
-		if err := k.CleanUp(ctx); err != nil {
-			k.Logger.Errorf("Error deleting namespace: %v", err)
+		// Lock the stop mutex to prevent multiple stop signals from being processed concurrently
+		k.stopMu.Lock()
+		defer k.stopMu.Unlock()
+		err := k.handleTimeout(ctx, timeoutHandlerTimeout, timeoutHandlerNameStop)
+		if err != nil {
+			k.Logger.Errorf("Error cleaning up resources with timeout handler: %v", err)
 		}
+		k.K8sClient.Terminate()
+		os.Exit(ExitCodeSIGINT)
 	}()
 }
 
 // handleTimeout creates a timeout handler that will delete all resources with the scope after the timeout
-func (k *Knuu) handleTimeout(ctx context.Context) error {
+func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeoutHandlerName string) error {
 	inst, err := k.NewInstance(timeoutHandlerName)
 	if err != nil {
 		return ErrCannotCreateInstance.Wrap(err)
@@ -112,7 +129,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 
 	// Wait for a specific period before executing the next operation.
 	// This is useful to ensure that any previous operation has time to complete.
-	commands = append(commands, fmt.Sprintf("sleep %d", int64(k.timeout.Seconds())))
+	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands,
@@ -184,20 +201,12 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 	}
 	k.Scope = k8s.SanitizeName(k.Scope)
 
-	if k.timeout == 0 {
-		k.timeout = defaultTimeout
-	}
-
 	if k.K8sClient == nil {
 		var err error
 		k.K8sClient, err = k8s.NewClient(ctx, k.Scope, k.Logger)
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}
-	}
-
-	if err := k.handleTimeout(ctx); err != nil {
-		return ErrHandleTimeout.Wrap(err)
 	}
 
 	if k.ImageBuilder == nil {

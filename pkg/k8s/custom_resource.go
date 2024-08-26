@@ -17,6 +17,9 @@ func (c *Client) CreateCustomResource(
 	gvr *schema.GroupVersionResource,
 	obj *map[string]interface{},
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateCustomResourceName(name); err != nil {
 		return err
 	}

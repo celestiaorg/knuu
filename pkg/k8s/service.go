@@ -13,6 +13,9 @@ import (
 )
 
 func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
@@ -24,6 +27,9 @@ func (c *Client) CreateService(
 	portsTCP,
 	portsUDP []int,
 ) (*v1.Service, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateServiceName(name); err != nil {
 		return nil, err
 	}
@@ -57,6 +63,9 @@ func (c *Client) PatchService(
 	portsTCP,
 	portsUDP []int,
 ) (*v1.Service, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateServiceName(name); err != nil {
 		return nil, err
 	}

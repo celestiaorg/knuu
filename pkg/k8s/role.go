@@ -14,6 +14,9 @@ func (c *Client) CreateRole(
 	labels map[string]string,
 	policyRules []rbacv1.PolicyRule,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateRoleName(name); err != nil {
 		return err
 	}
@@ -47,6 +50,9 @@ func (c *Client) CreateClusterRole(
 	labels map[string]string,
 	policyRules []rbacv1.PolicyRule,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateClusterRoleName(name); err != nil {
 		return err
 	}
