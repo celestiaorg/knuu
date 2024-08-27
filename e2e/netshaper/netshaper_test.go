@@ -19,17 +19,15 @@ const (
 )
 
 func (s *Suite) TestNetShaperBandwidth() {
-	s.T().Parallel()
-	// Setup
-
 	const (
+		namePrefix           = "ntshp-bw"
 		iperfTestDuration    = 45 * time.Second
 		iperfParallelClients = 4
 		iperfPort            = 5201
 	)
 	ctx := context.Background()
 
-	iperfMother, err := s.Knuu.NewInstance("iperf")
+	iperfMother, err := s.Knuu.NewInstance(namePrefix + "iperf")
 	s.Require().NoError(err)
 
 	s.Require().NoError(iperfMother.Build().SetImage(ctx, iperfImage))
@@ -37,10 +35,10 @@ func (s *Suite) TestNetShaperBandwidth() {
 	s.Require().NoError(iperfMother.Network().AddPortTCP(iperfPort))
 	s.Require().NoError(iperfMother.Build().Commit(ctx))
 
-	iperfServer, err := iperfMother.CloneWithName("iperf-server")
+	iperfServer, err := iperfMother.CloneWithName(namePrefix + "iperf-server")
 	s.Require().NoError(err)
 
-	iperfClient, err := iperfMother.CloneWithName("iperf-client")
+	iperfClient, err := iperfMother.CloneWithName(namePrefix + "iperf-client")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
@@ -116,17 +114,15 @@ func (s *Suite) TestNetShaperBandwidth() {
 }
 
 func (s *Suite) TestNetShaperPacketloss() {
-	s.T().Parallel()
-	// Setup
-
 	const (
+		namePrefix       = "ntshp-pl"
 		numOfPingPackets = 100
 		packetTimeout    = 1 * time.Second
 		gopingPort       = 8001
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
 	err = mother.Build().SetImage(ctx, gopingImage)
@@ -138,13 +134,13 @@ func (s *Suite) TestNetShaperPacketloss() {
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
 	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName(namePrefix + "executor")
 	s.Require().NoError(err)
 
 	// Prepare ping executor & target
@@ -211,17 +207,15 @@ func (s *Suite) TestNetShaperPacketloss() {
 }
 
 func (s *Suite) TestNetShaperLatency() {
-	s.T().Parallel()
-	// Setup
-
 	const (
+		namePrefix       = "ntshp-lat"
 		numOfPingPackets = 100
 		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
 	err = mother.Build().SetImage(ctx, gopingImage)
@@ -233,13 +227,13 @@ func (s *Suite) TestNetShaperLatency() {
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
 	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName(namePrefix + "executor")
 	s.Require().NoError(err)
 
 	// Prepare ping executor & target
@@ -313,17 +307,15 @@ func (s *Suite) TestNetShaperLatency() {
 	}
 }
 func (s *Suite) TestNetShaperJitter() {
-	s.T().Parallel()
-	// Setup
-
 	const (
+		namePrefix       = "ntshp-jit"
 		numOfPingPackets = 100
 		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
 	err = mother.Build().SetImage(ctx, gopingImage)
@@ -335,13 +327,13 @@ func (s *Suite) TestNetShaperJitter() {
 	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
 	btSidecar := netshaper.New()
 	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	executor, err := mother.CloneWithName("executor")
+	executor, err := mother.CloneWithName(namePrefix + "executor")
 	s.Require().NoError(err)
 
 	// Prepare ping executor & target
