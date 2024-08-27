@@ -15,8 +15,6 @@ func (s *Suite) TestEnvToJSON() {
 		numberOfInstances = 2
 	)
 
-	s.T().Parallel()
-
 	// Setup
 	ctx := context.Background()
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
@@ -60,14 +58,6 @@ func (s *Suite) TestEnvToJSON() {
 
 		instances[i] = ins
 	}
-
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {

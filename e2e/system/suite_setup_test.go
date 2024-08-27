@@ -2,7 +2,11 @@ package system
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
@@ -16,6 +20,8 @@ import (
 )
 
 const (
+	testTimeout = time.Minute * 15 // the same time that is used in the ci/cd pipeline
+
 	nginxImage       = "docker.io/nginx:latest"
 	nginxVolumeOwner = 0
 	nginxPort        = 80
@@ -30,11 +36,19 @@ type Suite struct {
 	suite.Suite
 	Knuu     *knuu.Knuu
 	Executor e2e.Executor
+
+	cleanupMu     sync.Mutex
+	totalTests    atomic.Int32
+	finishedTests int32
 }
 
 var (
 	nginxVolume = resource.MustParse("1Gi")
 )
+
+func TestRunSuite(t *testing.T) {
+	suite.Run(t, new(Suite))
+}
 
 func (s *Suite) SetupSuite() {
 	var (
@@ -52,6 +66,7 @@ func (s *Suite) SetupSuite() {
 		ProxyEnabled: true,
 		K8sClient:    k8sClient,
 		MinioClient:  minioClient, // needed for build from git tests
+		Timeout:      testTimeout,
 	})
 	s.Require().NoError(err)
 
@@ -61,18 +76,30 @@ func (s *Suite) SetupSuite() {
 	s.Executor.Kn = s.Knuu
 }
 
-func (s *Suite) TearDownSuite() {
-	s.T().Cleanup(func() {
-		logrus.Info("Tearing down test suite...")
-		err := s.Knuu.CleanUp(context.Background())
-		if err != nil {
-			s.T().Logf("Error cleaning up test suite: %v", err)
-		}
-	})
+// SetupTest is a test setup function that is called before each test is run.
+func (s *Suite) SetupTest() {
+	s.totalTests.Add(1)
+	s.T().Parallel()
 }
 
-func TestRunSuite(t *testing.T) {
-	suite.Run(t, new(Suite))
+// TearDownTest is a test teardown function that is called after each test is run.
+func (s *Suite) TearDownTest() {
+	s.cleanupMu.Lock()
+	defer s.cleanupMu.Unlock()
+	s.finishedTests++
+
+	// if I am the last test to finish, I need to clean up the suite
+	if s.finishedTests == s.totalTests.Load() {
+		s.cleanupSuite()
+	}
+}
+
+func (s *Suite) cleanupSuite() {
+	s.T().Logf("Cleaning up knuu...")
+	if err := s.Knuu.CleanUp(context.Background()); err != nil {
+		s.T().Logf("Error cleaning up test suite: %v", err)
+	}
+	s.T().Logf("Knuu is cleaned up")
 }
 
 func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.Instance {
@@ -81,7 +108,6 @@ func (s *Suite) createNginxInstance(ctx context.Context, name string) *instance.
 
 	s.Require().NoError(ins.Build().SetImage(ctx, nginxImage))
 	s.Require().NoError(ins.Network().AddPortTCP(nginxPort))
-
 	return ins
 }
 
@@ -93,4 +119,16 @@ func (s *Suite) createNginxInstanceWithVolume(ctx context.Context, name string) 
 
 	s.Require().NoError(ins.Storage().AddVolumeWithOwner(nginxHTMLPath, nginxVolume, nginxVolumeOwner))
 	return ins
+}
+
+func (s *Suite) retryOperation(operation func() error, maxRetries int) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		s.T().Logf("Retrying operation (%d/%d)...", i+1, maxRetries)
+		if err = operation(); err == nil {
+			return nil
+		}
+		time.Sleep(time.Second * time.Duration(i+1))
+	}
+	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, err)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -53,6 +54,7 @@ type Minio struct {
 	client    *miniogo.Client
 	k8sClient k8s.KubeManager
 	Logger    *logrus.Logger
+	muMap     map[string]*sync.Mutex
 }
 
 type Config struct {
@@ -322,6 +324,18 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 		return ErrMinioClientNotInitialized
 	}
 
+	if m.muMap == nil {
+		m.muMap = make(map[string]*sync.Mutex)
+	}
+
+	mu, ok := m.muMap[bucketName]
+	if !ok {
+		mu = &sync.Mutex{}
+		m.muMap[bucketName] = mu
+	}
+	mu.Lock()
+	defer mu.Unlock()
+
 	exists, err := m.client.BucketExists(ctx, bucketName)
 	if err != nil {
 		return ErrMinioFailedToCheckBucket.Wrap(err)
@@ -331,7 +345,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 	}
 
 	if err := m.client.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
-		return ErrMinioFailedToCreateBucket.Wrap(err)
+		return err
 	}
 	m.Logger.Debugf("Bucket `%s` created successfully.", bucketName)
 

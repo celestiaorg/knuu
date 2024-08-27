@@ -16,7 +16,6 @@ import (
 // no initContainer command, as there is no volumes, nor files.
 func (s *Suite) TestNoVolumesNoFiles() {
 	const namePrefix = "no-volumes-no-files"
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -25,14 +24,6 @@ func (s *Suite) TestNoVolumesNoFiles() {
 
 	target := s.createNginxInstance(ctx, namePrefix+"-target")
 	s.Require().NoError(target.Build().Commit(ctx))
-
-	// Cleanup
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	s.Require().NoError(target.Execution().StartAsync(ctx))
@@ -53,7 +44,6 @@ func (s *Suite) TestNoVolumesNoFiles() {
 // mkdir -p /knuu && if [ -d /opt/vol1 ] && [ \"$(ls -A /opt/vol1)\" ]; then cp -r /opt/vol1/* /knuu//opt/vol1 && chown -R 0:0 /knuu/* ;fi
 func (s *Suite) TestOneVolumeNoFiles() {
 	const namePrefix = "one-volume-no-files"
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -66,13 +56,6 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	s.Require().NoError(target.Execution().StartAsync(ctx))
@@ -97,7 +80,6 @@ func (s *Suite) TestNoVolumesOneFile() {
 		numberOfInstances = 2
 	)
 
-	s.T().Parallel()
 	// Setup
 	ctx := context.Background()
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
@@ -123,14 +105,6 @@ func (s *Suite) TestNoVolumesOneFile() {
 		}(i)
 	}
 	wgFolders.Wait()
-
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {
@@ -161,7 +135,6 @@ func (s *Suite) TestOneVolumeOneFile() {
 		namePrefix        = "one-volume-one-file"
 		numberOfInstances = 2
 	)
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -186,14 +159,6 @@ func (s *Suite) TestOneVolumeOneFile() {
 	}
 	wgFolders.Wait()
 
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
-
 	// Test logic
 	for _, i := range instances {
 		s.Require().NoError(i.Build().Commit(ctx))
@@ -213,18 +178,18 @@ func (s *Suite) TestOneVolumeOneFile() {
 	}
 }
 
-// TestOneVolumeOneFile tests the scenario where we have one volume and one file.
+// TestOneVolumeTwoFiles tests the scenario where we have one volume and two files.
 // the initContainer command that it generates looks like:
 // mkdir -p /knuu && mkdir -p /knuu/usr/share/nginx/html && chmod -R 777 /knuu//usr/share/nginx/html && if [ -d /usr/share/nginx/html ] && [ \"$(ls -A /usr/share/nginx/html)\" ]; then cp -r /usr/share/nginx/html/* /knuu//usr/share/nginx/html && chown -R 0:0 /knuu/* ;fi
 func (s *Suite) TestOneVolumeTwoFiles() {
 	const (
 		namePrefix        = "one-volume-two-files"
 		numberOfInstances = 2
+		maxRetries        = 3
 	)
-	s.T().Parallel()
-	// Setup
 
 	ctx := context.Background()
+
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
@@ -240,28 +205,34 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		wgFolders.Add(1)
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			// adding the folder after the Commit, it will help us to use a cached image.
-			err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
-			s.Require().NoError(err, "adding file to '%v'", i.Name())
-
-			err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
-			s.Require().NoError(err, "adding file to '%v'", i.Name())
+			err := s.retryOperation(func() error {
+				err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+				if err != nil {
+					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
+				}
+				err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
+				if err != nil {
+					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
+				}
+				return nil
+			}, maxRetries)
+			s.Require().NoError(err)
 		}(i)
 	}
 	wgFolders.Wait()
 
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
-
 	// Test logic
 	for _, i := range instances {
-		s.Require().NoError(i.Build().Commit(ctx))
-		s.Require().NoError(i.Execution().StartAsync(ctx))
+		err := s.retryOperation(func() error {
+			if err := i.Build().Commit(ctx); err != nil {
+				return fmt.Errorf("committing instance: %w", err)
+			}
+			if err := i.Execution().StartAsync(ctx); err != nil {
+				return fmt.Errorf("starting instance: %w", err)
+			}
+			return nil
+		}, maxRetries)
+		s.Require().NoError(err)
 	}
 
 	for _, i := range instances {

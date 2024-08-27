@@ -13,7 +13,6 @@ func (s *Suite) TestFolderCached() {
 		namePrefix        = "folder-cached"
 		numberOfInstances = 10
 	)
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -37,15 +36,6 @@ func (s *Suite) TestFolderCached() {
 		}(i)
 	}
 	wgFolders.Wait()
-
-	// Cleanup
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {

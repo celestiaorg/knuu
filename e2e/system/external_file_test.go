@@ -5,13 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
 func (s *Suite) TestExternalFile() {
 	const namePrefix = "external-file"
-	s.T().Parallel()
 	// Setup
 
 	ctx := context.Background()
@@ -42,13 +39,6 @@ func (s *Suite) TestExternalFile() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(server.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, executor, server)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	serverIP, err := server.Network().GetIP(ctx)
