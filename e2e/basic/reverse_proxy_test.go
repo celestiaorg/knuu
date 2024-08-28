@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
@@ -47,7 +48,7 @@ func (s *Suite) TestAddHostWithReadyCheck() {
 	const namePrefix = "add-host-with-ready-check"
 	ctx := context.Background()
 
-	target := s.createNginxInstance(ctx, namePrefix+"-target")
+	target := s.CreateNginxInstance(ctx, namePrefix+"-target")
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
 
@@ -75,7 +76,7 @@ func (s *Suite) TestAddHostWithReadyCheck() {
 		return strings.Contains(string(bodyBytes), "Welcome to nginx!"), nil
 	}
 
-	host, err := target.Network().AddHostWithReadyCheck(ctx, nginxPort, checkFunc)
+	host, err := target.Network().AddHostWithReadyCheck(ctx, e2e.NginxPort, checkFunc)
 	s.Require().NoError(err, "error adding host with ready check")
 	s.Assert().NotEmpty(host, "host should not be empty")
 
