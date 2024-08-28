@@ -31,7 +31,7 @@ const (
 	retryInterval = 100 * time.Millisecond
 
 	// if any pod is pending for more than this duration, a warning is logged
-	defaultMaxPendingDuration = 5 * time.Second
+	defaultMaxPendingDuration = 60 * time.Second
 )
 
 type Client struct {
