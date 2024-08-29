@@ -6,6 +6,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/celestiaorg/knuu/e2e"
 )
 
 func (s *Suite) TestProbe() {
@@ -16,16 +18,16 @@ func (s *Suite) TestProbe() {
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	web := s.createNginxInstanceWithVolume(ctx, namePrefix+"-web")
+	web := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-web")
 
-	err = web.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
+	err = web.Storage().AddFile(resourcesHTML+"/index.html", e2e.NginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
 	livenessProbe := v1.Probe{
 		ProbeHandler: v1.ProbeHandler{
 			HTTPGet: &v1.HTTPGetAction{
 				Path: "/",
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: nginxPort},
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: e2e.NginxPort},
 			},
 		},
 		InitialDelaySeconds: 10,

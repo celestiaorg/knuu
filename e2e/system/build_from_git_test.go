@@ -65,7 +65,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.Require().NoError(err)
 
 	s.T().Log("Setting git repo")
-	err = s.retryOperation(func() error {
+	err = s.RetryOperation(func() error {
 		return target.Build().SetGitRepo(ctx, builder.GitContext{
 			Repo:     gitRepo,
 			Branch:   gitBranch,
