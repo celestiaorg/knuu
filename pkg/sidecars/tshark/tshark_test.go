@@ -168,7 +168,7 @@ func TestTsharkValidateConfig(t *testing.T) {
 	}
 }
 
-func TestTsharkCloneWithSuffix(t *testing.T) {
+func TestTsharkClone(t *testing.T) {
 	testInstance, err := instance.New("testInstance", &system.SystemDependencies{})
 	require.NoError(t, err)
 

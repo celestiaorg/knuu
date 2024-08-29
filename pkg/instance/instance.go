@@ -44,17 +44,14 @@ type Instance struct {
 }
 
 func New(name string, sysDeps *system.SystemDependencies) (*Instance, error) {
-	name = k8s.SanitizeName(name)
-	if sysDeps.HasInstanceName(name) {
-		return nil, ErrInstanceNameAlreadyExists.WithParams(name)
-	}
-	sysDeps.AddInstanceName(name)
-
 	i := &Instance{
-		name:               name,
 		state:              StateNone,
 		instanceType:       BasicInstance,
 		SystemDependencies: sysDeps,
+	}
+
+	if err := i.SetName(name); err != nil {
+		return nil, err
 	}
 
 	i.build = &build{
@@ -110,8 +107,20 @@ func (i *Instance) Name() string {
 	return i.name
 }
 
-func (i *Instance) K8sName() string {
-	return i.name
+func (i *Instance) SetName(name string) error {
+	name = k8s.SanitizeName(name)
+	if i.SystemDependencies.HasInstanceName(name) {
+		return ErrInstanceNameAlreadyExists.WithParams(name)
+	}
+	i.SystemDependencies.AddInstanceName(name)
+
+	if i.name != "" {
+		// Remove the old name from the system dependencies
+		// So someone else can use it if they want
+		i.SystemDependencies.RemoveInstanceName(i.name)
+	}
+	i.name = name
+	return nil
 }
 
 func (i *Instance) State() InstanceState {
@@ -132,19 +141,12 @@ func (i *Instance) CloneWithSuffix(suffix string) (*Instance, error) {
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
-	name = k8s.SanitizeName(name)
-	if i.SystemDependencies.HasInstanceName(name) {
-		return nil, ErrInstanceNameAlreadyExists.WithParams(name)
-	}
-	i.SystemDependencies.AddInstanceName(name)
-
 	clonedSidecars, err := i.sidecars.clone()
 	if err != nil {
 		return nil, err
 	}
 
 	newInstance := &Instance{
-		name:               name,
 		SystemDependencies: i.SystemDependencies,
 
 		build:      i.build.clone(),
@@ -158,6 +160,10 @@ func (i *Instance) CloneWithName(name string) (*Instance, error) {
 
 		state:        i.state,
 		instanceType: i.instanceType,
+	}
+
+	if err := newInstance.SetName(name); err != nil {
+		return nil, err
 	}
 
 	// Need to set all the parent references to the newly created instance

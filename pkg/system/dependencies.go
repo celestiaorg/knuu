@@ -30,3 +30,7 @@ func (s *SystemDependencies) HasInstanceName(name string) bool {
 	_, exists := s.instancesMap.Load(name)
 	return exists
 }
+
+func (s *SystemDependencies) RemoveInstanceName(name string) {
+	s.instancesMap.Delete(name)
+}

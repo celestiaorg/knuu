@@ -57,9 +57,14 @@ func (s *TestSuite) TestPreStart() {
 	s.T().Skip("skipping as it is tested in e2e tests")
 }
 
-func (s *TestSuite) TestCloneWithSuffix() {
+func (s *TestSuite) TestClone() {
 	o := New()
 	err := o.Initialize(context.Background(), s.sysDeps)
+	s.Require().NoError(err)
+
+	// let's add a suffix to the instance name as the sidecars.Add() function
+	// will add the instance name as a prefix to the sidecar name to avoid name collisions
+	err = o.Instance().SetName("some-instance-name-" + o.Instance().Name())
 	s.Require().NoError(err)
 
 	clone, err := o.Clone()

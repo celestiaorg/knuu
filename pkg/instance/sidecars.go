@@ -49,6 +49,13 @@ func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 		return ErrSidecarInstanceIsNil.WithParams(s.instance.name)
 	}
 
+	// let's add the instance as the prefix to the sidecar name
+	// this is to avoid name collisions in the knuu name checker
+	newNameWithPrefix := s.instance.Name() + "-" + sc.Instance().Name()
+	if err := sc.Instance().SetName(newNameWithPrefix); err != nil {
+		return ErrSettingSidecarName.WithParams(newNameWithPrefix, s.instance.Name()).Wrap(err)
+	}
+
 	if !sc.Instance().IsInState(StateCommitted) {
 		return ErrSidecarNotCommitted.WithParams(sc.Instance().Name())
 	}

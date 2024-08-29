@@ -75,10 +75,15 @@ func (s *TestSuite) TestPreStart() {
 	s.T().Skip("skipping as it is tested in e2e tests")
 }
 
-func (s *TestSuite) TestCloneWithSuffix() {
+func (s *TestSuite) TestClone() {
 	err := s.bt.Initialize(s.ctx, s.sysDeps)
 	s.Require().NoError(err)
 	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
+
+	// let's add a suffix to the instance name as the sidecars.Add() function
+	// will add the instance name as a prefix to the sidecar name to avoid name collisions
+	err = s.bt.Instance().SetName("some-instance-name-" + s.bt.Instance().Name())
+	s.Require().NoError(err)
 
 	clone, err := s.bt.Clone()
 	s.Require().NoError(err)
@@ -94,12 +99,12 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
 	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
 	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
-	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+	s.Assert().Equal(instanceName, clonedBt.instance.Name())
 	clonedBt.SetPort(9090)
 	s.Assert().NotEqual(s.bt.port, clonedBt.port)
 }
 
-func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
+func (s *TestSuite) TestCloneWithCustomValues() {
 	err := s.bt.Initialize(s.ctx, s.sysDeps)
 	s.Require().NoError(err)
 	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
@@ -108,6 +113,11 @@ func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
 	s.bt.SetImage("nginx")
 	s.bt.SetNetworkInterface("eth0")
 
+	// let's add a suffix to the instance name as the sidecars.Add() function
+	// will add the instance name as a prefix to the sidecar name to avoid name collisions
+	err = s.bt.Instance().SetName("some-instance-name-" + s.bt.Instance().Name())
+	s.Require().NoError(err)
+
 	clone, err := s.bt.Clone()
 	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
@@ -122,7 +132,7 @@ func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
 	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
 	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
 	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
-	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+	s.Assert().Equal(instanceName, clonedBt.instance.Name())
 
 	clonedBt.SetPort(9090)
 	s.Assert().NotEqual(s.bt.port, clonedBt.port)
