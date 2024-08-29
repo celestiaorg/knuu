@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
@@ -37,11 +38,11 @@ func (s *Suite) TestEnvToJSON() {
 	for i := 0; i < numberOfInstances; i++ {
 		name := fmt.Sprintf("%s-web%d", namePrefix, i+1)
 
-		ins := s.createNginxInstance(ctx, name)
+		ins := s.CreateNginxInstance(ctx, name)
 		s.Require().NoError(ins.Build().Commit(ctx))
 		s.Require().NoError(ins.Execution().Start(ctx))
 
-		_, err = ins.Execution().ExecuteCommand(ctx, "mkdir", "-p", nginxHTMLPath)
+		_, err = ins.Execution().ExecuteCommand(ctx, "mkdir", "-p", e2e.NginxHTMLPath)
 		s.Require().NoError(err)
 
 		s.T().Logf("Writing JSON to instance '%v': %v", name, jsonString)
@@ -53,7 +54,7 @@ func (s *Suite) TestEnvToJSON() {
 		s.Require().NoError(err)
 
 		// for testing it, we also add it as index.html to the nginx server
-		_, err = ins.Execution().ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", nginxHTMLPath+"/index.html")
+		_, err = ins.Execution().ExecuteCommand(ctx, "echo", fmt.Sprintf("'%s'", jsonString), ">", e2e.NginxHTMLPath+"/index.html")
 		s.Require().NoError(err, "writing JSON to instance '%v': %v", name, err)
 
 		instances[i] = ins

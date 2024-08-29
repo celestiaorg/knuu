@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
@@ -22,7 +23,7 @@ func (s *Suite) TestNoVolumesNoFiles() {
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	target := s.createNginxInstance(ctx, namePrefix+"-target")
+	target := s.CreateNginxInstance(ctx, namePrefix+"-target")
 	s.Require().NoError(target.Build().Commit(ctx))
 
 	// Test logic
@@ -50,7 +51,7 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	target := s.createNginxInstance(ctx, namePrefix+"-target")
+	target := s.CreateNginxInstance(ctx, namePrefix+"-target")
 
 	err = target.Storage().AddVolumeWithOwner("/opt/vol1", resource.MustParse("1Gi"), 0)
 	s.Require().NoError(err)
@@ -88,7 +89,7 @@ func (s *Suite) TestNoVolumesOneFile() {
 	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
 		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
-		instances[i] = s.createNginxInstance(ctx, name)
+		instances[i] = s.CreateNginxInstance(ctx, name)
 	}
 
 	var (
@@ -100,7 +101,7 @@ func (s *Suite) TestNoVolumesOneFile() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", e2e.NginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v'", i.Name())
 		}(i)
 	}
@@ -144,7 +145,7 @@ func (s *Suite) TestOneVolumeOneFile() {
 	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
 		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
-		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
+		instances[i] = s.CreateNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -153,7 +154,7 @@ func (s *Suite) TestOneVolumeOneFile() {
 		go func(ins *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err = ins.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			err = ins.Storage().AddFile(resourcesFileCMToFolder+"/test_1", e2e.NginxHTMLPath+"/index.html", "0:0")
 			s.Require().NoError(err, "adding file to '%v': %v", i.Name())
 		}(i)
 	}
@@ -197,7 +198,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 
 	for i := 0; i < numberOfInstances; i++ {
 		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
-		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
+		instances[i] = s.CreateNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -205,12 +206,12 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 		wgFolders.Add(1)
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
-			err := s.retryOperation(func() error {
-				err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", nginxHTMLPath+"/index.html", "0:0")
+			err := s.RetryOperation(func() error {
+				err := i.Storage().AddFile(resourcesFileCMToFolder+"/test_1", e2e.NginxHTMLPath+"/index.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
 				}
-				err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_2", nginxHTMLPath+"/index-2.html", "0:0")
+				err = i.Storage().AddFile(resourcesFileCMToFolder+"/test_2", e2e.NginxHTMLPath+"/index-2.html", "0:0")
 				if err != nil {
 					return fmt.Errorf("adding file to '%v': %w", i.Name(), err)
 				}
@@ -223,7 +224,7 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 
 	// Test logic
 	for _, i := range instances {
-		err := s.retryOperation(func() error {
+		err := s.RetryOperation(func() error {
 			if err := i.Build().Commit(ctx); err != nil {
 				return fmt.Errorf("committing instance: %w", err)
 			}
