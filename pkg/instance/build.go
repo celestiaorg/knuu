@@ -200,7 +200,7 @@ func getImageRegistry(imageName string) (string, error) {
 
 // getBuildDir returns the build directory for the instance
 func (b *build) getBuildDir() string {
-	return filepath.Join(buildDirBase, b.instance.k8sName)
+	return filepath.Join(buildDirBase, b.instance.name)
 }
 
 // addFileToBuilder adds a file to the builder

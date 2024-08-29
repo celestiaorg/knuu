@@ -42,7 +42,7 @@ func New() *NetShaper {
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called
-func (bt *NetShaper) Initialize(ctx context.Context, sysDeps system.SystemDependencies) error {
+func (bt *NetShaper) Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error {
 	var err error
 	bt.instance, err = instance.New(instanceName, sysDeps)
 	if err != nil {
@@ -100,11 +100,15 @@ func (bt *NetShaper) Instance() *instance.Instance {
 	return bt.instance
 }
 
-func (bt *NetShaper) CloneWithSuffix(suffix string) instance.SidecarManager {
+func (bt *NetShaper) Clone() (instance.SidecarManager, error) {
+	clone, err := bt.instance.CloneWithName(instanceName)
+	if err != nil {
+		return nil, err
+	}
 	return &NetShaper{
-		instance:         bt.instance.CloneWithSuffix(suffix),
+		instance:         clone,
 		port:             bt.port,
 		image:            bt.image,
 		networkInterface: bt.networkInterface,
-	}
+	}, nil
 }

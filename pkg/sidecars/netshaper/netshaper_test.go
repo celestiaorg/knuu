@@ -18,14 +18,14 @@ type TestSuite struct {
 	suite.Suite
 	bt         *NetShaper
 	ctx        context.Context
-	sysDeps    system.SystemDependencies
+	sysDeps    *system.SystemDependencies
 	mockServer *httptest.Server
 }
 
 func (s *TestSuite) SetupTest() {
 	s.bt = New()
 	s.ctx = context.Background()
-	s.sysDeps = system.SystemDependencies{
+	s.sysDeps = &system.SystemDependencies{
 		Logger: logrus.New(),
 	}
 
@@ -80,7 +80,8 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	s.Require().NoError(err)
 	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
 
-	clone := s.bt.CloneWithSuffix("test")
+	clone, err := s.bt.Clone()
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedBt, ok := clone.(*NetShaper)
@@ -107,7 +108,8 @@ func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
 	s.bt.SetImage("nginx")
 	s.bt.SetNetworkInterface("eth0")
 
-	clone := s.bt.CloneWithSuffix("test")
+	clone, err := s.bt.Clone()
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedBt, ok := clone.(*NetShaper)

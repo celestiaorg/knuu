@@ -13,7 +13,7 @@ import (
 
 type TestSuite struct {
 	suite.Suite
-	sysDeps system.SystemDependencies
+	sysDeps *system.SystemDependencies
 }
 
 func TestObsyTestSuite(t *testing.T) {
@@ -30,7 +30,7 @@ func (m *mockK8sCli) Namespace() string {
 }
 
 func (s *TestSuite) SetupTest() {
-	s.sysDeps = system.SystemDependencies{
+	s.sysDeps = &system.SystemDependencies{
 		K8sClient: &mockK8sCli{
 			namespace:   "test",
 			KubeManager: &k8s.Client{},
@@ -62,7 +62,8 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	err := o.Initialize(context.Background(), s.sysDeps)
 	s.Require().NoError(err)
 
-	clone := o.CloneWithSuffix("test")
+	clone, err := o.Clone()
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedObsy, ok := clone.(*Obsy)

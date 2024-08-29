@@ -7,10 +7,10 @@ import (
 )
 
 type SidecarManager interface {
-	Initialize(ctx context.Context, sysDeps system.SystemDependencies) error
+	Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error
 	Instance() *Instance
 	PreStart(ctx context.Context) error
-	CloneWithSuffix(suffix string) SidecarManager
+	Clone() (SidecarManager, error)
 }
 
 type sidecars struct {
@@ -77,7 +77,7 @@ func (s *sidecars) verifySidecarsStates() error {
 func (s *sidecars) applyFunctionToSidecars(fn func(sc SidecarManager) error) error {
 	for _, i := range s.sidecars {
 		if err := fn(i); err != nil {
-			return ErrApplyingFunctionToSidecar.WithParams(i.Instance().k8sName).Wrap(err)
+			return ErrApplyingFunctionToSidecar.WithParams(i.Instance().name).Wrap(err)
 		}
 	}
 	return nil
@@ -92,12 +92,16 @@ func (s *sidecars) setStateForSidecars(state InstanceState) {
 		})
 }
 
-func (s *sidecars) cloneWithSuffix(suffix string) *sidecars {
+func (s *sidecars) clone() (*sidecars, error) {
 	clonedSidecars := make([]SidecarManager, len(s.sidecars))
 	for i, sc := range s.sidecars {
-		clonedSidecars[i] = sc.CloneWithSuffix(suffix)
+		cloned, err := sc.Clone()
+		if err != nil {
+			return nil, err
+		}
+		clonedSidecars[i] = cloned
 	}
 	return &sidecars{
 		sidecars: clonedSidecars,
-	}
+	}, nil
 }

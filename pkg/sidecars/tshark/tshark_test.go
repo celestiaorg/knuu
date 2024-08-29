@@ -83,7 +83,7 @@ func TestTsharkInitialize(t *testing.T) {
 		logrus.New(),
 	)
 	require.NoError(t, err)
-	sysDeps := system.SystemDependencies{
+	sysDeps := &system.SystemDependencies{
 		K8sClient: k8sClient,
 		Logger:    logger,
 	}
@@ -169,7 +169,7 @@ func TestTsharkValidateConfig(t *testing.T) {
 }
 
 func TestTsharkCloneWithSuffix(t *testing.T) {
-	testInstance, err := instance.New("testInstance", system.SystemDependencies{})
+	testInstance, err := instance.New("testInstance", &system.SystemDependencies{})
 	require.NoError(t, err)
 
 	tshark := &Tshark{
@@ -185,7 +185,8 @@ func TestTsharkCloneWithSuffix(t *testing.T) {
 		instance:       testInstance,
 	}
 
-	clone := tshark.CloneWithSuffix("-clone")
+	clone, err := tshark.Clone()
+	require.NoError(t, err)
 
 	assert.Equal(t, tshark.VolumeSize, clone.(*Tshark).VolumeSize)
 	assert.Equal(t, tshark.S3AccessKey, clone.(*Tshark).S3AccessKey)

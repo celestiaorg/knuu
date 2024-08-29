@@ -64,7 +64,7 @@ var (
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called
-func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependencies) error {
+func (t *Tshark) Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error {
 	if err := t.validateConfig(); err != nil {
 		return err
 	}
@@ -135,9 +135,13 @@ func (t *Tshark) Instance() *instance.Instance {
 	return t.instance
 }
 
-func (t *Tshark) CloneWithSuffix(suffix string) instance.SidecarManager {
+func (t *Tshark) Clone() (instance.SidecarManager, error) {
+	clone, err := t.instance.CloneWithName(tsharkCollectorName)
+	if err != nil {
+		return nil, err
+	}
 	return &Tshark{
-		instance:       t.instance.CloneWithSuffix(suffix),
+		instance:       clone,
 		VolumeSize:     t.VolumeSize,
 		S3AccessKey:    t.S3AccessKey,
 		S3SecretKey:    t.S3SecretKey,
@@ -147,5 +151,5 @@ func (t *Tshark) CloneWithSuffix(suffix string) instance.SidecarManager {
 		S3KeyPrefix:    t.S3KeyPrefix,
 		S3Endpoint:     t.S3Endpoint,
 		UploadInterval: t.UploadInterval,
-	}
+	}, nil
 }
