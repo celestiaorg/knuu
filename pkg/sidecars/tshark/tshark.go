@@ -64,7 +64,7 @@ var (
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called
-func (t *Tshark) Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error {
+func (t *Tshark) Initialize(ctx context.Context, namePrefix string, sysDeps *system.SystemDependencies) error {
 	if err := t.validateConfig(); err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps *system.SystemDependenc
 	}
 
 	var err error
-	t.instance, err = instance.New(tsharkCollectorName, sysDeps)
+	t.instance, err = instance.New(namePrefix+"-"+tsharkCollectorName, sysDeps)
 	if err != nil {
 		return ErrCreatingTsharkCollectorInstance.Wrap(err)
 	}
@@ -135,8 +135,8 @@ func (t *Tshark) Instance() *instance.Instance {
 	return t.instance
 }
 
-func (t *Tshark) Clone() (instance.SidecarManager, error) {
-	clone, err := t.instance.CloneWithName(tsharkCollectorName)
+func (t *Tshark) Clone(namePrefix string) (instance.SidecarManager, error) {
+	clone, err := t.instance.CloneWithName(namePrefix + "-" + tsharkCollectorName)
 	if err != nil {
 		return nil, err
 	}

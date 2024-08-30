@@ -7,10 +7,12 @@ import (
 )
 
 type SidecarManager interface {
-	Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error
+	// namePrefix is the name of the instance that is the parent of the sidecar
+	// it is used to set the name of the sidecar to avoid name collisions
+	Initialize(ctx context.Context, namePrefix string, sysDeps *system.SystemDependencies) error
 	Instance() *Instance
 	PreStart(ctx context.Context) error
-	Clone() (SidecarManager, error)
+	Clone(namePrefix string) (SidecarManager, error)
 }
 
 type sidecars struct {
@@ -41,19 +43,12 @@ func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 		return ErrAddingSidecarNotAllowed.WithParams(s.instance.state.String())
 	}
 
-	if err := sc.Initialize(ctx, s.instance.SystemDependencies); err != nil {
+	if err := sc.Initialize(ctx, s.instance.Name(), s.instance.SystemDependencies); err != nil {
 		return ErrInitializingSidecar.WithParams(s.instance.name).Wrap(err)
 	}
 
 	if sc.Instance() == nil {
 		return ErrSidecarInstanceIsNil.WithParams(s.instance.name)
-	}
-
-	// let's add the instance as the prefix to the sidecar name
-	// this is to avoid name collisions in the knuu name checker
-	newNameWithPrefix := s.instance.Name() + "-" + sc.Instance().Name()
-	if err := sc.Instance().SetName(newNameWithPrefix); err != nil {
-		return ErrSettingSidecarName.WithParams(newNameWithPrefix, s.instance.Name()).Wrap(err)
 	}
 
 	if !sc.Instance().IsInState(StateCommitted) {
@@ -99,10 +94,10 @@ func (s *sidecars) setStateForSidecars(state InstanceState) {
 		})
 }
 
-func (s *sidecars) clone() (*sidecars, error) {
+func (s *sidecars) clone(namePrefix string) (*sidecars, error) {
 	clonedSidecars := make([]SidecarManager, len(s.sidecars))
 	for i, sc := range s.sidecars {
-		cloned, err := sc.Clone()
+		cloned, err := sc.Clone(namePrefix)
 		if err != nil {
 			return nil, err
 		}

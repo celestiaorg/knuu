@@ -47,7 +47,7 @@ func (s *TestSuite) TestNew() {
 
 func (s *TestSuite) TestInitialize() {
 	o := New()
-	err := o.Initialize(context.Background(), s.sysDeps)
+	err := o.Initialize(context.Background(), "test-init", s.sysDeps)
 	s.Require().NoError(err)
 	s.Assert().NotNil(o.Instance())
 	s.Assert().True(o.Instance().Sidecars().IsSidecar())
@@ -59,21 +59,18 @@ func (s *TestSuite) TestPreStart() {
 
 func (s *TestSuite) TestClone() {
 	o := New()
-	err := o.Initialize(context.Background(), s.sysDeps)
+	err := o.Initialize(context.Background(), "test-clone", s.sysDeps)
 	s.Require().NoError(err)
 
-	// let's add a suffix to the instance name as the sidecars.Add() function
-	// will add the instance name as a prefix to the sidecar name to avoid name collisions
-	err = o.Instance().SetName("some-instance-name-" + o.Instance().Name())
-	s.Require().NoError(err)
-
-	clone, err := o.Clone()
+	clonePrefixName := "test-clone-prefix"
+	clone, err := o.Clone(clonePrefixName)
 	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedObsy, ok := clone.(*Obsy)
 	s.Assert().True(ok)
 	s.Assert().Equal(o.obsyConfig, clonedObsy.obsyConfig)
+	s.Assert().Equal(clonePrefixName+"-"+otelAgentName, clonedObsy.Instance().Name())
 }
 
 func (s *TestSuite) TestSetters() {

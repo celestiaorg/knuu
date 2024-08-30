@@ -91,7 +91,7 @@ func TestTsharkInitialize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			err := tt.config.Initialize(ctx, sysDeps)
+			err := tt.config.Initialize(ctx, "test-init", sysDeps)
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -185,7 +185,8 @@ func TestTsharkClone(t *testing.T) {
 		instance:       testInstance,
 	}
 
-	clone, err := tshark.Clone()
+	clonePrefixName := "test-clone-prefix"
+	clone, err := tshark.Clone(clonePrefixName)
 	require.NoError(t, err)
 
 	assert.Equal(t, tshark.VolumeSize, clone.(*Tshark).VolumeSize)
@@ -198,4 +199,5 @@ func TestTsharkClone(t *testing.T) {
 	assert.Equal(t, tshark.S3Endpoint, clone.(*Tshark).S3Endpoint)
 	assert.Equal(t, tshark.UploadInterval, clone.(*Tshark).UploadInterval)
 	assert.NotEmpty(t, clone.(*Tshark).instance)
+	assert.Equal(t, clonePrefixName+"-"+tsharkCollectorName, clone.(*Tshark).instance.Name())
 }

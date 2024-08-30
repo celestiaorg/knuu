@@ -86,9 +86,9 @@ func New() *Obsy {
 	}
 }
 
-func (o *Obsy) Initialize(ctx context.Context, sysDeps *system.SystemDependencies) error {
+func (o *Obsy) Initialize(ctx context.Context, namePrefix string, sysDeps *system.SystemDependencies) error {
 	var err error
-	o.instance, err = instance.New(otelAgentName, sysDeps)
+	o.instance, err = instance.New(namePrefix+"-"+otelAgentName, sysDeps)
 	if err != nil {
 		return ErrCreatingOtelAgentInstance.Wrap(err)
 	}
@@ -149,8 +149,8 @@ func (o *Obsy) Instance() *instance.Instance {
 	return o.instance
 }
 
-func (o *Obsy) Clone() (instance.SidecarManager, error) {
-	clone, err := o.instance.CloneWithName(otelAgentName)
+func (o *Obsy) Clone(namePrefix string) (instance.SidecarManager, error) {
+	clone, err := o.instance.CloneWithName(namePrefix + "-" + otelAgentName)
 	if err != nil {
 		return nil, err
 	}
