@@ -3,8 +3,9 @@ package instance
 import (
 	"context"
 
-	"github.com/celestiaorg/knuu/pkg/system"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/pkg/system"
 )
 
 type SidecarManager interface {

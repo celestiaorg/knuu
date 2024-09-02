@@ -70,9 +70,8 @@ func (s *security) AddKubernetesCapabilities(capabilities []string) error {
 	if !s.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(s.instance.state.String())
 	}
-	for _, capability := range capabilities {
-		s.capabilitiesAdd = append(s.capabilitiesAdd, capability)
-	}
+	s.capabilitiesAdd = append(s.capabilitiesAdd, capabilities...)
+
 	s.instance.Logger.WithFields(logrus.Fields{
 		"instance":     s.instance.name,
 		"capabilities": strings.Join(capabilities, ", "),
