@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -135,7 +136,10 @@ func (b *build) SetUser(user string) error {
 	if err := b.builderFactory.SetUser(user); err != nil {
 		return ErrSettingUser.WithParams(user, b.instance.name).Wrap(err)
 	}
-	b.instance.Logger.Debugf("Set user '%s' for instance '%s'", user, b.instance.name)
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"user":     user,
+	}).Debugf("Set user for instance")
 	return nil
 }
 
@@ -148,7 +152,10 @@ func (b *build) Commit(ctx context.Context) error {
 
 	if !b.builderFactory.Changed() {
 		b.imageName = b.builderFactory.ImageNameFrom()
-		b.instance.Logger.Debugf("No need to build and push image for instance '%s'", b.instance.name)
+		b.instance.Logger.WithFields(logrus.Fields{
+			"instance": b.instance.name,
+			"image":    b.imageName,
+		}).Debugf("no need to build and push image for instance")
 
 		b.instance.SetState(StateCommitted)
 		return nil
@@ -169,17 +176,30 @@ func (b *build) Commit(ctx context.Context) error {
 	cachedImageName, exists := b.checkImageHashInCache(imageHash)
 	if exists {
 		b.imageName = cachedImageName
-		b.instance.Logger.Debugf("Using cached image for instance '%s'", b.instance.name)
-	} else {
-		b.instance.Logger.Debugf("Cannot use any cached image for instance '%s'", b.instance.name)
-		err = b.builderFactory.PushBuilderImage(ctx, imageName)
-		if err != nil {
-			return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
-		}
-		b.updateImageCacheWithHash(imageHash, imageName)
-		b.imageName = imageName
-		b.instance.Logger.Debugf("Pushed new image for instance '%s'", b.instance.name)
+
+		b.instance.Logger.WithFields(logrus.Fields{
+			"instance": b.instance.name,
+			"image":    b.imageName,
+		}).Debugf("using cached image for instance")
+
+		b.instance.SetState(StateCommitted)
+		return nil
 	}
+
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+	}).Debugf("cannot use any cached image for instance")
+	err = b.builderFactory.PushBuilderImage(ctx, imageName)
+	if err != nil {
+		return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
+	}
+	b.updateImageCacheWithHash(imageHash, imageName)
+	b.imageName = imageName
+
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"image":    b.imageName,
+	}).Debugf("pushed new image for instance")
 
 	b.instance.SetState(StateCommitted)
 	return nil
@@ -220,11 +240,15 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 	if !b.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingEnvNotAllowed.WithParams(b.instance.state.String())
 	}
-	b.instance.Logger.Debugf("Setting environment variable '%s' in instance '%s'", key, b.instance.name)
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"key":      key,
+		// value is not logged to avoid leaking sensitive information
+	}).Debugf("Setting environment variable")
+
 	if b.instance.state == StatePreparing {
 		return b.builderFactory.SetEnvVar(key, value)
 	}
-
 	b.env[key] = value
 	return nil
 }

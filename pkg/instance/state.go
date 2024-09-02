@@ -1,5 +1,7 @@
 package instance
 
+import "github.com/sirupsen/logrus"
+
 // InstanceState represents the state of the instance
 type InstanceState int
 
@@ -33,7 +35,10 @@ func (i *Instance) IsInState(states ...InstanceState) bool {
 
 func (i *Instance) SetState(state InstanceState) {
 	i.state = state
-	i.Logger.Debugf("Set state of instance '%s' to '%s'", i.name, i.state.String())
+	i.Logger.WithFields(logrus.Fields{
+		"instance": i.name,
+		"state":    i.state.String(),
+	}).Debug("set state of instance")
 }
 
 func (i *Instance) IsState(state InstanceState) bool {
