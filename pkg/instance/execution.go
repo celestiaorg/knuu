@@ -73,7 +73,10 @@ func (e *execution) StartWithCallback(ctx context.Context, callback func()) erro
 	go func() {
 		err := e.WaitInstanceIsRunning(ctx)
 		if err != nil {
-			e.instance.Logger.Errorf("Error waiting for instance '%s' to be running: %s", e.instance.k8sName, err)
+			e.instance.Logger.WithFields(logrus.Fields{
+				"instance": e.instance.k8sName,
+				"error":    err,
+			}).Errorf("waiting for instance to be running")
 			return
 		}
 		callback()
@@ -117,10 +120,8 @@ func (e *execution) StartAsync(ctx context.Context) error {
 		return ErrDeployingPodForInstance.WithParams(e.instance.k8sName).Wrap(err)
 	}
 
-	e.instance.state = StateStarted
+	e.instance.SetState(StateStarted)
 	e.instance.sidecars.setStateForSidecars(StateStarted)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
 	return nil
 }
 
@@ -212,10 +213,9 @@ func (e *execution) Stop(ctx context.Context) error {
 	if err := e.destroyPod(ctx); err != nil {
 		return ErrDestroyingPod.WithParams(e.instance.k8sName).Wrap(err)
 	}
-	e.instance.state = StateStopped
-	e.instance.sidecars.setStateForSidecars(StateStopped)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
 
+	e.instance.SetState(StateStopped)
+	e.instance.sidecars.setStateForSidecars(StateStopped)
 	return nil
 }
 
@@ -252,17 +252,18 @@ func (e *execution) Destroy(ctx context.Context) error {
 
 	err := e.instance.sidecars.applyFunctionToSidecars(
 		func(sidecar SidecarManager) error {
-			e.instance.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.Instance().k8sName)
+			e.instance.Logger.WithFields(logrus.Fields{
+				"instance": e.instance.k8sName,
+				"sidecar":  sidecar.Instance().k8sName,
+			}).Debugf("destroying sidecar resources")
 			return sidecar.Instance().resources.destroyResources(ctx)
 		})
 	if err != nil {
 		return ErrDestroyingResourcesForSidecars.WithParams(e.instance.k8sName).Wrap(err)
 	}
 
-	e.instance.state = StateDestroyed
+	e.instance.SetState(StateDestroyed)
 	e.instance.sidecars.setStateForSidecars(StateDestroyed)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
 	return nil
 }
 
@@ -344,9 +345,7 @@ func (e *execution) deployPod(ctx context.Context) error {
 	e.instance.kubernetesReplicaSet = replicaSet
 
 	// Log the deployment of the pod
-	e.instance.Logger.Debugf("Started statefulSet '%s'", e.instance.k8sName)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
+	e.instance.Logger.WithField("instance", e.instance.k8sName).Debugf("started statefulSet")
 	return nil
 }
 

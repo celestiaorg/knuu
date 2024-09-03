@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/celestiaorg/knuu/e2e"
 )
 
 func (s *Suite) TestExternalFile() {
@@ -15,7 +17,7 @@ func (s *Suite) TestExternalFile() {
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	server := s.createNginxInstance(ctx, namePrefix+"-server")
+	server := s.CreateNginxInstance(ctx, namePrefix+"-server")
 
 	// copy resources/html/index.html to /tmp/index.html
 	srcFile, err := os.Open(resourcesHTML + "/index.html")
@@ -35,7 +37,7 @@ func (s *Suite) TestExternalFile() {
 	// Ensure that the copy is successful by syncing the written data to the disk
 	s.Require().NoError(dstFile.Sync())
 
-	err = server.Storage().AddFile(htmlTmpPath, nginxHTMLPath+"/index.html", "0:0")
+	err = server.Storage().AddFile(htmlTmpPath, e2e.NginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
 	s.Require().NoError(server.Build().Commit(ctx))
