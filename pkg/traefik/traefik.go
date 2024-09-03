@@ -352,7 +352,7 @@ func (t *Traefik) createIngressRoute(
 func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
 	apiResourceList, err := t.K8sClient.Clientset().Discovery().ServerResourcesForGroupVersion(traefikAPIGroupVersion)
 	if err != nil {
-		t.Logger.WithField("error", err).Error("Failed to discover Traefik API resources")
+		t.Logger.WithError(err).Error("Failed to discover Traefik API resources")
 		return false
 	}
 

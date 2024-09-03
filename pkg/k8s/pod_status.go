@@ -111,7 +111,7 @@ func (c *Client) startPendingPodsWarningMonitor(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				if err := c.reportLongPendingPods(ctx); err != nil {
-					c.logger.Errorf("Failed to report long pending pods: %v", err)
+					c.logger.WithError(err).Error("failed to report long pending pods")
 				}
 			case <-ctx.Done():
 				c.logger.Infof("Shutting down long pending pods monitor.")
