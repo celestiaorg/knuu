@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 type storage struct {
@@ -51,7 +52,12 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		return s.addFileToInstance(dstPath, dest, chown)
 	}
 
-	s.instance.Logger.Debugf("Added file '%s' to instance '%s'", dest, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"file":      dest,
+		"instance":  s.instance.name,
+		"state":     s.instance.state,
+		"build_dir": s.instance.build.getBuildDir(),
+	}).Debug("added file")
 	return nil
 }
 
@@ -98,7 +104,12 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, s.instance.name).Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Added folder '%s' to instance '%s'", dest, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"folder":    dest,
+		"instance":  s.instance.name,
+		"state":     s.instance.state,
+		"build_dir": s.instance.build.getBuildDir(),
+	}).Debug("added folder")
 	return nil
 }
 
@@ -132,7 +143,10 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 func (s *storage) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(s.volumes) > 0 {
-		s.instance.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", s.instance.name, len(s.volumes))
+		s.instance.Logger.WithFields(logrus.Fields{
+			"instance": s.instance.name,
+			"volumes":  len(s.volumes),
+		}).Debug("maximum volumes exceeded")
 		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
 	}
 	return s.AddVolumeWithOwner(path, size, 0)
@@ -146,12 +160,20 @@ func (s *storage) AddVolumeWithOwner(path string, size resource.Quantity, owner 
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(s.volumes) > 0 {
-		s.instance.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", s.instance.name, len(s.volumes))
+		s.instance.Logger.WithFields(logrus.Fields{
+			"instance": s.instance.name,
+			"volumes":  len(s.volumes),
+		}).Debug("maximum volumes exceeded")
 		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
 	}
 	volume := s.instance.K8sClient.NewVolume(path, size, owner)
 	s.volumes = append(s.volumes, volume)
-	s.instance.Logger.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"volume":   path,
+		"size":     size.String(),
+		"owner":    owner,
+		"instance": s.instance.name,
+	}).Debug("added volume")
 	return nil
 }
 
@@ -284,7 +306,10 @@ func (s *storage) deployVolume(ctx context.Context) error {
 		totalSize.Add(volume.Size)
 	}
 	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.k8sName, s.instance.execution.Labels(), totalSize)
-	s.instance.Logger.Debugf("Deployed persistent volume '%s'", s.instance.k8sName)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"total_size": totalSize.String(),
+		"instance":   s.instance.name,
+	}).Debug("deployed persistent volume")
 
 	return nil
 }
@@ -295,7 +320,7 @@ func (s *storage) destroyVolume(ctx context.Context) error {
 	if err != nil {
 		return ErrFailedToDeletePersistentVolumeClaim.Wrap(err)
 	}
-	s.instance.Logger.Debugf("Destroyed persistent volume '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("instance", s.instance.name).Debug("destroyed persistent volume")
 	return nil
 }
 
@@ -330,7 +355,7 @@ func (s *storage) deployFiles(ctx context.Context) error {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Deployed configmap '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("deployed configmap")
 
 	return nil
 }
@@ -341,7 +366,7 @@ func (s *storage) destroyFiles(ctx context.Context) error {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Destroyed configmap '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("destroyed configmap")
 	return nil
 }
 

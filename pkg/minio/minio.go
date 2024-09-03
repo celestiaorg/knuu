@@ -104,7 +104,10 @@ func (m *Minio) Push(ctx context.Context, localReader io.Reader, minioFilePath, 
 		return ErrMinioFailedToUploadData.Wrap(err)
 	}
 
-	m.Logger.Debugf("Data uploaded successfully to %s in bucket %s", uploadInfo.Key, bucketName)
+	m.Logger.WithFields(logrus.Fields{
+		"key":    uploadInfo.Key,
+		"bucket": bucketName,
+	}).Debug("Data uploaded successfully")
 	return nil
 }
 
@@ -125,7 +128,10 @@ func (m *Minio) Delete(ctx context.Context, minioFilePath, bucketName string) er
 		return ErrMinioFailedToDeleteFile.Wrap(err)
 	}
 
-	m.Logger.Debugf("File %s deleted successfully from bucket %s", minioFilePath, bucketName)
+	m.Logger.WithFields(logrus.Fields{
+		"key":    minioFilePath,
+		"bucket": bucketName,
+	}).Debug("File deleted successfully")
 	return nil
 }
 
@@ -301,12 +307,12 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 	// Check if Minio service already exists
 	existingService, err := serviceClient.Get(ctx, ServiceName, metav1.GetOptions{})
 	if err == nil {
-		m.Logger.Debugf("Service `%s` already exists, updating.", ServiceName)
+		m.Logger.WithField("service", ServiceName).Debug("Service already exists, updating.")
 		minioService.ResourceVersion = existingService.ResourceVersion // Retain the existing resource version
 		if _, err := serviceClient.Update(ctx, minioService, metav1.UpdateOptions{}); err != nil {
 			return ErrMinioFailedToUpdateService.Wrap(err)
 		}
-		m.Logger.Debugf("Service %s updated successfully.", ServiceName)
+		m.Logger.WithField("service", ServiceName).Debug("Service updated successfully.")
 		return nil
 	}
 
@@ -315,7 +321,7 @@ func (m *Minio) createOrUpdateService(ctx context.Context) error {
 		return ErrMinioFailedToCreateService.Wrap(err)
 	}
 
-	m.Logger.Debugf("Service %s created successfully.", ServiceName)
+	m.Logger.WithField("service", ServiceName).Debug("Service created successfully.")
 	return nil
 }
 
@@ -347,7 +353,7 @@ func (m *Minio) createBucketIfNotExists(ctx context.Context, bucketName string) 
 	if err := m.client.MakeBucket(ctx, bucketName, miniogo.MakeBucketOptions{}); err != nil {
 		return err
 	}
-	m.Logger.Debugf("Bucket `%s` created successfully.", bucketName)
+	m.Logger.WithField("bucket", bucketName).Debug("Bucket created successfully.")
 
 	return nil
 }
@@ -414,7 +420,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 	// Check if PVC already exists
 	_, err := pvcClient.Get(ctx, pvcName, metav1.GetOptions{})
 	if err == nil {
-		m.Logger.Debugf("PersistentVolumeClaim `%s` already exists.", pvcName)
+		m.Logger.WithField("pvc", pvcName).Debug("PersistentVolumeClaim already exists.")
 		return nil
 	}
 
@@ -455,7 +461,7 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 			return ErrMinioFailedToCreatePersistentVolume.Wrap(err)
 		}
 	}
-	m.Logger.Debugf("PersistentVolume `%s` created successfully.", existingPV.Name)
+	m.Logger.WithField("pv", existingPV.Name).Debug("PersistentVolume created successfully.")
 
 	// Create PVC with the existing or newly created PV
 	pvc := &v1.PersistentVolumeClaim{
@@ -478,6 +484,6 @@ func (m *Minio) createPVC(ctx context.Context, pvcName string, storageSize resou
 		return ErrMinioFailedToCreatePersistentVolumeClaim.Wrap(err)
 	}
 
-	m.Logger.Debugf("PersistentVolumeClaim `%s` created successfully.", pvcName)
+	m.Logger.WithField("pvc", pvcName).Debug("PersistentVolumeClaim created successfully.")
 	return nil
 }
