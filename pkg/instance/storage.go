@@ -9,13 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 type storage struct {
