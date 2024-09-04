@@ -31,10 +31,7 @@ func DefaultLogger() *logrus.Logger {
 	if customLevel := os.Getenv(envLogLevel); customLevel != "" {
 		err := logger.Level.UnmarshalText([]byte(customLevel))
 		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"env_log_level": envLogLevel,
-				"error":         err,
-			}).
+			logger.WithError(err).WithField("env_log_level", envLogLevel).
 				Warn("Failed to parse env var LOG_LEVEL, defaulting to INFO")
 		}
 	}

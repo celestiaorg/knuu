@@ -133,4 +133,6 @@ var (
 	ErrInvalidServiceAccountName       = errors.New("InvalidServiceAccountName", "invalid service account name %s: %v")
 	ErrInvalidClusterRoleBindingName   = errors.New("InvalidClusterRoleBindingName", "invalid cluster role binding name %s: %v")
 	ErrInvalidServiceName              = errors.New("InvalidServiceName", "invalid service name %s: %v")
+	ErrListingPods                     = errors.New("ListingPods", "failed to list pods")
+	ErrGetPodStatus                    = errors.New("GetPodStatus", "failed to get pod status for pod %s")
 )

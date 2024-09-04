@@ -83,14 +83,15 @@ func (n *network) PortForwardTCP(ctx context.Context, port int) (int, error) {
 		if attempt == maxRetries {
 			return -1, ErrForwardingPort.WithParams(maxRetries)
 		}
-		n.instance.Logger.WithFields(logrus.Fields{
-			"instance":       n.instance.name,
-			"port":           port,
-			"error":          err,
-			"attempt":        attempt,
-			"max":            maxRetries,
-			"retry_interval": retryInterval.String(),
-		}).Debug("forwarding port failed, retrying")
+		n.instance.Logger.
+			WithError(err).
+			WithFields(logrus.Fields{
+				"instance":       n.instance.name,
+				"port":           port,
+				"attempt":        attempt,
+				"max":            maxRetries,
+				"retry_interval": retryInterval.String(),
+			}).Debug("forwarding port failed, retrying")
 	}
 	return localPort, nil
 }
@@ -295,10 +296,7 @@ func (n *network) deployOrPatchService(ctx context.Context, portsTCP, portsUDP [
 func (n *network) enableIfDisabled(ctx context.Context) error {
 	disableNetwork, err := n.IsDisabled(ctx)
 	if err != nil {
-		n.instance.Logger.WithFields(logrus.Fields{
-			"instance": n.instance.name,
-			"error":    err,
-		}).Error("error checking network status for instance")
+		n.instance.Logger.WithError(err).WithField("instance", n.instance.k8sName).Error("error checking network status for instance")
 		return ErrCheckingNetworkStatusForInstance.WithParams(n.instance.k8sName).Wrap(err)
 	}
 
@@ -306,10 +304,7 @@ func (n *network) enableIfDisabled(ctx context.Context) error {
 		return nil
 	}
 	if err := n.Enable(ctx); err != nil {
-		n.instance.Logger.WithFields(logrus.Fields{
-			"instance": n.instance.name,
-			"error":    err,
-		}).Error("error enabling network for instance")
+		n.instance.Logger.WithError(err).WithField("instance", n.instance.k8sName).Error("error enabling network for instance")
 		return ErrEnablingNetworkForInstance.WithParams(n.instance.k8sName).Wrap(err)
 	}
 	return nil

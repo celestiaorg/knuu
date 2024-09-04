@@ -73,10 +73,7 @@ func (e *execution) StartWithCallback(ctx context.Context, callback func()) erro
 	go func() {
 		err := e.WaitInstanceIsRunning(ctx)
 		if err != nil {
-			e.instance.Logger.WithFields(logrus.Fields{
-				"instance": e.instance.k8sName,
-				"error":    err,
-			}).Errorf("waiting for instance to be running")
+			e.instance.Logger.WithError(err).WithField("instance", e.instance.k8sName).Error("waiting for instance to be running")
 			return
 		}
 		callback()

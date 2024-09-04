@@ -88,7 +88,7 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 		<-stop
 		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			k.Logger.WithField("error", err).Error("deleting namespace")
+			k.Logger.WithError(err).Error("deleting namespace")
 		}
 	}()
 }
