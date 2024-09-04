@@ -87,12 +87,9 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) e
 	}
 	b.builderFactory = factory
 	b.imageName = imageName
-
-	if err := b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName); err != nil {
-		return err
-	}
 	b.instance.SetState(StatePreparing)
-	return nil
+
+	return b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
 }
 
 // SetStartCommand sets the command to run in the instance
