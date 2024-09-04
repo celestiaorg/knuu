@@ -74,13 +74,11 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 		namePrefix = "download-file-running"
 	)
 
-	// Setup
-
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
@@ -102,14 +100,12 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 }
 func (s *Suite) TestDownloadFileFromBuilder() {
 	const namePrefix = "download-file-builder"
-	s.T().Parallel()
-	// Setup
 
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
 
 	s.T().Cleanup(func() {
 		if err := target.Execution().Destroy(ctx); err != nil {
@@ -146,7 +142,7 @@ func (s *Suite) TestMinio() {
 	s.Require().NoError(err)
 
 	ctx := context.Background()
-	s.Require().NoError(target.Build().SetImage(ctx, "alpine:latest"))
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
