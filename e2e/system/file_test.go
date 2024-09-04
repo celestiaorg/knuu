@@ -7,50 +7,73 @@ import (
 	"os"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
-
 	"github.com/google/uuid"
+
+	"github.com/celestiaorg/knuu/e2e"
 )
 
 func (s *Suite) TestFile() {
-	const namePrefix = "file"
-	s.T().Parallel()
-	// Setup
+	const (
+		namePrefix = "file"
+		maxRetries = 3
+	)
 
+	// Setup
 	ctx := context.Background()
+
+	s.T().Log("Creating executor instance")
 	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	s.Require().NoError(err)
 
-	serverfile := s.createNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
+	s.T().Log("Creating nginx instance with volume")
+	serverfile := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
 
-	err = serverfile.Storage().AddFile(resourcesHTML+"/index.html", nginxHTMLPath+"/index.html", "0:0")
-	s.Require().NoError(err)
+	s.T().Log("Adding file to nginx instance")
+	err = s.RetryOperation(func() error {
+		return serverfile.Storage().AddFile(resourcesHTML+"/index.html", e2e.NginxHTMLPath+"/index.html", "0:0")
+	}, maxRetries)
+	s.Require().NoError(err, "Error adding file to nginx instance")
 
-	s.Require().NoError(serverfile.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, serverfile, executor)
-		if err != nil {
-			s.T().Logf("Error destroying instance: %v", err)
-		}
-	})
+	s.T().Log("Committing changes")
+	err = s.RetryOperation(func() error {
+		return serverfile.Build().Commit(ctx)
+	}, maxRetries)
+	s.Require().NoError(err, "Error committing changes")
 
 	// Test logic
+	s.T().Log("Getting server IP")
+	var serverfileIP string
+	err = s.RetryOperation(func() error {
+		var err error
+		serverfileIP, err = serverfile.Network().GetIP(ctx)
+		return err
+	}, maxRetries)
+	s.Require().NoError(err, "Error getting server IP")
 
-	serverfileIP, err := serverfile.Network().GetIP(ctx)
-	s.Require().NoError(err)
+	s.T().Log("Starting server")
+	err = s.RetryOperation(func() error {
+		return serverfile.Execution().Start(ctx)
+	}, maxRetries)
+	s.Require().NoError(err, "Error starting server")
 
-	s.Require().NoError(serverfile.Execution().Start(ctx))
+	s.T().Log("Executing wget command")
+	var wget string
+	err = s.RetryOperation(func() error {
+		var err error
+		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+		return err
+	}, maxRetries)
+	s.Require().NoError(err, "Error executing wget command")
 
-	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
-	s.Require().NoError(err)
-
+	s.T().Log("Asserting wget output")
 	s.Assert().Contains(wget, "Hello World!")
 }
 
 func (s *Suite) TestDownloadFileFromRunningInstance() {
-	const namePrefix = "download-file-running"
-	s.T().Parallel()
+	const (
+		namePrefix = "download-file-running"
+	)
+
 	// Setup
 
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
@@ -61,12 +84,6 @@ func (s *Suite) TestDownloadFileFromRunningInstance() {
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
-
-	s.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	const (
@@ -124,7 +141,6 @@ func (s *Suite) TestMinio() {
 		minioBucketName  = "knuu-e2e-test"
 		minioPushTimeout = 1 * time.Minute
 	)
-	s.T().Parallel()
 	// Setup
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
 	s.Require().NoError(err)
@@ -134,12 +150,6 @@ func (s *Suite) TestMinio() {
 	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
-
-	s.T().Cleanup(func() {
-		if err := target.Execution().Destroy(ctx); err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	var (
 		fileContent = "Hello World!"

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
@@ -16,13 +18,14 @@ import (
 const buildDirBase = "/tmp/knuu"
 
 type build struct {
-	instance       *Instance
-	imageName      string
-	builderFactory *container.BuilderFactory
-	command        []string
-	args           []string
-	env            map[string]string
-	imageCache     *sync.Map
+	instance        *Instance
+	imageName       string
+	imagePullPolicy v1.PullPolicy
+	builderFactory  *container.BuilderFactory
+	command         []string
+	args            []string
+	env             map[string]string
+	imageCache      *sync.Map
 }
 
 func (i *Instance) Build() *build {
@@ -31,6 +34,14 @@ func (i *Instance) Build() *build {
 
 func (b *build) ImageName() string {
 	return b.imageName
+}
+
+func (b *build) ImagePullPolicy() v1.PullPolicy {
+	return b.imagePullPolicy
+}
+
+func (b *build) SetImagePullPolicy(pullPolicy v1.PullPolicy) {
+	b.imagePullPolicy = pullPolicy
 }
 
 // SetImage sets the image of the instance.
@@ -120,7 +131,10 @@ func (b *build) SetUser(user string) error {
 	}
 
 	b.builderFactory.SetUser(user)
-	b.instance.Logger.Debugf("Set user '%s' for instance '%s'", user, b.instance.name)
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"user":     user,
+	}).Debugf("Set user for instance")
 	return nil
 }
 
@@ -133,16 +147,13 @@ func (b *build) Commit(ctx context.Context) error {
 
 	if !b.builderFactory.Changed() {
 		b.imageName = b.builderFactory.ImageNameFrom()
-		b.instance.Logger.Debugf("No need to build and push image for instance '%s'", b.instance.name)
+		b.instance.Logger.WithFields(logrus.Fields{
+			"instance": b.instance.name,
+			"image":    b.imageName,
+		}).Debugf("no need to build and push image for instance")
 
 		b.instance.SetState(StateCommitted)
 		return nil
-	}
-
-	//TODO: To speed up the process, the image name could be dependent on the hash of the image
-	imageName, err := b.getImageRegistry()
-	if err != nil {
-		return ErrGettingImageRegistry.Wrap(err)
 	}
 
 	// Generate a hash for the current image
@@ -151,38 +162,55 @@ func (b *build) Commit(ctx context.Context) error {
 		return ErrGeneratingImageHash.Wrap(err)
 	}
 
+	imageName, err := getImageRegistry(imageHash)
+	if err != nil {
+		return ErrGettingImageRegistry.Wrap(err)
+	}
+
 	// Check if the generated image hash already exists in the cache, otherwise, we build it.
 	cachedImageName, exists := b.checkImageHashInCache(imageHash)
 	if exists {
 		b.imageName = cachedImageName
-		b.instance.Logger.Debugf("Using cached image for instance '%s'", b.instance.name)
-	} else {
-		b.instance.Logger.Debugf("Cannot use any cached image for instance '%s'", b.instance.name)
-		err = b.builderFactory.PushBuilderImage(ctx, imageName)
-		if err != nil {
-			return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
-		}
-		b.updateImageCacheWithHash(imageHash, imageName)
-		b.imageName = imageName
-		b.instance.Logger.Debugf("Pushed new image for instance '%s'", b.instance.name)
+
+		b.instance.Logger.WithFields(logrus.Fields{
+			"instance": b.instance.name,
+			"image":    b.imageName,
+		}).Debugf("using cached image for instance")
+
+		b.instance.SetState(StateCommitted)
+		return nil
 	}
+
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+	}).Debugf("cannot use any cached image for instance")
+	err = b.builderFactory.PushBuilderImage(ctx, imageName)
+	if err != nil {
+		return ErrPushingImage.WithParams(b.instance.name).Wrap(err)
+	}
+	b.updateImageCacheWithHash(imageHash, imageName)
+	b.imageName = imageName
+
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"image":    b.imageName,
+	}).Debugf("pushed new image for instance")
 
 	b.instance.SetState(StateCommitted)
 	return nil
 }
 
 // getImageRegistry returns the name of the temporary image registry
-func (b *build) getImageRegistry() (string, error) {
-	if b.imageName != "" {
-		return b.imageName, nil
+func getImageRegistry(imageName string) (string, error) {
+	if imageName == "" {
+		// If not already set, generate a random name using ttl.sh
+		uuid, err := uuid.NewRandom()
+		if err != nil {
+			return "", fmt.Errorf("error generating UUID: %w", err)
+		}
+		imageName = uuid.String()
 	}
-	// If not already set, generate a random name using ttl.sh
-	uuid, err := uuid.NewRandom()
-	if err != nil {
-		return "", fmt.Errorf("error generating UUID: %w", err)
-	}
-	imageName := fmt.Sprintf("ttl.sh/%s:24h", uuid.String())
-	return imageName, nil
+	return fmt.Sprintf("ttl.sh/%s:24h", imageName), nil
 }
 
 // getBuildDir returns the build directory for the instance
@@ -203,12 +231,16 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 	if !b.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingEnvNotAllowed.WithParams(b.instance.state.String())
 	}
-	b.instance.Logger.Debugf("Setting environment variable '%s' in instance '%s'", key, b.instance.name)
+	b.instance.Logger.WithFields(logrus.Fields{
+		"instance": b.instance.name,
+		"key":      key,
+		// value is not logged to avoid leaking sensitive information
+	}).Debugf("Setting environment variable")
+
 	if b.instance.state == StatePreparing {
 		b.builderFactory.SetEnvVar(key, value)
 		return nil
 	}
-
 	b.env[key] = value
 	return nil
 }

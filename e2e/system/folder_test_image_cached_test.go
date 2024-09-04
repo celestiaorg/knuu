@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
 )
 
@@ -13,7 +14,6 @@ func (s *Suite) TestFolderCached() {
 		namePrefix        = "folder-cached"
 		numberOfInstances = 10
 	)
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
@@ -23,7 +23,7 @@ func (s *Suite) TestFolderCached() {
 	instances := make([]*instance.Instance, numberOfInstances)
 	for i := 0; i < numberOfInstances; i++ {
 		name := fmt.Sprintf("%s-%d", namePrefix, i+1)
-		instances[i] = s.createNginxInstanceWithVolume(ctx, name)
+		instances[i] = s.CreateNginxInstanceWithVolume(ctx, name)
 	}
 
 	var wgFolders sync.WaitGroup
@@ -32,20 +32,11 @@ func (s *Suite) TestFolderCached() {
 		go func(i *instance.Instance) {
 			defer wgFolders.Done()
 			// adding the folder after the Commit, it will help us to use a cached image.
-			err := i.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
+			err := i.Storage().AddFolder(resourcesHTML, e2e.NginxHTMLPath, "0:0")
 			s.Require().NoError(err, "adding file to '%v'", i.Name())
 		}(i)
 	}
 	wgFolders.Wait()
-
-	// Cleanup
-	s.T().Cleanup(func() {
-		all := append(instances, executor)
-		err := instance.BatchDestroy(ctx, all...)
-		if err != nil {
-			s.T().Logf("error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	for _, i := range instances {

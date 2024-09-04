@@ -5,30 +5,22 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/e2e"
 )
 
 func (s *Suite) TestFolder() {
 	const namePrefix = "folder"
-	s.T().Parallel()
 
 	// Setup
 	ctx := context.Background()
-	executor, err := s.Executor.NewInstance(ctx, namePrefix)
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
 	require.NoError(s.T(), err)
 
-	web := s.createNginxInstanceWithVolume(ctx, namePrefix)
-	err = web.Storage().AddFolder(resourcesHTML, nginxHTMLPath, "0:0")
+	web := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-web")
+	err = web.Storage().AddFolder(resourcesHTML, e2e.NginxHTMLPath, "0:0")
 	require.NoError(s.T(), err)
 
 	require.NoError(s.T(), web.Build().Commit(ctx))
-
-	s.T().Cleanup(func() {
-		err := instance.BatchDestroy(ctx, web, executor)
-		if err != nil {
-			s.T().Logf("Error destroying instance: %v", err)
-		}
-	})
 
 	// Test logic
 	webIP, err := web.Network().GetIP(ctx)

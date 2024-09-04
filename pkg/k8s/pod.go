@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -37,6 +38,7 @@ const (
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
 	Image           string              // Name of the container image to use for the container
+	ImagePullPolicy v1.PullPolicy       // Image pull policy for the container
 	Command         []string            // Command to run in the container
 	Args            []string            // Arguments to pass to the command in the container
 	Env             map[string]string   // Environment variables to set in the container
@@ -104,7 +106,7 @@ func (c *Client) NewFile(source, dest string) *File {
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	c.logger.Debugf("Replacing pod %s", podConfig.Name)
+	c.logger.WithField("name", podConfig.Name).Debug("replacing pod")
 
 	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
@@ -126,13 +128,13 @@ func (c *Client) waitForPodDeletion(ctx context.Context, name string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Errorf("Context cancelled while waiting for pod %s to delete", name)
+			c.logger.WithField("name", name).Error("context cancelled while waiting for pod to delete")
 			return ctx.Err()
 		case <-time.After(retryInterval):
 			_, err := c.getPod(ctx, name)
 			if err != nil {
 				if apierrs.IsNotFound(err) {
-					c.logger.Debugf("Pod %s successfully deleted", name)
+					c.logger.WithField("name", name).Debug("pod successfully deleted")
 					return nil
 				}
 				return ErrWaitingForPodDeletion.WithParams(name).Wrap(err)
@@ -218,12 +220,12 @@ func (c *Client) RunCommandInPod(
 	})
 
 	if err != nil {
-		return "", ErrExecutingCommand.Wrap(err)
+		return "", ErrExecutingCommand.WithParams(stdout.String(), stderr.String()).Wrap(err)
 	}
 
 	// Check if there were any errors on the error stream
 	if stderr.Len() != 0 {
-		return "", ErrCommandExecution.WithParams(stderr.String())
+		return "", ErrCommandExecution.WithParams(stdout.String(), stderr.String())
 	}
 
 	return stdout.String(), nil
@@ -308,8 +310,11 @@ func (c *Client) PortForwardPod(
 	if stderr.Len() > 0 {
 		return ErrPortForwarding.WithParams(stderr.String())
 	}
-	c.logger.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	c.logger.Debugf("Port forwarding stdout: %v", stdout)
+	c.logger.WithFields(logrus.Fields{
+		"local_port":  localPort,
+		"remote_port": remotePort,
+		"stdout":      stdout.String(),
+	}).Debug("port forwarding")
 
 	// Start the port forwarding
 	go func() {
@@ -324,7 +329,10 @@ func (c *Client) PortForwardPod(
 	select {
 	case <-readyChan:
 		// Ready to forward
-		c.logger.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+		c.logger.WithFields(logrus.Fields{
+			"local_port":  localPort,
+			"remote_port": remotePort,
+		}).Debug("port forwarding ready")
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)
@@ -490,7 +498,7 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
 
-	c.logger.Debugf("Init container command: %s", fullCommand)
+	c.logger.WithField("command", fullCommand).Debug("init container command")
 	return commands
 }
 
@@ -512,6 +520,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 	return v1.Container{
 		Name:            config.Name,
 		Image:           config.Image,
+		ImagePullPolicy: config.ImagePullPolicy,
 		Command:         config.Command,
 		Args:            config.Args,
 		Env:             buildEnv(config.Env),
@@ -580,6 +589,9 @@ func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
 		Spec: c.preparePodSpec(spec, init),
 	}
 
-	c.logger.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      spec.Name,
+		"namespace": spec.Namespace,
+	}).Debug("prepared pod")
 	return pod
 }
