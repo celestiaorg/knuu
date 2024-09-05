@@ -17,6 +17,7 @@ import (
 const (
 	testTimeout = time.Minute * 15 // the same time that is used in the ci/cd pipeline
 
+	alpineImage             = "alpine:latest"
 	resourcesHTML           = "resources/html"
 	resourcesFileCMToFolder = "resources/file_cm_to_folder"
 )

@@ -119,10 +119,7 @@ func (b *build) ExecuteCommand(command ...string) error {
 		return ErrAddingCommandNotAllowed.WithParams(b.instance.state.String())
 	}
 
-	_, err := b.builderFactory.ExecuteCmdInBuilder(command)
-	if err != nil {
-		return ErrExecutingCommandInInstance.WithParams(command, b.instance.name).Wrap(err)
-	}
+	b.builderFactory.AddCmdToBuilder(command)
 	return nil
 }
 
@@ -133,9 +130,7 @@ func (b *build) SetUser(user string) error {
 		return ErrSettingUserNotAllowed.WithParams(b.instance.state.String())
 	}
 
-	if err := b.builderFactory.SetUser(user); err != nil {
-		return ErrSettingUser.WithParams(user, b.instance.name).Wrap(err)
-	}
+	b.builderFactory.SetUser(user)
 	b.instance.Logger.WithFields(logrus.Fields{
 		"instance": b.instance.name,
 		"user":     user,
@@ -224,14 +219,10 @@ func (b *build) getBuildDir() string {
 }
 
 // addFileToBuilder adds a file to the builder
-func (b *build) addFileToBuilder(src, dest, chown string) error {
-	_ = src
+func (b *build) addFileToBuilder(src, dest, chown string) {
 	// dest is the same as src here, as we copy the file to the build dir with the subfolder structure of dest
-	err := b.builderFactory.AddToBuilder(dest, dest, chown)
-	if err != nil {
-		return ErrAddingFileToInstance.WithParams(dest, b.instance.name).Wrap(err)
-	}
-	return nil
+	_ = src
+	b.builderFactory.AddToBuilder(dest, dest, chown)
 }
 
 // SetEnvironmentVariable sets the given environment variable in the instance
@@ -247,7 +238,8 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 	}).Debugf("Setting environment variable")
 
 	if b.instance.state == StatePreparing {
-		return b.builderFactory.SetEnvVar(key, value)
+		b.builderFactory.SetEnvVar(key, value)
+		return nil
 	}
 	b.env[key] = value
 	return nil

@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 type storage struct {
@@ -47,7 +48,8 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 
 	switch s.instance.state {
 	case StatePreparing:
-		return s.instance.build.addFileToBuilder(src, dest, chown)
+		s.instance.build.addFileToBuilder(src, dest, chown)
+		return nil
 	case StateCommitted:
 		return s.addFileToInstance(dstPath, dest, chown)
 	}
@@ -185,7 +187,7 @@ func (s *storage) GetFileBytes(ctx context.Context, file string) ([]byte, error)
 	}
 
 	if s.instance.state != StateStarted {
-		bytes, err := s.instance.build.builderFactory.ReadFileFromBuilder(file)
+		bytes, err := s.readFileFromImage(ctx, file)
 		if err != nil {
 			return nil, ErrGettingFile.WithParams(file, s.instance.name).Wrap(err)
 		}
@@ -368,6 +370,48 @@ func (s *storage) destroyFiles(ctx context.Context) error {
 
 	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("destroyed configmap")
 	return nil
+}
+
+func (s *storage) readFileFromImage(ctx context.Context, filePath string) ([]byte, error) {
+	// Another way to implement this is to download all the layers of the image and then
+	// extract the file from them, but it seems hacky and will run on the user's machine.
+	// Therefore, we will use the tmp instance to get the file from the image
+
+	tmpName, err := names.NewRandomK8("tmp-dl")
+	if err != nil {
+		return nil, err
+	}
+
+	ti, err := New(tmpName, s.instance.SystemDependencies)
+	if err != nil {
+		return nil, err
+	}
+	if err := ti.build.SetImage(ctx, s.instance.build.ImageName()); err != nil {
+		return nil, err
+	}
+
+	if err := ti.build.SetStartCommand("sleep", "infinity"); err != nil {
+		return nil, err
+	}
+
+	if err := ti.build.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := ti.execution.Start(ctx); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ti.execution.Destroy(ctx); err != nil {
+			ti.Logger.Errorf("failed to destroy tmp instance %s: %v", ti.k8sName, err)
+		}
+	}()
+
+	output, err := ti.execution.ExecuteCommand(ctx, "cat", filePath)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(output), nil
 }
 
 func (s *storage) clone() *storage {
