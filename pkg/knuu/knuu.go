@@ -88,7 +88,7 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 		<-stop
 		k.Logger.Info("Received signal to stop, cleaning up resources...")
 		if err := k.CleanUp(ctx); err != nil {
-			k.Logger.Errorf("Error deleting namespace: %v", err)
+			k.Logger.WithError(err).Error("deleting namespace")
 		}
 	}()
 }
@@ -120,7 +120,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 			k.Scope, k.K8sClient.Namespace(), instance.TimeoutHandlerInstance.String(), k.K8sClient.Namespace()))
 
 	// Delete the namespace as it was created by knuu.
-	k.Logger.Debugf("The namespace generated [%s] will be deleted", k.K8sClient.Namespace())
+	k.Logger.WithField("namespace", k.K8sClient.Namespace()).Debug("the namespace will be deleted")
 	commands = append(commands, fmt.Sprintf("kubectl delete namespace %s", k.K8sClient.Namespace()))
 
 	// Delete all labeled resources within the namespace.
@@ -131,7 +131,7 @@ func (k *Knuu) handleTimeout(ctx context.Context) error {
 
 	// Run the command
 	if err := inst.Build().SetStartCommand("sh", "-c", finalCmd); err != nil {
-		k.Logger.Debugf("The full command generated is [%s]", finalCmd)
+		k.Logger.WithField("command", finalCmd).Error("cannot set start command")
 		return ErrCannotSetStartCommand.Wrap(err)
 	}
 
@@ -225,6 +225,6 @@ func setupProxy(ctx context.Context, k *Knuu) error {
 	if err != nil {
 		return ErrCannotGetTraefikEndpoint.Wrap(err)
 	}
-	k.Logger.Debugf("Proxy endpoint: %s", endpoint)
+	k.Logger.WithField("endpoint", endpoint).Debug("proxy endpoint")
 	return nil
 }

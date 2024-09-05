@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -26,7 +27,11 @@ func (r *resources) SetMemory(request, limit resource.Quantity) error {
 	}
 	r.memoryRequest = request
 	r.memoryLimit = limit
-	r.instance.Logger.Debugf("Set memory to '%s' and limit to '%s' in instance '%s'", request.String(), limit.String(), r.instance.name)
+	r.instance.Logger.WithFields(logrus.Fields{
+		"instance":       r.instance.name,
+		"memory_request": request.String(),
+		"memory_limit":   limit.String(),
+	}).Debug("set memory for instance")
 	return nil
 }
 
@@ -37,7 +42,10 @@ func (r *resources) SetCPU(request resource.Quantity) error {
 		return ErrSettingCPUNotAllowed.WithParams(r.instance.state.String())
 	}
 	r.cpuRequest = request
-	r.instance.Logger.Debugf("Set cpu to '%s' in instance '%s'", request.String(), r.instance.name)
+	r.instance.Logger.WithFields(logrus.Fields{
+		"instance":    r.instance.name,
+		"cpu_request": request.String(),
+	}).Debug("set cpu for instance")
 	return nil
 }
 

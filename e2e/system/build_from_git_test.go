@@ -65,14 +65,12 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	s.Require().NoError(err)
 
 	s.T().Log("Setting git repo")
-	err = s.RetryOperation(func() error {
-		return target.Build().SetGitRepo(ctx, builder.GitContext{
-			Repo:     gitRepo,
-			Branch:   gitBranch,
-			Username: "",
-			Password: "",
-		})
-	}, maxRetries)
+	err = target.Build().SetGitRepo(ctx, builder.GitContext{
+		Repo:     gitRepo,
+		Branch:   gitBranch,
+		Username: "",
+		Password: "",
+	})
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))

@@ -256,7 +256,7 @@ func (t *Traefik) createService(ctx context.Context) error {
 		return ErrTraefikFailedToCreateService.Wrap(err)
 	}
 
-	t.Logger.Debugf("Service %s created successfully.", traefikServiceName)
+	t.Logger.WithField("service", traefikServiceName).Debug("Service created successfully.")
 	return nil
 }
 
@@ -352,7 +352,7 @@ func (t *Traefik) createIngressRoute(
 func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
 	apiResourceList, err := t.K8sClient.Clientset().Discovery().ServerResourcesForGroupVersion(traefikAPIGroupVersion)
 	if err != nil {
-		t.Logger.Errorf("Failed to discover Traefik API resources: %v", err)
+		t.Logger.WithError(err).Error("Failed to discover Traefik API resources")
 		return false
 	}
 
@@ -371,6 +371,6 @@ func (t *Traefik) IsTraefikAPIAvailable(ctx context.Context) bool {
 		return true
 	}
 
-	t.Logger.Warnf("Missing Traefik API resources: %v", requiredResources)
+	t.Logger.WithField("missing_resources", requiredResources).Warn("Missing Traefik API resources")
 	return false
 }

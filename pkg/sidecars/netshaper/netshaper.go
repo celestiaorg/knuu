@@ -90,7 +90,6 @@ func (bt *NetShaper) PreStart(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	bt.instance.Logger.Debugf("BitTwister URL: %s", btURL)
 
 	bt.setNewClientByURL(btURL)
 	return nil

@@ -1,6 +1,9 @@
 package instance
 
-import v1 "k8s.io/api/core/v1"
+import (
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+)
 
 type monitoring struct {
 	instance       *Instance
@@ -22,7 +25,10 @@ func (m *monitoring) SetLivenessProbe(livenessProbe *v1.Probe) error {
 		return err
 	}
 	m.livenessProbe = livenessProbe
-	m.instance.Logger.Debugf("Set liveness probe to '%s' in instance '%s'", livenessProbe, m.instance.name)
+	m.instance.Logger.WithFields(logrus.Fields{
+		"instance":       m.instance.name,
+		"liveness_probe": livenessProbe,
+	}).Debug("set liveness probe")
 	return nil
 }
 
@@ -35,7 +41,10 @@ func (m *monitoring) SetReadinessProbe(readinessProbe *v1.Probe) error {
 		return err
 	}
 	m.readinessProbe = readinessProbe
-	m.instance.Logger.Debugf("Set readiness probe to '%s' in instance '%s'", readinessProbe, m.instance.name)
+	m.instance.Logger.WithFields(logrus.Fields{
+		"instance":        m.instance.name,
+		"readiness_probe": readinessProbe,
+	}).Debug("set readiness probe")
 	return nil
 }
 
@@ -48,7 +57,10 @@ func (m *monitoring) SetStartupProbe(startupProbe *v1.Probe) error {
 		return err
 	}
 	m.startupProbe = startupProbe
-	m.instance.Logger.Debugf("Set startup probe to '%s' in instance '%s'", startupProbe, m.instance.name)
+	m.instance.Logger.WithFields(logrus.Fields{
+		"instance":      m.instance.name,
+		"startup_probe": startupProbe,
+	}).Debug("set startup probe")
 	return nil
 }
 

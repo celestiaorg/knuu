@@ -97,7 +97,7 @@ func (c *Client) GetNetworkPolicy(ctx context.Context, name string) (*v1.Network
 func (c *Client) NetworkPolicyExists(ctx context.Context, name string) bool {
 	_, err := c.GetNetworkPolicy(ctx, name)
 	if err != nil {
-		c.logger.Debug("NetworkPolicy does not exist, err: ", err)
+		c.logger.WithField("name", name).WithError(err).Debug("getting networkPolicy")
 		return false
 	}
 
