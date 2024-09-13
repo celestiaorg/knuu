@@ -216,6 +216,10 @@ func (e *execution) Stop(ctx context.Context) error {
 	return nil
 }
 
+func (b *execution) SetImage(ctx context.Context, image string) error {
+	return b.instance.build.SetImage(ctx, image)
+}
+
 // Labels returns the labels for the instance
 func (e *execution) Labels() map[string]string {
 	return map[string]string{
@@ -262,18 +266,6 @@ func (e *execution) Destroy(ctx context.Context) error {
 	e.instance.SetState(StateDestroyed)
 	e.instance.sidecars.setStateForSidecars(StateDestroyed)
 	return nil
-}
-
-func (e *execution) UpgradeImage(ctx context.Context, image string) error {
-	return e.UpgradeImageWithGracePeriod(ctx, image, 0)
-}
-
-func (e *execution) UpgradeImageWithGracePeriod(ctx context.Context, image string, gracePeriod time.Duration) error {
-	if !e.instance.IsInState(StateStarted) {
-		return ErrUpgradingImageNotAllowed.WithParams(e.instance.state.String())
-	}
-
-	return e.instance.build.setImageWithGracePeriod(ctx, image, gracePeriod)
 }
 
 // BatchDestroy destroys a list of instances.

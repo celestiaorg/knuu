@@ -20,9 +20,9 @@ func (i *Instance) Resources() *resources {
 }
 
 // SetMemory sets the memory of the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (r *resources) SetMemory(request, limit resource.Quantity) error {
-	if !r.instance.IsInState(StatePreparing, StateCommitted) {
+	if !r.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingMemoryNotAllowed.WithParams(r.instance.state.String())
 	}
 	r.memoryRequest = request
@@ -36,9 +36,9 @@ func (r *resources) SetMemory(request, limit resource.Quantity) error {
 }
 
 // SetCPU sets the CPU of the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (r *resources) SetCPU(request resource.Quantity) error {
-	if !r.instance.IsInState(StatePreparing, StateCommitted) {
+	if !r.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingCPUNotAllowed.WithParams(r.instance.state.String())
 	}
 	r.cpuRequest = request

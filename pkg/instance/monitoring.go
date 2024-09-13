@@ -66,7 +66,7 @@ func (m *monitoring) SetStartupProbe(startupProbe *v1.Probe) error {
 
 // checkStateForProbe checks if the current state is allowed for setting a probe
 func (m *monitoring) checkStateForProbe() error {
-	if !m.instance.IsInState(StatePreparing, StateCommitted) {
+	if !m.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingProbeNotAllowed.WithParams(m.instance.state.String())
 	}
 	return nil

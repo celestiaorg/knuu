@@ -27,9 +27,9 @@ func (i *Instance) Security() *security {
 }
 
 // AddPolicyRule adds a policy rule to the instance
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (s *security) AddPolicyRule(rule rbacv1.PolicyRule) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingPolicyRuleNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.policyRules = append(s.policyRules, rule)
@@ -37,9 +37,9 @@ func (s *security) AddPolicyRule(rule rbacv1.PolicyRule) error {
 }
 
 // SetPrivileged sets the privileged status for the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing', 'Committed' or 'Stopped'
 func (s *security) SetPrivileged(privileged bool) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingPrivilegedNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.privileged = privileged
@@ -51,9 +51,9 @@ func (s *security) SetPrivileged(privileged bool) error {
 }
 
 // AddKubernetesCapability adds a Kubernetes capability to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing', 'Committed' or 'Stopped'
 func (s *security) AddKubernetesCapability(capability string) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingCapabilityNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.capabilitiesAdd = append(s.capabilitiesAdd, capability)
@@ -65,9 +65,9 @@ func (s *security) AddKubernetesCapability(capability string) error {
 }
 
 // AddKubernetesCapabilities adds multiple Kubernetes capabilities to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing', 'Committed' or 'Stopped'
 func (s *security) AddKubernetesCapabilities(capabilities []string) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.capabilitiesAdd = append(s.capabilitiesAdd, capabilities...)

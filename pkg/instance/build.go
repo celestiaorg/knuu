@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -47,7 +46,7 @@ func (b *build) SetImagePullPolicy(pullPolicy v1.PullPolicy) {
 // SetImage sets the image of the instance.
 // It is only allowed in the 'None' and 'Preparing' states.
 func (b *build) SetImage(ctx context.Context, image string) error {
-	if !b.instance.IsInState(StateNone, StatePreparing) {
+	if !b.instance.IsInState(StateNone, StatePreparing, StateStopped) {
 		if b.instance.sidecars.IsSidecar() {
 			return ErrSettingImageNotAllowedForSidecarsStarted
 		}
@@ -95,7 +94,7 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) e
 // SetStartCommand sets the command to run in the instance
 // This function can only be called when the instance is in state 'Preparing' or 'Committed'
 func (b *build) SetStartCommand(command ...string) error {
-	if !b.instance.IsInState(StatePreparing, StateCommitted) {
+	if !b.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingCommand.WithParams(b.instance.state.String())
 	}
 	b.command = command
@@ -105,7 +104,7 @@ func (b *build) SetStartCommand(command ...string) error {
 // SetArgs sets the arguments passed to the instance
 // This function can only be called in the states 'Preparing' or 'Committed'
 func (b *build) SetArgs(args ...string) error {
-	if !b.instance.IsInState(StatePreparing, StateCommitted) {
+	if !b.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingArgsNotAllowed.WithParams(b.instance.state.String())
 	}
 	b.args = args
@@ -228,7 +227,7 @@ func (b *build) addFileToBuilder(src, dest, chown string) {
 // SetEnvironmentVariable sets the given environment variable in the instance
 // This function can only be called in the states 'Preparing' and 'Committed'
 func (b *build) SetEnvironmentVariable(key, value string) error {
-	if !b.instance.IsInState(StatePreparing, StateCommitted) {
+	if !b.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrSettingEnvNotAllowed.WithParams(b.instance.state.String())
 	}
 	b.instance.Logger.WithFields(logrus.Fields{
@@ -244,29 +243,6 @@ func (b *build) SetEnvironmentVariable(key, value string) error {
 	b.env[key] = value
 	return nil
 }
-
-// setImageWithGracePeriod sets the image of the instance with a grace period
-func (b *build) setImageWithGracePeriod(ctx context.Context, imageName string, gracePeriod time.Duration) error {
-	b.imageName = imageName
-
-	var gracePeriodInSecondsPtr *int64
-	if gracePeriod != 0 {
-		gpInSeconds := int64(gracePeriod.Seconds())
-		gracePeriodInSecondsPtr = &gpInSeconds
-	}
-	_, err := b.instance.K8sClient.ReplaceReplicaSetWithGracePeriod(ctx, b.instance.execution.prepareReplicaSetConfig(), gracePeriodInSecondsPtr)
-	if err != nil {
-		return ErrReplacingPod.Wrap(err)
-	}
-
-	if err := b.instance.execution.WaitInstanceIsRunning(ctx); err != nil {
-		return ErrWaitingInstanceIsRunning.Wrap(err)
-	}
-
-	return nil
-}
-
-// imageCache maps image hash values to image names
 
 // checkImageHashInCache checks if the given image hash exists in the cache.
 func (b *build) checkImageHashInCache(imageHash string) (string, bool) {
