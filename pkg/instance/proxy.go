@@ -11,7 +11,7 @@ const (
 )
 
 func (n *network) AddHost(ctx context.Context, port int) (host string, err error) {
-	if n.instance.state != StateStarted {
+	if !n.instance.IsInState(StateStarted, StatePreparing) {
 		return "", ErrAddingHostToProxyNotAllowed.WithParams(n.instance.state.String())
 	}
 
