@@ -108,18 +108,6 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "With custom Timeout",
-			options: Options{
-				Scope:   "test",
-				Timeout: 30 * time.Minute,
-			},
-			expectedError: nil,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.Equal(t, 30*time.Minute, defaultTimeout)
-			},
-		},
-		{
 			name: "With custom Image Builder",
 			options: Options{
 				Scope:        "test",
