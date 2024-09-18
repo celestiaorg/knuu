@@ -5,6 +5,7 @@ import (
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -60,11 +61,12 @@ func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
 	}
 
 	i.build = &build{
-		instance:   i,
-		command:    make([]string, 0),
-		args:       make([]string, 0),
-		env:        make(map[string]string),
-		imageCache: &sync.Map{},
+		instance:        i,
+		command:         make([]string, 0),
+		args:            make([]string, 0),
+		env:             make(map[string]string),
+		imageCache:      &sync.Map{},
+		imagePullPolicy: v1.PullAlways,
 	}
 
 	i.execution = &execution{instance: i}

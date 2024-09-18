@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 type storage struct {
@@ -46,12 +48,18 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 
 	switch s.instance.state {
 	case StatePreparing:
-		return s.instance.build.addFileToBuilder(src, dest, chown)
+		s.instance.build.addFileToBuilder(src, dest, chown)
+		return nil
 	case StateCommitted:
 		return s.addFileToInstance(dstPath, dest, chown)
 	}
 
-	s.instance.Logger.Debugf("Added file '%s' to instance '%s'", dest, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"file":      dest,
+		"instance":  s.instance.name,
+		"state":     s.instance.state,
+		"build_dir": s.instance.build.getBuildDir(),
+	}).Debug("added file")
 	return nil
 }
 
@@ -98,7 +106,12 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, s.instance.name).Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Added folder '%s' to instance '%s'", dest, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"folder":    dest,
+		"instance":  s.instance.name,
+		"state":     s.instance.state,
+		"build_dir": s.instance.build.getBuildDir(),
+	}).Debug("added folder")
 	return nil
 }
 
@@ -132,7 +145,10 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 func (s *storage) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(s.volumes) > 0 {
-		s.instance.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", s.instance.name, len(s.volumes))
+		s.instance.Logger.WithFields(logrus.Fields{
+			"instance": s.instance.name,
+			"volumes":  len(s.volumes),
+		}).Debug("maximum volumes exceeded")
 		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
 	}
 	return s.AddVolumeWithOwner(path, size, 0)
@@ -146,12 +162,20 @@ func (s *storage) AddVolumeWithOwner(path string, size resource.Quantity, owner 
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(s.volumes) > 0 {
-		s.instance.Logger.Debugf("Maximum volumes exceeded for instance '%s', volumes: %d", s.instance.name, len(s.volumes))
+		s.instance.Logger.WithFields(logrus.Fields{
+			"instance": s.instance.name,
+			"volumes":  len(s.volumes),
+		}).Debug("maximum volumes exceeded")
 		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
 	}
 	volume := s.instance.K8sClient.NewVolume(path, size, owner)
 	s.volumes = append(s.volumes, volume)
-	s.instance.Logger.Debugf("Added volume '%s' with size '%s' and owner '%d' to instance '%s'", path, size.String(), owner, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"volume":   path,
+		"size":     size.String(),
+		"owner":    owner,
+		"instance": s.instance.name,
+	}).Debug("added volume")
 	return nil
 }
 
@@ -163,7 +187,7 @@ func (s *storage) GetFileBytes(ctx context.Context, file string) ([]byte, error)
 	}
 
 	if s.instance.state != StateStarted {
-		bytes, err := s.instance.build.builderFactory.ReadFileFromBuilder(file)
+		bytes, err := s.readFileFromImage(ctx, file)
 		if err != nil {
 			return nil, ErrGettingFile.WithParams(file, s.instance.name).Wrap(err)
 		}
@@ -284,7 +308,10 @@ func (s *storage) deployVolume(ctx context.Context) error {
 		totalSize.Add(volume.Size)
 	}
 	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.k8sName, s.instance.execution.Labels(), totalSize)
-	s.instance.Logger.Debugf("Deployed persistent volume '%s'", s.instance.k8sName)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"total_size": totalSize.String(),
+		"instance":   s.instance.name,
+	}).Debug("deployed persistent volume")
 
 	return nil
 }
@@ -295,7 +322,7 @@ func (s *storage) destroyVolume(ctx context.Context) error {
 	if err != nil {
 		return ErrFailedToDeletePersistentVolumeClaim.Wrap(err)
 	}
-	s.instance.Logger.Debugf("Destroyed persistent volume '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("instance", s.instance.name).Debug("destroyed persistent volume")
 	return nil
 }
 
@@ -330,7 +357,7 @@ func (s *storage) deployFiles(ctx context.Context) error {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Deployed configmap '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("deployed configmap")
 
 	return nil
 }
@@ -341,8 +368,50 @@ func (s *storage) destroyFiles(ctx context.Context) error {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.Debugf("Destroyed configmap '%s'", s.instance.k8sName)
+	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("destroyed configmap")
 	return nil
+}
+
+func (s *storage) readFileFromImage(ctx context.Context, filePath string) ([]byte, error) {
+	// Another way to implement this is to download all the layers of the image and then
+	// extract the file from them, but it seems hacky and will run on the user's machine.
+	// Therefore, we will use the tmp instance to get the file from the image
+
+	tmpName, err := names.NewRandomK8("tmp-dl")
+	if err != nil {
+		return nil, err
+	}
+
+	ti, err := New(tmpName, s.instance.SystemDependencies)
+	if err != nil {
+		return nil, err
+	}
+	if err := ti.build.SetImage(ctx, s.instance.build.ImageName()); err != nil {
+		return nil, err
+	}
+
+	if err := ti.build.SetStartCommand("sleep", "infinity"); err != nil {
+		return nil, err
+	}
+
+	if err := ti.build.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := ti.execution.Start(ctx); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ti.execution.Destroy(ctx); err != nil {
+			ti.Logger.Errorf("failed to destroy tmp instance %s: %v", ti.k8sName, err)
+		}
+	}()
+
+	output, err := ti.execution.ExecuteCommand(ctx, "cat", filePath)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(output), nil
 }
 
 func (s *storage) clone() *storage {

@@ -3,6 +3,8 @@ package instance
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -58,7 +60,10 @@ func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 
 	s.sidecars = append(s.sidecars, sc)
 	sc.Instance().parentInstance = s.instance
-	s.instance.Logger.Debugf("Added sidecar '%s' to instance '%s'", sc.Instance().Name(), s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"sidecar":  sc.Instance().Name(),
+		"instance": s.instance.name,
+	}).Debug("added sidecar to instance")
 	return nil
 }
 

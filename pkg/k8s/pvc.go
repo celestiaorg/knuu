@@ -51,7 +51,7 @@ func (c *Client) CreatePersistentVolumeClaim(
 		return ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	c.logger.Debugf("PersistentVolumeClaim %s created", name)
+	c.logger.WithField("name", name).Debug("PersistentVolumeClaim created")
 	return nil
 }
 
@@ -69,7 +69,7 @@ func (c *Client) DeletePersistentVolumeClaim(ctx context.Context, name string) e
 		return ErrDeletingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	c.logger.Debugf("PersistentVolumeClaim %s deleted", name)
+	c.logger.WithField("name", name).Debug("PersistentVolumeClaim deleted")
 	return nil
 }
 

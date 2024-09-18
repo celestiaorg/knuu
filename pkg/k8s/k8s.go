@@ -29,6 +29,9 @@ const (
 
 	// retryInterval is the interval to wait between retries
 	retryInterval = 100 * time.Millisecond
+
+	// if any pod is pending for more than this duration, a warning is logged
+	defaultMaxPendingDuration = 60 * time.Second
 )
 
 type Client struct {
@@ -38,6 +41,8 @@ type Client struct {
 	namespace       string
 	logger          *logrus.Logger
 	terminated      bool // This flag is used to indicate that the process has been terminated by the user
+	// max duration for any pod to be in pending state, otherwise it triggers a notice to be shown
+	maxPendingDuration time.Duration
 }
 
 var _ KubeManager = &Client{}
@@ -47,6 +52,10 @@ func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*C
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
 	}
+
+	// Set custom QPS and Burst to avoid client rate limit errors
+	config.QPS = CustomQPS
+	config.Burst = CustomBurst
 
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -74,17 +83,19 @@ func NewClientCustom(
 	logger *logrus.Logger,
 ) (*Client, error) {
 	kc := &Client{
-		clientset:       cs,
-		discoveryClient: dc,
-		dynamicClient:   dC,
-		namespace:       namespace,
-		logger:          logger,
-		terminated:      false,
+		clientset:          cs,
+		discoveryClient:    dc,
+		dynamicClient:      dC,
+		namespace:          namespace,
+		logger:             logger,
+		terminated:         false,
+		maxPendingDuration: defaultMaxPendingDuration,
 	}
 	kc.namespace = SanitizeName(namespace)
 	if err := kc.CreateNamespace(ctx, kc.namespace); err != nil {
 		return nil, ErrCreatingNamespace.WithParams(kc.namespace).Wrap(err)
 	}
+	kc.startPendingPodsWarningMonitor(ctx)
 	return kc, nil
 }
 
@@ -106,4 +117,8 @@ func (c *Client) Namespace() string {
 
 func (c *Client) DiscoveryClient() discovery.DiscoveryInterface {
 	return c.discoveryClient
+}
+
+func (c *Client) SetMaxPendingDuration(duration time.Duration) {
+	c.maxPendingDuration = duration
 }
