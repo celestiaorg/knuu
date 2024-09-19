@@ -33,6 +33,10 @@ func (c *Client) CreateConfigMap(
 	ctx context.Context, name string,
 	labels, data map[string]string,
 ) (*v1.ConfigMap, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
+
 	if err := validateConfigMapName(name); err != nil {
 		return nil, err
 	}

@@ -77,6 +77,9 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validatePodConfig(podConfig); err != nil {
 		return nil, err
 	}
@@ -344,6 +347,9 @@ func (c *Client) PortForwardPod(
 }
 
 func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 

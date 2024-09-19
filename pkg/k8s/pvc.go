@@ -16,6 +16,9 @@ func (c *Client) CreatePersistentVolumeClaim(
 	labels map[string]string,
 	size resource.Quantity,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validatePVCName(name); err != nil {
 		return err
 	}
