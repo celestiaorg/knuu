@@ -1,6 +1,9 @@
 package instance
 
 import (
+	"context"
+	"io"
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 )
@@ -14,6 +17,13 @@ type monitoring struct {
 
 func (i *Instance) Monitoring() *monitoring {
 	return i.monitoring
+}
+
+func (m *monitoring) Logs(ctx context.Context) (io.ReadCloser, error) {
+	if m.instance.sidecars.IsSidecar() {
+		return m.instance.K8sClient.GetLogStream(ctx, m.instance.parentInstance.Name(), m.instance.Name())
+	}
+	return m.instance.K8sClient.GetLogStream(ctx, m.instance.Name(), m.instance.Name())
 }
 
 // SetLivenessProbe sets the liveness probe of the instance
