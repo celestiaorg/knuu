@@ -38,7 +38,7 @@ const (
 )
 
 type Knuu struct {
-	system.SystemDependencies
+	*system.SystemDependencies
 	stopMu sync.Mutex
 }
 
@@ -58,7 +58,7 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 	}
 
 	k := &Knuu{
-		SystemDependencies: system.SystemDependencies{
+		SystemDependencies: &system.SystemDependencies{
 			K8sClient:    opts.K8sClient,
 			MinioClient:  opts.MinioClient,
 			ImageBuilder: opts.ImageBuilder,

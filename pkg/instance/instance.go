@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -24,7 +23,7 @@ const (
 
 // Instance represents a instance
 type Instance struct {
-	system.SystemDependencies
+	*system.SystemDependencies
 
 	resources  *resources
 	network    *network
@@ -36,7 +35,6 @@ type Instance struct {
 	sidecars   *sidecars
 
 	name         string
-	k8sName      string
 	state        InstanceState
 	instanceType InstanceType
 
@@ -45,19 +43,15 @@ type Instance struct {
 	parentInstance *Instance
 }
 
-func New(name string, sysDeps system.SystemDependencies) (*Instance, error) {
-	k8sName, err := names.NewRandomK8(name)
-	if err != nil {
-		return nil, ErrGeneratingK8sName.WithParams(name).Wrap(err)
-	}
-
-	// Create the instance
+func New(name string, sysDeps *system.SystemDependencies) (*Instance, error) {
 	i := &Instance{
-		name:               name,
-		k8sName:            k8sName,
 		state:              StateNone,
 		instanceType:       BasicInstance,
 		SystemDependencies: sysDeps,
+	}
+
+	if err := i.SetName(name); err != nil {
+		return nil, err
 	}
 
 	i.build = &build{
@@ -113,8 +107,20 @@ func (i *Instance) Name() string {
 	return i.name
 }
 
-func (i *Instance) K8sName() string {
-	return i.k8sName
+func (i *Instance) SetName(name string) error {
+	name = k8s.SanitizeName(name)
+	if i.SystemDependencies.HasInstanceName(name) {
+		return ErrInstanceNameAlreadyExists.WithParams(name)
+	}
+	i.SystemDependencies.AddInstanceName(name)
+
+	if i.name != "" {
+		// Remove the old name from the system dependencies
+		// So someone else can use it if they want
+		i.SystemDependencies.RemoveInstanceName(i.name)
+	}
+	i.name = name
+	return nil
 }
 
 func (i *Instance) State() InstanceState {
@@ -125,23 +131,9 @@ func (i *Instance) SetInstanceType(instanceType InstanceType) {
 	i.instanceType = instanceType
 }
 
-// Clone creates a clone of the instance
-// This function can only be called in the state 'Committed'
-// When cloning an instance that is a sidecar, the clone will be not a sidecar
-// When cloning an instance with sidecars, the sidecars will be cloned as well
-func (i *Instance) Clone() (*Instance, error) {
-	if !i.IsInState(StateCommitted) {
-		return nil, ErrCloningNotAllowed.WithParams(i.state.String())
-	}
-
-	newK8sName, err := names.NewRandomK8(i.name)
-	if err != nil {
-		return nil, ErrGeneratingK8sName.WithParams(i.name).Wrap(err)
-	}
-	// Create a new instance with the same attributes as the original instance
-	ins := i.CloneWithSuffix("")
-	ins.k8sName = newK8sName
-	return ins, nil
+// CloneWithSuffix clones the instance with a suffix
+func (i *Instance) CloneWithSuffix(suffix string) (*Instance, error) {
+	return i.CloneWithName(i.name + "-" + suffix)
 }
 
 // CloneWithName creates a clone of the instance with a given name
@@ -149,26 +141,12 @@ func (i *Instance) Clone() (*Instance, error) {
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
-	if !i.IsInState(StateCommitted) {
-		return nil, ErrCloningNotAllowedForSidecar.WithParams(i.state.String())
-	}
-
-	newK8sName, err := names.NewRandomK8(name)
+	clonedSidecars, err := i.sidecars.clone(name)
 	if err != nil {
-		return nil, ErrGeneratingK8sNameForSidecar.WithParams(name).Wrap(err)
+		return nil, err
 	}
-	// Create a new instance with the same attributes as the original instance
-	ins := i.CloneWithSuffix("")
-	ins.name = name
-	ins.k8sName = newK8sName
-	return ins, nil
-}
 
-// cloneWithSuffix clones the instance with a suffix
-func (i *Instance) CloneWithSuffix(suffix string) *Instance {
 	newInstance := &Instance{
-		name:               i.name + "-" + suffix,
-		k8sName:            i.k8sName + "-" + suffix,
 		SystemDependencies: i.SystemDependencies,
 
 		build:      i.build.clone(),
@@ -178,10 +156,14 @@ func (i *Instance) CloneWithSuffix(suffix string) *Instance {
 		storage:    i.storage.clone(),
 		monitoring: i.monitoring.clone(),
 		security:   i.security.clone(),
-		sidecars:   i.sidecars.cloneWithSuffix(suffix),
+		sidecars:   clonedSidecars,
 
 		state:        i.state,
 		instanceType: i.instanceType,
+	}
+
+	if err := newInstance.SetName(name); err != nil {
+		return nil, err
 	}
 
 	// Need to set all the parent references to the newly created instance
@@ -194,5 +176,5 @@ func (i *Instance) CloneWithSuffix(suffix string) *Instance {
 	newInstance.resources.instance = newInstance
 	newInstance.build.instance = newInstance
 
-	return newInstance
+	return newInstance, nil
 }

@@ -10,6 +10,6 @@ func (k *Knuu) NewInstance(name string) (*instance.Instance, error) {
 	return instance.New(name, k.SystemDependencies)
 }
 
-func (k *Knuu) NewPreloader() (*preloader.Preloader, error) {
-	return preloader.New(k.SystemDependencies)
+func (k *Knuu) NewPreloader(name string) (*preloader.Preloader, error) {
+	return preloader.New(name, k.SystemDependencies)
 }
