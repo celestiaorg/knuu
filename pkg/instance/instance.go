@@ -131,7 +131,7 @@ func (i *Instance) SetInstanceType(instanceType InstanceType) {
 	i.instanceType = instanceType
 }
 
-// cloneWithSuffix clones the instance with a suffix
+// CloneWithSuffix clones the instance with a suffix
 func (i *Instance) CloneWithSuffix(suffix string) (*Instance, error) {
 	return i.CloneWithName(i.name + "-" + suffix)
 }
