@@ -78,7 +78,7 @@ func TestTshark(t *testing.T) {
 
 	require.NoError(t, target.Sidecars().Add(ctx, tsc))
 	var (
-		filename = tsc.Instance().K8sName() + tshark.TsharkCaptureFileExtension
+		filename = tsc.Instance().Name() + tshark.TsharkCaptureFileExtension
 		fileKey  = filepath.Join(keyPrefix, filename)
 	)
 

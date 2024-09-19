@@ -19,12 +19,12 @@ func (n *network) AddHost(ctx context.Context, port int) (host string, err error
 		return "", ErrProxyNotInitialized
 	}
 
-	serviceName := n.instance.k8sName
+	serviceName := n.instance.name
 	if n.instance.sidecars.IsSidecar() {
 		// The service is created for the main instance and
 		// named after it which will be the parent instance for sidecars,
 		// so we need to use the parent instance's service name.
-		serviceName = n.instance.parentInstance.k8sName
+		serviceName = n.instance.parentInstance.name
 	}
 
 	prefix := fmt.Sprintf("%s-%d", serviceName, port)

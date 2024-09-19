@@ -18,14 +18,14 @@ type TestSuite struct {
 	suite.Suite
 	bt         *NetShaper
 	ctx        context.Context
-	sysDeps    system.SystemDependencies
+	sysDeps    *system.SystemDependencies
 	mockServer *httptest.Server
 }
 
 func (s *TestSuite) SetupTest() {
 	s.bt = New()
 	s.ctx = context.Background()
-	s.sysDeps = system.SystemDependencies{
+	s.sysDeps = &system.SystemDependencies{
 		Logger: logrus.New(),
 	}
 
@@ -64,7 +64,7 @@ func (s *TestSuite) TestNew() {
 }
 
 func (s *TestSuite) TestInitialize() {
-	err := s.bt.Initialize(s.ctx, s.sysDeps)
+	err := s.bt.Initialize(s.ctx, "test-init", s.sysDeps)
 	s.Require().NoError(err)
 	s.Assert().NotNil(s.bt.Instance())
 	s.Assert().Equal(DefaultImage, s.bt.Instance().Build().ImageName())
@@ -75,12 +75,14 @@ func (s *TestSuite) TestPreStart() {
 	s.T().Skip("skipping as it is tested in e2e tests")
 }
 
-func (s *TestSuite) TestCloneWithSuffix() {
-	err := s.bt.Initialize(s.ctx, s.sysDeps)
+func (s *TestSuite) TestClone() {
+	err := s.bt.Initialize(s.ctx, "test-clone", s.sysDeps)
 	s.Require().NoError(err)
 	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
 
-	clone := s.bt.CloneWithSuffix("test")
+	clonePrefixName := "test-clone-prefix"
+	clone, err := s.bt.Clone(clonePrefixName)
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedBt, ok := clone.(*NetShaper)
@@ -93,13 +95,13 @@ func (s *TestSuite) TestCloneWithSuffix() {
 	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
 	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
 	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
-	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+	s.Assert().Equal(clonePrefixName+"-"+instanceName, clonedBt.instance.Name())
 	clonedBt.SetPort(9090)
 	s.Assert().NotEqual(s.bt.port, clonedBt.port)
 }
 
-func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
-	err := s.bt.Initialize(s.ctx, s.sysDeps)
+func (s *TestSuite) TestCloneWithCustomValues() {
+	err := s.bt.Initialize(s.ctx, "test-clone-custom", s.sysDeps)
 	s.Require().NoError(err)
 	s.Require().NotNil(s.bt.instance, "Instance should be initialized before cloning")
 
@@ -107,7 +109,9 @@ func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
 	s.bt.SetImage("nginx")
 	s.bt.SetNetworkInterface("eth0")
 
-	clone := s.bt.CloneWithSuffix("test")
+	clonePrefixName := "test-clone-custom-prefix"
+	clone, err := s.bt.Clone(clonePrefixName)
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedBt, ok := clone.(*NetShaper)
@@ -120,7 +124,7 @@ func (s *TestSuite) TestCloneWithSuffixWithCustomValues() {
 	s.Assert().NotNil(clonedBt.instance, "Cloned instance should not be nil")
 	s.Assert().NotEqual(s.bt.instance, clonedBt.instance, "Cloned instance should be a new object")
 	s.Assert().Equal(s.bt.instance.Build().ImageName(), clonedBt.instance.Build().ImageName())
-	s.Assert().Equal(s.bt.instance.Name()+"-test", clonedBt.instance.Name())
+	s.Assert().Equal(clonePrefixName+"-"+instanceName, clonedBt.instance.Name())
 
 	clonedBt.SetPort(9090)
 	s.Assert().NotEqual(s.bt.port, clonedBt.port)

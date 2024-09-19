@@ -60,7 +60,7 @@ func (r *resources) CreateCustomResource(ctx context.Context, gvr *schema.GroupV
 		return ErrCustomResourceDefinitionDoesNotExist.WithParams(gvr.Resource)
 	}
 
-	return r.instance.K8sClient.CreateCustomResource(ctx, r.instance.k8sName, gvr, obj)
+	return r.instance.K8sClient.CreateCustomResource(ctx, r.instance.name, gvr, obj)
 }
 
 // CustomResourceDefinitionExists checks if the custom resource definition exists
@@ -86,7 +86,7 @@ func (r *resources) deployResources(ctx context.Context) error {
 func (r *resources) deployStorage(ctx context.Context) error {
 	if len(r.instance.storage.volumes) != 0 {
 		if err := r.instance.storage.deployVolume(ctx); err != nil {
-			return ErrDeployingVolumeForInstance.WithParams(r.instance.k8sName).Wrap(err)
+			return ErrDeployingVolumeForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
 	if len(r.instance.storage.files) == 0 {
@@ -94,7 +94,7 @@ func (r *resources) deployStorage(ctx context.Context) error {
 	}
 
 	if err := r.instance.storage.deployFiles(ctx); err != nil {
-		return ErrDeployingFilesForInstance.WithParams(r.instance.k8sName).Wrap(err)
+		return ErrDeployingFilesForInstance.WithParams(r.instance.name).Wrap(err)
 	}
 	return nil
 }
@@ -118,20 +118,20 @@ func (r *resources) deployService(ctx context.Context) error {
 func (r *resources) destroyResources(ctx context.Context) error {
 	if len(r.instance.storage.volumes) != 0 {
 		if err := r.instance.storage.destroyVolume(ctx); err != nil {
-			return ErrDestroyingVolumeForInstance.WithParams(r.instance.k8sName).Wrap(err)
+			return ErrDestroyingVolumeForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
 
 	if len(r.instance.storage.files) != 0 {
 		err := r.instance.storage.destroyFiles(ctx)
 		if err != nil {
-			return ErrDestroyingFilesForInstance.WithParams(r.instance.k8sName).Wrap(err)
+			return ErrDestroyingFilesForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
 	if r.instance.network.kubernetesService != nil {
 		err := r.instance.network.destroyService(ctx)
 		if err != nil {
-			return ErrDestroyingServiceForInstance.WithParams(r.instance.k8sName).Wrap(err)
+			return ErrDestroyingServiceForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
 
@@ -139,7 +139,7 @@ func (r *resources) destroyResources(ctx context.Context) error {
 	if !r.instance.sidecars.IsSidecar() {
 		// enable network when network is disabled
 		if err := r.instance.network.enableIfDisabled(ctx); err != nil {
-			return ErrEnablingNetworkForInstance.WithParams(r.instance.k8sName).Wrap(err)
+			return ErrEnablingNetworkForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
 

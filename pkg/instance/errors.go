@@ -218,4 +218,6 @@ var (
 	ErrFailedToDeletePersistentVolumeClaim       = errors.New("FailedToDeletePersistentVolumeClaim", "failed to delete persistent volume claim")
 	ErrUpgradingImageNotAllowed                  = errors.New("UpgradingImageNotAllowed", "upgrading image is only allowed in state 'Started'. Current state is '%s'")
 	ErrAddingHostToProxyNotAllowed               = errors.New("AddingHostToProxyNotAllowed", "adding host to proxy is only allowed in state 'Started' and 'Preparing'. Current state is '%s'")
+	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
+	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
 )

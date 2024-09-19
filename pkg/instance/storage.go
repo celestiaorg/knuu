@@ -307,7 +307,7 @@ func (s *storage) deployVolume(ctx context.Context) error {
 	for _, volume := range s.volumes {
 		totalSize.Add(volume.Size)
 	}
-	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.k8sName, s.instance.execution.Labels(), totalSize)
+	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
 	s.instance.Logger.WithFields(logrus.Fields{
 		"total_size": totalSize.String(),
 		"instance":   s.instance.name,
@@ -318,7 +318,7 @@ func (s *storage) deployVolume(ctx context.Context) error {
 
 // destroyVolume destroys the volume for the instance
 func (s *storage) destroyVolume(ctx context.Context) error {
-	err := s.instance.K8sClient.DeletePersistentVolumeClaim(ctx, s.instance.k8sName)
+	err := s.instance.K8sClient.DeletePersistentVolumeClaim(ctx, s.instance.name)
 	if err != nil {
 		return ErrFailedToDeletePersistentVolumeClaim.Wrap(err)
 	}
@@ -352,23 +352,23 @@ func (s *storage) deployFiles(ctx context.Context) error {
 	}
 
 	// create configmap
-	_, err := s.instance.K8sClient.CreateConfigMap(ctx, s.instance.k8sName, s.instance.execution.Labels(), data)
+	_, err := s.instance.K8sClient.CreateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
 	if err != nil {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("deployed configmap")
+	s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
 
 	return nil
 }
 
 // destroyFiles destroys the files for the instance
 func (s *storage) destroyFiles(ctx context.Context) error {
-	if err := s.instance.K8sClient.DeleteConfigMap(ctx, s.instance.k8sName); err != nil {
+	if err := s.instance.K8sClient.DeleteConfigMap(ctx, s.instance.name); err != nil {
 		return ErrFailedToDeleteConfigMap.Wrap(err)
 	}
 
-	s.instance.Logger.WithField("configmap", s.instance.k8sName).Debug("destroyed configmap")
+	s.instance.Logger.WithField("configmap", s.instance.name).Debug("destroyed configmap")
 	return nil
 }
 
@@ -403,7 +403,7 @@ func (s *storage) readFileFromImage(ctx context.Context, filePath string) ([]byt
 	}
 	defer func() {
 		if err := ti.execution.Destroy(ctx); err != nil {
-			ti.Logger.Errorf("failed to destroy tmp instance %s: %v", ti.k8sName, err)
+			ti.Logger.Errorf("failed to destroy tmp instance %s: %v", ti.name, err)
 		}
 	}()
 
