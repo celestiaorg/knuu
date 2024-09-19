@@ -98,7 +98,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Logger",
 			options: Options{
-				Scope:  "test",
 				Logger: &logrus.Logger{},
 			},
 			expectedError: nil,
@@ -110,7 +109,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Timeout",
 			options: Options{
-				Scope:   "test",
 				Timeout: 30 * time.Minute,
 			},
 			expectedError: nil,
@@ -122,7 +120,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Image Builder",
 			options: Options{
-				Scope:        "test",
 				ImageBuilder: &kaniko.Kaniko{},
 			},
 			expectedError: nil,

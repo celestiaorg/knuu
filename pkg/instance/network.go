@@ -62,9 +62,9 @@ func (n *network) PortForwardTCP(ctx context.Context, port int) (int, error) {
 	}
 
 	// Forward the port
-	pod, err := n.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, n.instance.k8sName)
+	pod, err := n.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, n.instance.name)
 	if err != nil {
-		return -1, ErrGettingPodFromReplicaSet.WithParams(n.instance.k8sName).Wrap(err)
+		return -1, ErrGettingPodFromReplicaSet.WithParams(n.instance.name).Wrap(err)
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -126,22 +126,22 @@ func (n *network) GetIP(ctx context.Context) (string, error) {
 		return n.kubernetesService.Spec.ClusterIP, nil
 	}
 	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := n.instance.K8sClient.GetService(ctx, n.instance.k8sName)
+	svc, err := n.instance.K8sClient.GetService(ctx, n.instance.name)
 	if err != nil || svc == nil {
 		// Service does not exist, so we need to deploy it
 		err := n.deployService(ctx, n.portsTCP, n.portsUDP)
 		if err != nil {
-			return "", ErrDeployingServiceForInstance.WithParams(n.instance.k8sName).Wrap(err)
+			return "", ErrDeployingServiceForInstance.WithParams(n.instance.name).Wrap(err)
 		}
-		svc, err = n.instance.K8sClient.GetService(ctx, n.instance.k8sName)
+		svc, err = n.instance.K8sClient.GetService(ctx, n.instance.name)
 		if err != nil {
-			return "", ErrGettingServiceForInstance.WithParams(n.instance.k8sName).Wrap(err)
+			return "", ErrGettingServiceForInstance.WithParams(n.instance.name).Wrap(err)
 		}
 	}
 
 	ip := svc.Spec.ClusterIP
 	if ip == "" {
-		return "", ErrGettingServiceIP.WithParams(n.instance.k8sName)
+		return "", ErrGettingServiceIP.WithParams(n.instance.name)
 	}
 
 	// Update i.kubernetesService for future reference
@@ -153,18 +153,18 @@ func (n *network) GetIP(ctx context.Context) (string, error) {
 func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) error {
 	// a sidecar instance should use the parent instance's service
 	if n.instance.sidecars.IsSidecar() {
-		return ErrDeployingServiceForSidecar.WithParams(n.instance.k8sName)
+		return ErrDeployingServiceForSidecar.WithParams(n.instance.name)
 	}
 
 	var (
-		serviceName    = n.instance.k8sName
+		serviceName    = n.instance.name
 		labels         = n.instance.execution.Labels()
 		labelSelectors = labels
 	)
 
 	srv, err := n.instance.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
 	if err != nil {
-		return ErrDeployingService.WithParams(n.instance.k8sName).Wrap(err)
+		return ErrDeployingService.WithParams(n.instance.name).Wrap(err)
 	}
 	n.kubernetesService = srv
 	n.instance.Logger.WithFields(logrus.Fields{
@@ -178,11 +178,11 @@ func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) e
 func (n *network) patchService(ctx context.Context, portsTCP, portsUDP []int) error {
 	// a sidecar instance should use the parent instance's service
 	if n.instance.sidecars.IsSidecar() {
-		return ErrPatchingServiceForSidecar.WithParams(n.instance.k8sName)
+		return ErrPatchingServiceForSidecar.WithParams(n.instance.name)
 	}
 
 	var (
-		serviceName    = n.instance.k8sName
+		serviceName    = n.instance.name
 		labels         = n.instance.execution.Labels()
 		labelSelectors = labels
 	)
@@ -201,7 +201,7 @@ func (n *network) patchService(ctx context.Context, portsTCP, portsUDP []int) er
 
 // destroyService destroys the service for the instance
 func (n *network) destroyService(ctx context.Context) error {
-	return n.instance.K8sClient.DeleteService(ctx, n.instance.k8sName)
+	return n.instance.K8sClient.DeleteService(ctx, n.instance.name)
 }
 
 // isTCPPortRegistered returns true if the given port is registered
@@ -241,9 +241,9 @@ func (n *network) Disable(ctx context.Context) error {
 		return ErrDisablingNetworkNotAllowed.WithParams(n.instance.state.String())
 	}
 
-	err := n.instance.K8sClient.CreateNetworkPolicy(ctx, n.instance.k8sName, n.instance.execution.Labels(), nil, nil)
+	err := n.instance.K8sClient.CreateNetworkPolicy(ctx, n.instance.name, n.instance.execution.Labels(), nil, nil)
 	if err != nil {
-		return ErrDisablingNetwork.WithParams(n.instance.k8sName).Wrap(err)
+		return ErrDisablingNetwork.WithParams(n.instance.name).Wrap(err)
 	}
 	return nil
 }
@@ -255,9 +255,9 @@ func (n *network) Enable(ctx context.Context) error {
 		return ErrEnablingNetworkNotAllowed.WithParams(n.instance.state.String())
 	}
 
-	err := n.instance.K8sClient.DeleteNetworkPolicy(ctx, n.instance.k8sName)
+	err := n.instance.K8sClient.DeleteNetworkPolicy(ctx, n.instance.name)
 	if err != nil {
-		return ErrEnablingNetwork.WithParams(n.instance.k8sName).Wrap(err)
+		return ErrEnablingNetwork.WithParams(n.instance.name).Wrap(err)
 	}
 	return nil
 }
@@ -269,7 +269,7 @@ func (n *network) IsDisabled(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfNetworkDisabledNotAllowed.WithParams(n.instance.state.String())
 	}
 
-	return n.instance.K8sClient.NetworkPolicyExists(ctx, n.instance.k8sName), nil
+	return n.instance.K8sClient.NetworkPolicyExists(ctx, n.instance.name), nil
 }
 
 // deployService deploys the service for the instance
@@ -279,16 +279,17 @@ func (n *network) deployOrPatchService(ctx context.Context, portsTCP, portsUDP [
 	}
 
 	n.instance.Logger.WithField("instance", n.instance.name).Debug("ports not empty, deploying service")
-	svc, _ := n.instance.K8sClient.GetService(ctx, n.instance.k8sName)
+	svc, _ := n.instance.K8sClient.GetService(ctx, n.instance.name)
+	// TODO: check the error and deploy the service if it does not exist
 	if svc == nil {
 		if err := n.deployService(ctx, portsTCP, portsUDP); err != nil {
-			return ErrDeployingServiceForInstance.WithParams(n.instance.k8sName).Wrap(err)
+			return ErrDeployingServiceForInstance.WithParams(n.instance.name).Wrap(err)
 		}
 		return nil
 	}
 
 	if err := n.patchService(ctx, portsTCP, portsUDP); err != nil {
-		return ErrPatchingServiceForInstance.WithParams(n.instance.k8sName).Wrap(err)
+		return ErrPatchingServiceForInstance.WithParams(n.instance.name).Wrap(err)
 	}
 	return nil
 }
@@ -296,16 +297,16 @@ func (n *network) deployOrPatchService(ctx context.Context, portsTCP, portsUDP [
 func (n *network) enableIfDisabled(ctx context.Context) error {
 	disableNetwork, err := n.IsDisabled(ctx)
 	if err != nil {
-		n.instance.Logger.WithError(err).WithField("instance", n.instance.k8sName).Error("error checking network status for instance")
-		return ErrCheckingNetworkStatusForInstance.WithParams(n.instance.k8sName).Wrap(err)
+		n.instance.Logger.WithError(err).WithField("instance", n.instance.name).Error("error checking network status for instance")
+		return ErrCheckingNetworkStatusForInstance.WithParams(n.instance.name).Wrap(err)
 	}
 
 	if !disableNetwork {
 		return nil
 	}
 	if err := n.Enable(ctx); err != nil {
-		n.instance.Logger.WithError(err).WithField("instance", n.instance.k8sName).Error("error enabling network for instance")
-		return ErrEnablingNetworkForInstance.WithParams(n.instance.k8sName).Wrap(err)
+		n.instance.Logger.WithError(err).WithField("instance", n.instance.name).Error("error enabling network for instance")
+		return ErrEnablingNetworkForInstance.WithParams(n.instance.name).Wrap(err)
 	}
 	return nil
 }
