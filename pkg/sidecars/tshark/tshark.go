@@ -64,7 +64,7 @@ var (
 
 // Initialize initializes the BitTwister sidecar
 // and it is called once the instance.AddSidecar is called
-func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependencies) error {
+func (t *Tshark) Initialize(ctx context.Context, namePrefix string, sysDeps *system.SystemDependencies) error {
 	if err := t.validateConfig(); err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 	}
 
 	var err error
-	t.instance, err = instance.New(tsharkCollectorName, sysDeps)
+	t.instance, err = instance.New(namePrefix+"-"+tsharkCollectorName, sysDeps)
 	if err != nil {
 		return ErrCreatingTsharkCollectorInstance.Wrap(err)
 	}
@@ -105,7 +105,7 @@ func (t *Tshark) Initialize(ctx context.Context, sysDeps system.SystemDependenci
 		envStorageRegion:          t.S3Region,
 		envStorageBucketName:      t.S3Bucket,
 		envStorageKeyPrefix:       t.S3KeyPrefix,
-		envCaptureFileName:        t.instance.K8sName() + TsharkCaptureFileExtension,
+		envCaptureFileName:        t.instance.Name() + TsharkCaptureFileExtension,
 		envStorageEndpoint:        t.S3Endpoint,
 		envUploadInterval:         fmt.Sprintf("%d", int64(t.UploadInterval.Seconds())),
 		envCreateBucket:           fmt.Sprintf("%t", t.CreateBucket),
@@ -135,9 +135,13 @@ func (t *Tshark) Instance() *instance.Instance {
 	return t.instance
 }
 
-func (t *Tshark) CloneWithSuffix(suffix string) instance.SidecarManager {
+func (t *Tshark) Clone(namePrefix string) (instance.SidecarManager, error) {
+	clone, err := t.instance.CloneWithName(namePrefix + "-" + tsharkCollectorName)
+	if err != nil {
+		return nil, err
+	}
 	return &Tshark{
-		instance:       t.instance.CloneWithSuffix(suffix),
+		instance:       clone,
 		VolumeSize:     t.VolumeSize,
 		S3AccessKey:    t.S3AccessKey,
 		S3SecretKey:    t.S3SecretKey,
@@ -147,5 +151,5 @@ func (t *Tshark) CloneWithSuffix(suffix string) instance.SidecarManager {
 		S3KeyPrefix:    t.S3KeyPrefix,
 		S3Endpoint:     t.S3Endpoint,
 		UploadInterval: t.UploadInterval,
-	}
+	}, nil
 }

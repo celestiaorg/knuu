@@ -30,7 +30,7 @@ const (
 )
 
 type Kaniko struct {
-	system.SystemDependencies
+	*system.SystemDependencies
 }
 
 var _ builder.Builder = &Kaniko{}

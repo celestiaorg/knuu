@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +22,9 @@ type ReplicaSetConfig struct {
 
 // CreateReplicaSet creates a new replicaSet in namespace that k8s is initialized with if it doesn't already exist.
 func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateReplicaSetConfig(rsConfig); err != nil {
 		return nil, err
 	}
@@ -36,7 +40,7 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
-	c.logger.Debugf("Replacing ReplicaSet %s", ReplicaSetConfig.Name)
+	c.logger.WithField("name", ReplicaSetConfig.Name).Debug("replacing replicaSet")
 
 	if err := c.DeleteReplicaSetWithGracePeriod(ctx, ReplicaSetConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingReplicaSet.Wrap(err)
@@ -117,6 +121,9 @@ func (c *Client) GetFirstPodFromReplicaSet(ctx context.Context, name string) (*v
 }
 
 func (c *Client) getReplicaSet(ctx context.Context, name string) (*appv1.ReplicaSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.AppsV1().ReplicaSets(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
@@ -174,6 +181,9 @@ func (c *Client) prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *appv1.Re
 		},
 	}
 
-	c.logger.Debugf("Prepared ReplicaSet %s in namespace %s", rsConf.Name, rsConf.Namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      rsConf.Name,
+		"namespace": rsConf.Namespace,
+	}).Debug("prepared replicaSet")
 	return rs
 }

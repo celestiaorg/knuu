@@ -40,20 +40,20 @@ func (e *execution) ExecuteCommand(ctx context.Context, command ...string) (stri
 	var (
 		instanceName  string
 		eErr          *Error
-		containerName = e.instance.k8sName
+		containerName = e.instance.name
 	)
 
 	if e.instance.sidecars.isSidecar {
-		instanceName = e.instance.parentInstance.k8sName
-		eErr = ErrExecutingCommandInSidecar.WithParams(command, e.instance.k8sName, e.instance.parentInstance.k8sName)
+		instanceName = e.instance.parentInstance.name
+		eErr = ErrExecutingCommandInSidecar.WithParams(command, e.instance.name, e.instance.parentInstance.name)
 	} else {
-		instanceName = e.instance.k8sName
-		eErr = ErrExecutingCommandInInstance.WithParams(command, e.instance.k8sName)
+		instanceName = e.instance.name
+		eErr = ErrExecutingCommandInInstance.WithParams(command, e.instance.name)
 	}
 
 	pod, err := e.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, instanceName)
 	if err != nil {
-		return "", ErrGettingPodFromReplicaSet.WithParams(e.instance.k8sName).Wrap(err)
+		return "", ErrGettingPodFromReplicaSet.WithParams(e.instance.name).Wrap(err)
 	}
 
 	commandWithShell := []string{"/bin/sh", "-c", strings.Join(command, " ")}
@@ -73,7 +73,7 @@ func (e *execution) StartWithCallback(ctx context.Context, callback func()) erro
 	go func() {
 		err := e.WaitInstanceIsRunning(ctx)
 		if err != nil {
-			e.instance.Logger.Errorf("Error waiting for instance '%s' to be running: %s", e.instance.k8sName, err)
+			e.instance.Logger.WithError(err).WithField("instance", e.instance.name).Error("waiting for instance to be running")
 			return
 		}
 		callback()
@@ -85,7 +85,7 @@ func (e *execution) StartWithCallback(ctx context.Context, callback func()) erro
 // This function can only be called in the state 'Committed' or 'Stopped'
 func (e *execution) StartAsync(ctx context.Context) error {
 	if !e.instance.IsInState(StateCommitted, StateStopped) {
-		return ErrStartingNotAllowed.WithParams(e.instance.k8sName, e.instance.state.String())
+		return ErrStartingNotAllowed.WithParams(e.instance.name, e.instance.state.String())
 	}
 
 	if err := e.instance.sidecars.verifySidecarsStates(); err != nil {
@@ -109,18 +109,16 @@ func (e *execution) StartAsync(ctx context.Context) error {
 
 	if e.instance.state == StateCommitted {
 		if err := e.deployResourcesForCommittedState(ctx); err != nil {
-			return ErrDeployingResourcesForInstance.WithParams(e.instance.k8sName).Wrap(err)
+			return ErrDeployingResourcesForInstance.WithParams(e.instance.name).Wrap(err)
 		}
 	}
 
 	if err := e.deployPod(ctx); err != nil {
-		return ErrDeployingPodForInstance.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDeployingPodForInstance.WithParams(e.instance.name).Wrap(err)
 	}
 
-	e.instance.state = StateStarted
+	e.instance.SetState(StateStarted)
 	e.instance.sidecars.setStateForSidecars(StateStarted)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
 	return nil
 }
 
@@ -132,7 +130,7 @@ func (e *execution) Start(ctx context.Context) error {
 	}
 
 	if err := e.WaitInstanceIsRunning(ctx); err != nil {
-		return ErrWaitingForInstanceRunning.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrWaitingForInstanceRunning.WithParams(e.instance.name).Wrap(err)
 	}
 	return nil
 }
@@ -144,7 +142,7 @@ func (e *execution) IsRunning(ctx context.Context) (bool, error) {
 		return false, ErrCheckingIfInstanceRunningNotAllowed.WithParams(e.instance.state.String())
 	}
 
-	return e.instance.K8sClient.IsReplicaSetRunning(ctx, e.instance.k8sName)
+	return e.instance.K8sClient.IsReplicaSetRunning(ctx, e.instance.name)
 }
 
 // WaitInstanceIsRunning waits until the instance is running
@@ -157,7 +155,7 @@ func (e *execution) WaitInstanceIsRunning(ctx context.Context) error {
 	for {
 		running, err := e.IsRunning(ctx)
 		if err != nil {
-			return ErrCheckingIfInstanceRunning.WithParams(e.instance.k8sName).Wrap(err)
+			return ErrCheckingIfInstanceRunning.WithParams(e.instance.name).Wrap(err)
 		}
 		if running {
 			return nil
@@ -166,7 +164,7 @@ func (e *execution) WaitInstanceIsRunning(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ErrWaitingForInstanceTimeout.
-				WithParams(e.instance.k8sName).Wrap(ctx.Err())
+				WithParams(e.instance.name).Wrap(ctx.Err())
 		case <-time.After(waitForInstanceRetry):
 			continue
 		}
@@ -185,13 +183,13 @@ func (e *execution) WaitInstanceIsStopped(ctx context.Context) error {
 			break
 		}
 		if err != nil {
-			return ErrCheckingIfInstanceStopped.WithParams(e.instance.k8sName).Wrap(err)
+			return ErrCheckingIfInstanceStopped.WithParams(e.instance.name).Wrap(err)
 		}
 
 		select {
 		case <-ctx.Done():
 			return ErrWaitingForInstanceTimeout.
-				WithParams(e.instance.k8sName).Wrap(ctx.Err())
+				WithParams(e.instance.name).Wrap(ctx.Err())
 		case <-time.After(waitForInstanceRetry):
 			continue
 		}
@@ -210,24 +208,23 @@ func (e *execution) Stop(ctx context.Context) error {
 	}
 
 	if err := e.destroyPod(ctx); err != nil {
-		return ErrDestroyingPod.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDestroyingPod.WithParams(e.instance.name).Wrap(err)
 	}
-	e.instance.state = StateStopped
-	e.instance.sidecars.setStateForSidecars(StateStopped)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
 
+	e.instance.SetState(StateStopped)
+	e.instance.sidecars.setStateForSidecars(StateStopped)
 	return nil
 }
 
 // Labels returns the labels for the instance
 func (e *execution) Labels() map[string]string {
 	return map[string]string{
-		labelAppKey:         e.instance.k8sName,
+		labelAppKey:         e.instance.name,
 		labelManagedByKey:   labelKnuuValue,
 		labelScopeKey:       e.instance.Scope,
 		labelTestStartedKey: e.instance.StartTime,
 		labelNameKey:        e.instance.name,
-		labelK8sNameKey:     e.instance.k8sName,
+		labelK8sNameKey:     e.instance.name,
 		labelTypeKey:        e.instance.instanceType.String(),
 	}
 }
@@ -244,25 +241,26 @@ func (e *execution) Destroy(ctx context.Context) error {
 	}
 
 	if err := e.destroyPod(ctx); err != nil {
-		return ErrDestroyingPod.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDestroyingPod.WithParams(e.instance.name).Wrap(err)
 	}
 	if err := e.instance.resources.destroyResources(ctx); err != nil {
-		return ErrDestroyingResourcesForInstance.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDestroyingResourcesForInstance.WithParams(e.instance.name).Wrap(err)
 	}
 
 	err := e.instance.sidecars.applyFunctionToSidecars(
 		func(sidecar SidecarManager) error {
-			e.instance.Logger.Debugf("Destroying sidecar resources from '%s'", sidecar.Instance().k8sName)
+			e.instance.Logger.WithFields(logrus.Fields{
+				"instance": e.instance.name,
+				"sidecar":  sidecar.Instance().name,
+			}).Debugf("destroying sidecar resources")
 			return sidecar.Instance().resources.destroyResources(ctx)
 		})
 	if err != nil {
-		return ErrDestroyingResourcesForSidecars.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDestroyingResourcesForSidecars.WithParams(e.instance.name).Wrap(err)
 	}
 
-	e.instance.state = StateDestroyed
+	e.instance.SetState(StateDestroyed)
 	e.instance.sidecars.setStateForSidecars(StateDestroyed)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
 	return nil
 }
 
@@ -299,7 +297,7 @@ func BatchDestroy(ctx context.Context, instances ...*Instance) error {
 // deployResourcesForCommittedState handles resource deployment for instances in the 'Committed' state
 func (e *execution) deployResourcesForCommittedState(ctx context.Context) error {
 	if err := e.instance.resources.deployResources(ctx); err != nil {
-		return ErrDeployingResourcesForInstance.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDeployingResourcesForInstance.WithParams(e.instance.name).Wrap(err)
 	}
 	err := e.instance.sidecars.applyFunctionToSidecars(func(sc SidecarManager) error {
 		if err := sc.PreStart(ctx); err != nil {
@@ -308,7 +306,7 @@ func (e *execution) deployResourcesForCommittedState(ctx context.Context) error 
 		return sc.Instance().resources.deployResources(ctx)
 	})
 	if err != nil {
-		return ErrDeployingResourcesForSidecars.WithParams(e.instance.k8sName).Wrap(err)
+		return ErrDeployingResourcesForSidecars.WithParams(e.instance.name).Wrap(err)
 	}
 
 	return nil
@@ -320,16 +318,16 @@ func (e *execution) deployPod(ctx context.Context) error {
 	labels := e.Labels()
 
 	// create a service account for the pod
-	if err := e.instance.K8sClient.CreateServiceAccount(ctx, e.instance.k8sName, labels); err != nil {
+	if err := e.instance.K8sClient.CreateServiceAccount(ctx, e.instance.name, labels); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
 	// create a role and role binding for the pod if there are policy rules
 	if len(e.instance.security.policyRules) > 0 {
-		if err := e.instance.K8sClient.CreateRole(ctx, e.instance.k8sName, labels, e.instance.security.policyRules); err != nil {
+		if err := e.instance.K8sClient.CreateRole(ctx, e.instance.name, labels, e.instance.security.policyRules); err != nil {
 			return ErrFailedToCreateRole.Wrap(err)
 		}
-		if err := e.instance.K8sClient.CreateRoleBinding(ctx, e.instance.k8sName, labels, e.instance.k8sName, e.instance.k8sName); err != nil {
+		if err := e.instance.K8sClient.CreateRoleBinding(ctx, e.instance.name, labels, e.instance.name, e.instance.name); err != nil {
 			return ErrFailedToCreateRoleBinding.Wrap(err)
 		}
 	}
@@ -344,22 +342,20 @@ func (e *execution) deployPod(ctx context.Context) error {
 	e.instance.kubernetesReplicaSet = replicaSet
 
 	// Log the deployment of the pod
-	e.instance.Logger.Debugf("Started statefulSet '%s'", e.instance.k8sName)
-	e.instance.Logger.Debugf("Set state of instance '%s' to '%s'", e.instance.k8sName, e.instance.state.String())
-
+	e.instance.Logger.WithField("instance", e.instance.name).Debugf("started statefulSet")
 	return nil
 }
 
 // destroyPod destroys the pod for the instance (no grace period)
 // Skips if the pod is already destroyed
 func (e *execution) destroyPod(ctx context.Context) error {
-	err := e.instance.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, e.instance.k8sName, nil)
+	err := e.instance.K8sClient.DeleteReplicaSetWithGracePeriod(ctx, e.instance.name, nil)
 	if err != nil {
 		return ErrFailedToDeletePod.Wrap(err)
 	}
 
 	// Delete the service account for the pod
-	if err := e.instance.K8sClient.DeleteServiceAccount(ctx, e.instance.k8sName); err != nil {
+	if err := e.instance.K8sClient.DeleteServiceAccount(ctx, e.instance.name); err != nil {
 		return ErrFailedToDeleteServiceAccount.Wrap(err)
 	}
 
@@ -368,10 +364,10 @@ func (e *execution) destroyPod(ctx context.Context) error {
 		return nil
 	}
 
-	if err := e.instance.K8sClient.DeleteRole(ctx, e.instance.k8sName); err != nil {
+	if err := e.instance.K8sClient.DeleteRole(ctx, e.instance.name); err != nil {
 		return ErrFailedToDeleteRole.Wrap(err)
 	}
-	if err := e.instance.K8sClient.DeleteRoleBinding(ctx, e.instance.k8sName); err != nil {
+	if err := e.instance.K8sClient.DeleteRoleBinding(ctx, e.instance.name); err != nil {
 		return ErrFailedToDeleteRoleBinding.Wrap(err)
 	}
 
@@ -381,7 +377,7 @@ func (e *execution) destroyPod(ctx context.Context) error {
 // prepareConfig prepares the config for the instance
 func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	containerConfig := k8s.ContainerConfig{
-		Name:            e.instance.k8sName,
+		Name:            e.instance.name,
 		Image:           e.instance.build.imageName,
 		ImagePullPolicy: e.instance.build.imagePullPolicy,
 		Command:         e.instance.build.command,
@@ -401,7 +397,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
 	for _, sidecar := range e.instance.sidecars.sidecars {
 		sidecarConfigs = append(sidecarConfigs, k8s.ContainerConfig{
-			Name:            sidecar.Instance().k8sName,
+			Name:            sidecar.Instance().name,
 			Image:           sidecar.Instance().build.imageName,
 			Command:         sidecar.Instance().build.command,
 			Args:            sidecar.Instance().build.args,
@@ -420,9 +416,9 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 
 	podConfig := k8s.PodConfig{
 		Namespace:          e.instance.K8sClient.Namespace(),
-		Name:               e.instance.k8sName,
+		Name:               e.instance.name,
 		Labels:             e.Labels(),
-		ServiceAccountName: e.instance.k8sName,
+		ServiceAccountName: e.instance.name,
 		FsGroup:            e.instance.storage.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
@@ -430,7 +426,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 
 	return k8s.ReplicaSetConfig{
 		Namespace: e.instance.K8sClient.Namespace(),
-		Name:      e.instance.k8sName,
+		Name:      e.instance.name,
 		Labels:    e.Labels(),
 		Replicas:  1,
 		PodConfig: podConfig,

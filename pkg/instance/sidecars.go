@@ -3,14 +3,18 @@ package instance
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
 type SidecarManager interface {
-	Initialize(ctx context.Context, sysDeps system.SystemDependencies) error
+	// namePrefix is the name of the instance that is the parent of the sidecar
+	// it is used to set the name of the sidecar to avoid name collisions
+	Initialize(ctx context.Context, namePrefix string, sysDeps *system.SystemDependencies) error
 	Instance() *Instance
 	PreStart(ctx context.Context) error
-	CloneWithSuffix(suffix string) SidecarManager
+	Clone(namePrefix string) (SidecarManager, error)
 }
 
 type sidecars struct {
@@ -41,7 +45,7 @@ func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 		return ErrAddingSidecarNotAllowed.WithParams(s.instance.state.String())
 	}
 
-	if err := sc.Initialize(ctx, s.instance.SystemDependencies); err != nil {
+	if err := sc.Initialize(ctx, s.instance.Name(), s.instance.SystemDependencies); err != nil {
 		return ErrInitializingSidecar.WithParams(s.instance.name).Wrap(err)
 	}
 
@@ -58,7 +62,10 @@ func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 
 	s.sidecars = append(s.sidecars, sc)
 	sc.Instance().parentInstance = s.instance
-	s.instance.Logger.Debugf("Added sidecar '%s' to instance '%s'", sc.Instance().Name(), s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"sidecar":  sc.Instance().Name(),
+		"instance": s.instance.name,
+	}).Debug("added sidecar to instance")
 	return nil
 }
 
@@ -77,7 +84,7 @@ func (s *sidecars) verifySidecarsStates() error {
 func (s *sidecars) applyFunctionToSidecars(fn func(sc SidecarManager) error) error {
 	for _, i := range s.sidecars {
 		if err := fn(i); err != nil {
-			return ErrApplyingFunctionToSidecar.WithParams(i.Instance().k8sName).Wrap(err)
+			return ErrApplyingFunctionToSidecar.WithParams(i.Instance().name).Wrap(err)
 		}
 	}
 	return nil
@@ -92,12 +99,16 @@ func (s *sidecars) setStateForSidecars(state InstanceState) {
 		})
 }
 
-func (s *sidecars) cloneWithSuffix(suffix string) *sidecars {
+func (s *sidecars) clone(namePrefix string) (*sidecars, error) {
 	clonedSidecars := make([]SidecarManager, len(s.sidecars))
 	for i, sc := range s.sidecars {
-		clonedSidecars[i] = sc.CloneWithSuffix(suffix)
+		cloned, err := sc.Clone(namePrefix)
+		if err != nil {
+			return nil, err
+		}
+		clonedSidecars[i] = cloned
 	}
 	return &sidecars{
 		sidecars: clonedSidecars,
-	}
+	}, nil
 }

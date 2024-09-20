@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +36,9 @@ func (c *Client) CreateDaemonSet(
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateDaemonSetName(name); err != nil {
 		return nil, err
 	}
@@ -49,7 +53,10 @@ func (c *Client) CreateDaemonSet(
 	if err != nil {
 		return nil, ErrCreatingDaemonset.WithParams(name).Wrap(err)
 	}
-	c.logger.Debugf("DaemonSet %s created in namespace %s", name, c.namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      name,
+		"namespace": c.namespace,
+	}).Debug("daemonSet created")
 	return created, nil
 }
 
@@ -73,7 +80,10 @@ func (c *Client) UpdateDaemonSet(ctx context.Context,
 	if err != nil {
 		return nil, ErrUpdatingDaemonset.WithParams(name).Wrap(err)
 	}
-	c.logger.Debugf("DaemonSet %s updated in namespace %s", name, c.namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      name,
+		"namespace": c.namespace,
+	}).Debug("daemonSet updated")
 	return updated, nil
 }
 
@@ -82,7 +92,10 @@ func (c *Client) DeleteDaemonSet(ctx context.Context, name string) error {
 	if err != nil {
 		return ErrDeletingDaemonset.WithParams(name).Wrap(err)
 	}
-	c.logger.Debugf("DaemonSet %s deleted in namespace %s", name, c.namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      name,
+		"namespace": c.namespace,
+	}).Debug("daemonSet deleted")
 	return nil
 }
 

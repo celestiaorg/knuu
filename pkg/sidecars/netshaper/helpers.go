@@ -10,7 +10,7 @@ import (
 
 func (bt *NetShaper) setNewClientByURL(url string) {
 	bt.client = sdk.NewClient(url)
-	bt.instance.Logger.Debugf("NetShaper (BitTwister) address '%s'", url)
+	bt.instance.Logger.WithField("address", url).Debug("NetShaper (BitTwister) address")
 }
 
 func (bt *NetShaper) SetPort(port int) {

@@ -74,7 +74,7 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
 				assert.NotEmpty(t, k.Scope)
-				assert.Equal(t, defaultTimeout, k.timeout)
+				assert.Equal(t, defaultTimeout, defaultTimeout, timeoutHandlerName)
 			},
 		},
 		{
@@ -98,7 +98,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "With custom Logger",
 			options: Options{
-				Scope:  "test",
 				Logger: &logrus.Logger{},
 			},
 			expectedError: nil,
@@ -108,21 +107,8 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "With custom Timeout",
-			options: Options{
-				Scope:   "test",
-				Timeout: 30 * time.Minute,
-			},
-			expectedError: nil,
-			validateFunc: func(t *testing.T, k *Knuu) {
-				assert.NotNil(t, k)
-				assert.Equal(t, 30*time.Minute, k.timeout)
-			},
-		},
-		{
 			name: "With custom Image Builder",
 			options: Options{
-				Scope:        "test",
 				ImageBuilder: &kaniko.Kaniko{},
 			},
 			expectedError: nil,

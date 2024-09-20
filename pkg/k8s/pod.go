@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -76,6 +77,9 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validatePodConfig(podConfig); err != nil {
 		return nil, err
 	}
@@ -105,7 +109,7 @@ func (c *Client) NewFile(source, dest string) *File {
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	c.logger.Debugf("Replacing pod %s", podConfig.Name)
+	c.logger.WithField("name", podConfig.Name).Debug("replacing pod")
 
 	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
@@ -127,13 +131,13 @@ func (c *Client) waitForPodDeletion(ctx context.Context, name string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Errorf("Context cancelled while waiting for pod %s to delete", name)
+			c.logger.WithField("name", name).Error("context cancelled while waiting for pod to delete")
 			return ctx.Err()
 		case <-time.After(retryInterval):
 			_, err := c.getPod(ctx, name)
 			if err != nil {
 				if apierrs.IsNotFound(err) {
-					c.logger.Debugf("Pod %s successfully deleted", name)
+					c.logger.WithField("name", name).Debug("pod successfully deleted")
 					return nil
 				}
 				return ErrWaitingForPodDeletion.WithParams(name).Wrap(err)
@@ -309,8 +313,11 @@ func (c *Client) PortForwardPod(
 	if stderr.Len() > 0 {
 		return ErrPortForwarding.WithParams(stderr.String())
 	}
-	c.logger.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	c.logger.Debugf("Port forwarding stdout: %v", stdout)
+	c.logger.WithFields(logrus.Fields{
+		"local_port":  localPort,
+		"remote_port": remotePort,
+		"stdout":      stdout.String(),
+	}).Debug("port forwarding")
 
 	// Start the port forwarding
 	go func() {
@@ -325,7 +332,10 @@ func (c *Client) PortForwardPod(
 	select {
 	case <-readyChan:
 		// Ready to forward
-		c.logger.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+		c.logger.WithFields(logrus.Fields{
+			"local_port":  localPort,
+			"remote_port": remotePort,
+		}).Debug("port forwarding ready")
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)
@@ -337,6 +347,9 @@ func (c *Client) PortForwardPod(
 }
 
 func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
@@ -491,7 +504,7 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
 
-	c.logger.Debugf("Init container command: %s", fullCommand)
+	c.logger.WithField("command", fullCommand).Debug("init container command")
 	return commands
 }
 
@@ -582,6 +595,9 @@ func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
 		Spec: c.preparePodSpec(spec, init),
 	}
 
-	c.logger.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      spec.Name,
+		"namespace": spec.Namespace,
+	}).Debug("prepared pod")
 	return pod
 }

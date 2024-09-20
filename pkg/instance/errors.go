@@ -217,4 +217,6 @@ var (
 	ErrSidecarInstanceIsNil                      = errors.New("SidecarInstanceIsNil", "sidecar instance is nil for instance '%s'")
 	ErrFailedToDeletePersistentVolumeClaim       = errors.New("FailedToDeletePersistentVolumeClaim", "failed to delete persistent volume claim")
 	ErrUpgradingImageNotAllowed                  = errors.New("UpgradingImageNotAllowed", "upgrading image is only allowed in state 'Started'. Current state is '%s'")
+	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
+	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
 )

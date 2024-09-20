@@ -1,6 +1,9 @@
 package instance
 
 import (
+	"strings"
+
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 )
@@ -40,7 +43,10 @@ func (s *security) SetPrivileged(privileged bool) error {
 		return ErrSettingPrivilegedNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.privileged = privileged
-	s.instance.Logger.Debugf("Set privileged to '%t' for instance '%s'", privileged, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"instance":   s.instance.name,
+		"privileged": privileged,
+	}).Debug("set privileged for instance")
 	return nil
 }
 
@@ -51,7 +57,10 @@ func (s *security) AddKubernetesCapability(capability string) error {
 		return ErrAddingCapabilityNotAllowed.WithParams(s.instance.state.String())
 	}
 	s.capabilitiesAdd = append(s.capabilitiesAdd, capability)
-	s.instance.Logger.Debugf("Added capability '%s' to instance '%s'", capability, s.instance.name)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"instance":   s.instance.name,
+		"capability": capability,
+	}).Debug("added capability to instance")
 	return nil
 }
 
@@ -61,10 +70,12 @@ func (s *security) AddKubernetesCapabilities(capabilities []string) error {
 	if !s.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrAddingCapabilitiesNotAllowed.WithParams(s.instance.state.String())
 	}
-	for _, capability := range capabilities {
-		s.capabilitiesAdd = append(s.capabilitiesAdd, capability)
-		s.instance.Logger.Debugf("Added capability '%s' to instance '%s'", capability, s.instance.name)
-	}
+	s.capabilitiesAdd = append(s.capabilitiesAdd, capabilities...)
+
+	s.instance.Logger.WithFields(logrus.Fields{
+		"instance":     s.instance.name,
+		"capabilities": strings.Join(capabilities, ", "),
+	}).Debug("added capabilities to instance")
 	return nil
 }
 

@@ -13,7 +13,7 @@ import (
 
 type TestSuite struct {
 	suite.Suite
-	sysDeps system.SystemDependencies
+	sysDeps *system.SystemDependencies
 }
 
 func TestObsyTestSuite(t *testing.T) {
@@ -30,7 +30,7 @@ func (m *mockK8sCli) Namespace() string {
 }
 
 func (s *TestSuite) SetupTest() {
-	s.sysDeps = system.SystemDependencies{
+	s.sysDeps = &system.SystemDependencies{
 		K8sClient: &mockK8sCli{
 			namespace:   "test",
 			KubeManager: &k8s.Client{},
@@ -47,7 +47,7 @@ func (s *TestSuite) TestNew() {
 
 func (s *TestSuite) TestInitialize() {
 	o := New()
-	err := o.Initialize(context.Background(), s.sysDeps)
+	err := o.Initialize(context.Background(), "test-init", s.sysDeps)
 	s.Require().NoError(err)
 	s.Assert().NotNil(o.Instance())
 	s.Assert().True(o.Instance().Sidecars().IsSidecar())
@@ -57,17 +57,20 @@ func (s *TestSuite) TestPreStart() {
 	s.T().Skip("skipping as it is tested in e2e tests")
 }
 
-func (s *TestSuite) TestCloneWithSuffix() {
+func (s *TestSuite) TestClone() {
 	o := New()
-	err := o.Initialize(context.Background(), s.sysDeps)
+	err := o.Initialize(context.Background(), "test-clone", s.sysDeps)
 	s.Require().NoError(err)
 
-	clone := o.CloneWithSuffix("test")
+	clonePrefixName := "test-clone-prefix"
+	clone, err := o.Clone(clonePrefixName)
+	s.Require().NoError(err)
 	s.Assert().NotNil(clone)
 
 	clonedObsy, ok := clone.(*Obsy)
 	s.Assert().True(ok)
 	s.Assert().Equal(o.obsyConfig, clonedObsy.obsyConfig)
+	s.Assert().Equal(clonePrefixName+"-"+otelAgentName, clonedObsy.Instance().Name())
 }
 
 func (s *TestSuite) TestSetters() {
