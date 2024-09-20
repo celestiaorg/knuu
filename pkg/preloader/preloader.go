@@ -6,7 +6,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/celestiaorg/knuu/pkg/names"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -30,19 +30,21 @@ const (
 // A preloader makes sure that the images are preloaded before the test suite starts.
 // Hint: If you use a Preloader per test suite, you can save resources
 type Preloader struct {
-	K8sName string   `json:"k8sName"`
-	Images  []string `json:"images"`
-	system.SystemDependencies
+	Name   string   `json:"name"`
+	Images []string `json:"images"`
+	*system.SystemDependencies
 }
 
 // New creates a new preloader
-func New(sysDeps system.SystemDependencies) (*Preloader, error) {
-	k8sName, err := names.NewRandomK8(preloaderName)
-	if err != nil {
-		return nil, ErrGeneratingK8sNameForPreloader.Wrap(err)
+func New(name string, sysDeps *system.SystemDependencies) (*Preloader, error) {
+	name = k8s.SanitizeName(name)
+	if sysDeps.HasInstanceName(name) {
+		return nil, ErrPreloaderNameAlreadyExists.WithParams(name)
 	}
+	sysDeps.AddInstanceName(name)
+
 	return &Preloader{
-		K8sName:            k8sName,
+		Name:               name,
 		Images:             []string{},
 		SystemDependencies: sysDeps,
 	}, nil
@@ -87,7 +89,7 @@ func (p *Preloader) EmptyImages(ctx context.Context) error {
 func (p *Preloader) preloadImages(ctx context.Context) error {
 	// delete the daemonset if no images are preloaded
 	if len(p.Images) == 0 {
-		return p.K8sClient.DeleteDaemonSet(ctx, p.K8sName)
+		return p.K8sClient.DeleteDaemonSet(ctx, p.Name)
 	}
 	var initContainers []v1.Container
 
@@ -111,28 +113,28 @@ func (p *Preloader) preloadImages(ctx context.Context) error {
 	})
 
 	labels := map[string]string{
-		labelApp:         p.K8sName,
+		labelApp:         p.Name,
 		labelManagedBy:   managedByLabel,
-		labelScope:       p.TestScope,
+		labelScope:       p.Scope,
 		labelTestStarted: p.StartTime,
 	}
 
-	exists, err := p.K8sClient.DaemonSetExists(ctx, p.K8sName)
+	exists, err := p.K8sClient.DaemonSetExists(ctx, p.Name)
 	if err != nil {
 		return err
 	}
 
 	// update the daemonset if it already exists
 	if exists {
-		_, err = p.K8sClient.UpdateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+		_, err = p.K8sClient.UpdateDaemonSet(ctx, p.Name, labels, initContainers, containers)
 		return err
 	}
 
 	// create the daemonset if it doesn't exist
-	_, err = p.K8sClient.CreateDaemonSet(ctx, p.K8sName, labels, initContainers, containers)
+	_, err = p.K8sClient.CreateDaemonSet(ctx, p.Name, labels, initContainers, containers)
 	return err
 }
 
 func (p *Preloader) Cleanup(ctx context.Context) error {
-	return p.K8sClient.DeleteDaemonSet(ctx, p.K8sName)
+	return p.K8sClient.DeleteDaemonSet(ctx, p.Name)
 }

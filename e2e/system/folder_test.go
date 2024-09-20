@@ -1,59 +1,35 @@
 package system
 
 import (
-	"testing"
+	"context"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/celestiaorg/knuu/e2e"
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
-func TestFolder(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestFolder() {
+	const namePrefix = "folder"
+
 	// Setup
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	require.NoError(s.T(), err)
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	web := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-web")
+	err = web.Storage().AddFolder(resourcesHTML, e2e.NginxHTMLPath, "0:0")
+	require.NoError(s.T(), err)
 
-	// Create and commit the instance
-	instanceName := "web"
-	web := e2e.AssertCreateInstanceNginxWithVolumeOwnerWithoutCommit(t, instanceName)
-	err = web.AddFolder("resources/html", "/usr/share/nginx/html", "0:0")
-	if err != nil {
-		t.Fatalf("Error adding file to '%v': %v", instanceName, err)
-	}
-	err = web.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance '%v': %v", instanceName, err)
-	}
-
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
-	})
+	require.NoError(s.T(), web.Build().Commit(ctx))
 
 	// Test logic
-	webIP, err := web.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP '%v':", err)
-	}
+	webIP, err := web.Network().GetIP(ctx)
+	s.Require().NoError(err)
 
-	err = web.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = web.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.Require().NoError(web.Execution().Start(ctx))
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	s.Require().NoError(err)
 
-	assert.Contains(t, wget, "Hello World!")
+	s.Assert().Contains(wget, "Hello World!")
 }

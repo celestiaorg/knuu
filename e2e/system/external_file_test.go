@@ -1,97 +1,55 @@
 package system
 
 import (
+	"context"
 	"io"
 	"os"
-	"testing"
+	"path/filepath"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/celestiaorg/knuu/e2e"
 )
 
-func TestExternalFile(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestExternalFile() {
+	const namePrefix = "external-file"
 	// Setup
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	ctx := context.Background()
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	server, err := knuu.NewInstance("server")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = server.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image '%v':", err)
-	}
-	server.AddPortTCP(80)
-	_, err = server.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
+	server := s.CreateNginxInstance(ctx, namePrefix+"-server")
+
 	// copy resources/html/index.html to /tmp/index.html
-	srcFile, err := os.Open("resources/html/index.html")
-	if err != nil {
-		t.Fatalf("Error opening source file '%v':", err)
-	}
+	srcFile, err := os.Open(resourcesHTML + "/index.html")
+	s.Require().NoError(err)
 	defer srcFile.Close()
 
 	// Create the destination file
-	dstFile, err := os.Create("/tmp/index.html")
-	if err != nil {
-		t.Fatalf("Error creating destination file '%v':", err)
-	}
+	htmlTmpPath := filepath.Join(os.TempDir(), "index.html")
+	dstFile, err := os.Create(htmlTmpPath)
+	s.Require().NoError(err)
 	defer dstFile.Close()
 
 	// Copy the contents of the source file into the destination file
 	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		t.Fatalf("Error copying contents '%v':", err)
-	}
+	s.Require().NoError(err)
 
 	// Ensure that the copy is successful by syncing the written data to the disk
-	err = dstFile.Sync()
-	if err != nil {
-		t.Fatalf("Error syncing data to disk '%v':", err)
-	}
+	s.Require().NoError(dstFile.Sync())
 
-	err = server.AddFile("/tmp/index.html", "/usr/share/nginx/html/index.html", "0:0")
-	if err != nil {
-		t.Fatalf("Error adding file '%v':", err)
-	}
-	err = server.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	err = server.Storage().AddFile(htmlTmpPath, e2e.NginxHTMLPath+"/index.html", "0:0")
+	s.Require().NoError(err)
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, server))
-	})
+	s.Require().NoError(server.Build().Commit(ctx))
 
 	// Test logic
+	serverIP, err := server.Network().GetIP(ctx)
+	s.Require().NoError(err)
 
-	serverIP, err := server.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP '%v':", err)
-	}
+	s.Require().NoError(server.Execution().Start(ctx))
 
-	err = server.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = server.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverIP)
+	s.Require().NoError(err)
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverIP)
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-
-	assert.Contains(t, wget, "Hello World!")
+	s.Assert().Contains(wget, "Hello World!")
 }

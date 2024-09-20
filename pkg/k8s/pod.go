@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -37,6 +38,7 @@ const (
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
 	Image           string              // Name of the container image to use for the container
+	ImagePullPolicy v1.PullPolicy       // Image pull policy for the container
 	Command         []string            // Command to run in the container
 	Args            []string            // Arguments to pass to the command in the container
 	Env             map[string]string   // Environment variables to set in the container
@@ -75,6 +77,13 @@ type File struct {
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
+	if err := validatePodConfig(podConfig); err != nil {
+		return nil, err
+	}
+
 	pod := c.preparePod(podConfig, init)
 	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
@@ -100,7 +109,7 @@ func (c *Client) NewFile(source, dest string) *File {
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
-	c.logger.Debugf("Replacing pod %s", podConfig.Name)
+	c.logger.WithField("name", podConfig.Name).Debug("replacing pod")
 
 	if err := c.DeletePodWithGracePeriod(ctx, podConfig.Name, gracePeriod); err != nil {
 		return nil, ErrDeletingPod.Wrap(err)
@@ -122,13 +131,13 @@ func (c *Client) waitForPodDeletion(ctx context.Context, name string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Errorf("Context cancelled while waiting for pod %s to delete", name)
+			c.logger.WithField("name", name).Error("context cancelled while waiting for pod to delete")
 			return ctx.Err()
 		case <-time.After(retryInterval):
 			_, err := c.getPod(ctx, name)
 			if err != nil {
 				if apierrs.IsNotFound(err) {
-					c.logger.Debugf("Pod %s successfully deleted", name)
+					c.logger.WithField("name", name).Debug("pod successfully deleted")
 					return nil
 				}
 				return ErrWaitingForPodDeletion.WithParams(name).Wrap(err)
@@ -166,6 +175,16 @@ func (c *Client) RunCommandInPod(
 	containerName string,
 	cmd []string,
 ) (string, error) {
+	if err := validatePodName(podName); err != nil {
+		return "", err
+	}
+	if err := validateContainerName(containerName); err != nil {
+		return "", err
+	}
+	if err := validateCommand(cmd); err != nil {
+		return "", err
+	}
+
 	_, err := c.getPod(ctx, podName)
 	if err != nil {
 		return "", ErrGettingPod.WithParams(podName).Wrap(err)
@@ -204,12 +223,12 @@ func (c *Client) RunCommandInPod(
 	})
 
 	if err != nil {
-		return "", ErrExecutingCommand.Wrap(err)
+		return "", ErrExecutingCommand.WithParams(stdout.String(), stderr.String()).Wrap(err)
 	}
 
 	// Check if there were any errors on the error stream
 	if stderr.Len() != 0 {
-		return "", ErrCommandExecution.WithParams(stderr.String())
+		return "", ErrCommandExecution.WithParams(stdout.String(), stderr.String())
 	}
 
 	return stdout.String(), nil
@@ -245,6 +264,16 @@ func (c *Client) PortForwardPod(
 	localPort,
 	remotePort int,
 ) error {
+	if err := validatePodName(podName); err != nil {
+		return err
+	}
+	if err := validatePort(localPort); err != nil {
+		return err
+	}
+	if err := validatePort(remotePort); err != nil {
+		return err
+	}
+
 	if _, err := c.getPod(ctx, podName); err != nil {
 		return ErrGettingPod.WithParams(podName).Wrap(err)
 	}
@@ -284,8 +313,11 @@ func (c *Client) PortForwardPod(
 	if stderr.Len() > 0 {
 		return ErrPortForwarding.WithParams(stderr.String())
 	}
-	c.logger.Debugf("Port forwarding from %d to %d", localPort, remotePort)
-	c.logger.Debugf("Port forwarding stdout: %v", stdout)
+	c.logger.WithFields(logrus.Fields{
+		"local_port":  localPort,
+		"remote_port": remotePort,
+		"stdout":      stdout.String(),
+	}).Debug("port forwarding")
 
 	// Start the port forwarding
 	go func() {
@@ -300,7 +332,10 @@ func (c *Client) PortForwardPod(
 	select {
 	case <-readyChan:
 		// Ready to forward
-		c.logger.Debugf("Port forwarding ready from %d to %d", localPort, remotePort)
+		c.logger.WithFields(logrus.Fields{
+			"local_port":  localPort,
+			"remote_port": remotePort,
+		}).Debug("port forwarding ready")
 	case err := <-errChan:
 		// if there's an error, return it
 		return ErrForwardingPorts.Wrap(err)
@@ -312,6 +347,9 @@ func (c *Client) PortForwardPod(
 }
 
 func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	return c.clientset.CoreV1().Pods(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
@@ -363,7 +401,7 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
+func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
 	var containerVolumes []v1.VolumeMount
 	for _, volume := range volumes {
 		containerVolumes = append(
@@ -376,7 +414,26 @@ func buildContainerVolumes(name string, volumes []*Volume) []v1.VolumeMount {
 		)
 	}
 
-	return containerVolumes
+	var containerFiles []v1.VolumeMount
+
+	for n, file := range files {
+		shouldAddFile := true
+		for _, volume := range volumes {
+			if strings.HasPrefix(file.Dest, volume.Path) {
+				shouldAddFile = false
+				break
+			}
+		}
+		if shouldAddFile {
+			containerFiles = append(containerFiles, v1.VolumeMount{
+				Name:      name + podFilesConfigmapNameSuffix,
+				MountPath: file.Dest,
+				SubPath:   fmt.Sprintf("%d", n),
+			})
+		}
+	}
+
+	return append(containerVolumes, containerFiles...)
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
@@ -447,7 +504,7 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
 
-	c.logger.Debugf("Init container command: %s", fullCommand)
+	c.logger.WithField("command", fullCommand).Debug("init container command")
 	return commands
 }
 
@@ -469,10 +526,11 @@ func prepareContainer(config ContainerConfig) v1.Container {
 	return v1.Container{
 		Name:            config.Name,
 		Image:           config.Image,
+		ImagePullPolicy: config.ImagePullPolicy,
 		Command:         config.Command,
 		Args:            config.Args,
 		Env:             buildEnv(config.Env),
-		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes),
+		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes, config.Files),
 		Resources:       buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest),
 		LivenessProbe:   config.LivenessProbe,
 		ReadinessProbe:  config.ReadinessProbe,
@@ -516,9 +574,10 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
+		sidecarContainer := prepareContainer(sidecarConfig)
 		sidecarVolumes := preparePodVolumes(sidecarConfig)
 
-		podSpec.Containers = append(podSpec.Containers, prepareContainer(sidecarConfig))
+		podSpec.Containers = append(podSpec.Containers, sidecarContainer)
 		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}
 
@@ -536,6 +595,9 @@ func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
 		Spec: c.preparePodSpec(spec, init),
 	}
 
-	c.logger.Debugf("Prepared pod %s in namespace %s", spec.Name, spec.Namespace)
+	c.logger.WithFields(logrus.Fields{
+		"name":      spec.Name,
+		"namespace": spec.Namespace,
+	}).Debug("prepared pod")
 	return pod
 }

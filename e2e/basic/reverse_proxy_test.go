@@ -2,89 +2,55 @@ package basic
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
-	"os"
 	"strings"
-	"testing"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/celestiaorg/knuu/e2e"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
 // TestReverseProxy is a test function that verifies the functionality of a reverse proxy setup.
-// It mainly tests the ability to reach to a service running in a sidecar like BitTwister.
+// It mainly tests the ability to reach to a service running in a sidecar like netshaper (BitTwister).
 // It calls an endpoint of the service and checks if the response is as expected.
-func TestReverseProxy(t *testing.T) {
-	t.Parallel()
-	// Setup
+func (s *Suite) TestReverseProxy() {
+	const namePrefix = "reverse-proxy"
+	ctx := context.Background()
 
-	main, err := knuu.NewInstance("main")
-	require.NoError(t, err, "Error creating instance")
+	main, err := s.Knuu.NewInstance(namePrefix + "-main")
+	s.Require().NoError(err)
 
-	err = main.SetImage("alpine:latest")
-	require.NoError(t, err, "Error setting image")
+	s.Require().NoError(main.Build().SetImage(ctx, alpineImage))
+	s.Require().NoError(main.Build().SetStartCommand("sleep", "infinite"))
+	s.Require().NoError(main.Build().Commit(ctx))
 
-	err = main.SetCommand("sleep", "infinite")
-	require.NoError(t, err, "Error executing command")
+	btSidecar := netshaper.New()
+	s.Require().NoError(main.Sidecars().Add(ctx, btSidecar))
 
-	require.NoError(t, main.Commit(), "Error committing instance")
+	s.Require().NoError(main.Execution().Start(ctx))
 
-	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-
-		require.NoError(t, main.Destroy(), "Error destroying instance")
-	})
-
-	require.NoError(t, main.EnableBitTwister(), "Error enabling BitTwister")
-	require.NoError(t, main.Start(), "Error starting main instance")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	require.NoError(t, main.BitTwister.WaitForStart(ctx), "Error waiting for BitTwister to start")
-
-	// test if BitTwister running in a sidecar is accessible
-	err = main.SetBandwidthLimit(1000)
-	assert.NoError(t, err, "Error setting bandwidth limit")
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
 	// Check if the BitTwister service is set
-	out, err := main.BitTwister.Client().AllServicesStatus()
-	assert.NoError(t, err, "Error getting all services status")
-	assert.GreaterOrEqual(t, len(out), 1, "No services found")
-	assert.NotEmpty(t, out[0].Name, "Service name is empty")
+	out, err := btSidecar.AllServicesStatus()
+	s.Require().NoError(err)
+
+	s.Assert().GreaterOrEqual(len(out), 1)
+	s.Assert().NotEmpty(out[0].Name)
+
+	// assert that the BitTwister running in a sidecar is accessible
+	s.Assert().NoError(btSidecar.SetBandwidthLimit(4_000_000))
 }
 
-func TestAddHostWithReadyCheck(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestAddHostWithReadyCheck() {
+	const namePrefix = "add-host-with-ready-check"
+	ctx := context.Background()
 
-	target, err := knuu.NewInstance("target")
-	require.NoError(t, err, "Error creating instance 'target'")
-
-	err = target.SetImage("nginx:latest")
-	require.NoError(t, err, "error setting image")
-
-	require.NoError(t, target.Commit(), "error committing instance")
-
-	t.Cleanup(func() {
-		if os.Getenv("KNUU_SKIP_CLEANUP") == "true" {
-			t.Log("Skipping cleanup")
-			return
-		}
-		if err := target.Destroy(); err != nil {
-			t.Logf("error destroying instance: %v", err)
-		}
-	})
-
-	const port = 80
-	require.NoError(t, target.AddPortTCP(port), "error adding port")
-	require.NoError(t, target.Start(), "error starting instance")
+	target := s.CreateNginxInstance(ctx, namePrefix+"-target")
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -93,6 +59,9 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 	checkFunc := func(host string) (bool, error) {
 		resp, err := http.Get(host)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return false, nil
+			}
 			return false, err
 		}
 		defer resp.Body.Close()
@@ -107,12 +76,12 @@ func TestAddHostWithReadyCheck(t *testing.T) {
 		return strings.Contains(string(bodyBytes), "Welcome to nginx!"), nil
 	}
 
-	host, err := target.AddHostWithReadyCheck(ctx, port, checkFunc)
-	require.NoError(t, err, "error adding host with ready check")
-	assert.NotEmpty(t, host, "host should not be empty")
+	host, err := target.Network().AddHostWithReadyCheck(ctx, e2e.NginxPort, checkFunc)
+	s.Require().NoError(err, "error adding host with ready check")
+	s.Assert().NotEmpty(host, "host should not be empty")
 
 	// Additional verification that the host is accessible
 	ok, err := checkFunc(host)
-	require.NoError(t, err, "error checking host")
-	assert.True(t, ok, "Host should be ready and serving content: expected true, got false")
+	s.Require().NoError(err, "error checking host")
+	s.Assert().True(ok, "Host should be ready and serving content: expected true, got false")
 }

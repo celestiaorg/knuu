@@ -1,4 +1,4 @@
-package bittwister
+package netshaper
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/sidecars/netshaper"
 )
 
 const (
@@ -18,47 +18,40 @@ const (
 	gopingImage        = "ghcr.io/celestiaorg/goping:4803195"
 )
 
-func (s *Suite) TestBittwisterBandwidth() {
-	s.T().Parallel()
-	// Setup
-
+func (s *Suite) TestNetShaperBandwidth() {
 	const (
+		namePrefix           = "ntshp-bw"
 		iperfTestDuration    = 45 * time.Second
 		iperfParallelClients = 4
 		iperfPort            = 5201
 	)
 	ctx := context.Background()
 
-	iperfMother, err := s.Knuu.NewInstance("iperf")
+	iperfMother, err := s.Knuu.NewInstance(namePrefix + "iperf")
 	s.Require().NoError(err)
 
-	s.Require().NoError(iperfMother.SetImage(ctx, iperfImage))
-	s.Require().NoError(iperfMother.SetCommand("iperf3", "-s"))
-	s.Require().NoError(iperfMother.AddPortTCP(iperfPort))
-	s.Require().NoError(iperfMother.Commit())
+	s.Require().NoError(iperfMother.Build().SetImage(ctx, iperfImage))
+	s.Require().NoError(iperfMother.Build().SetStartCommand("iperf3", "-s"))
+	s.Require().NoError(iperfMother.Network().AddPortTCP(iperfPort))
+	s.Require().NoError(iperfMother.Build().Commit(ctx))
 
-	iperfServer, err := iperfMother.CloneWithName("iperf-server")
+	iperfServer, err := iperfMother.CloneWithName(namePrefix + "iperf-server")
 	s.Require().NoError(err)
 
-	iperfClient, err := iperfMother.CloneWithName("iperf-client")
+	iperfClient, err := iperfMother.CloneWithName(namePrefix + "iperf-client")
 	s.Require().NoError(err)
 
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterBandwidth test...")
-		err := instance.BatchDestroy(ctx, iperfServer, iperfClient)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
+	btSidecar := netshaper.New()
+	s.Require().NoError(iperfServer.Sidecars().Add(ctx, btSidecar))
 
 	// Prepare iperf client & server
 
-	s.Require().NoError(iperfServer.EnableBitTwister())
-	s.Require().NoError(iperfServer.Start(ctx))
-	s.Require().NoError(iperfServer.BitTwister.WaitForStart(ctx))
-	s.Require().NoError(iperfClient.Start(ctx))
+	s.Require().NoError(iperfServer.Execution().Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	iperfServerIP, err := iperfServer.GetIP(ctx)
+	s.Require().NoError(iperfClient.Execution().Start(ctx))
+
+	iperfServerIP, err := iperfServer.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	// Perform the test
@@ -86,12 +79,11 @@ func (s *Suite) TestBittwisterBandwidth() {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Max bandwidth: %v \t tolerance: %v%%", formatBandwidth(float64(tc.targetBandwidth)), tc.tolerancePercent)
-
-			s.Require().NoError(iperfServer.SetBandwidthLimit(tc.targetBandwidth))
+			s.Require().NoError(btSidecar.SetBandwidthLimit(tc.targetBandwidth))
 
 			s.T().Log("Starting bandwidth test. It takes a while.")
 			startTime := time.Now()
-			output, err := iperfClient.ExecuteCommand(ctx,
+			output, err := iperfClient.Execution().ExecuteCommand(ctx,
 				"iperf3", "-c", iperfServerIP,
 				"-t", fmt.Sprint(int64(iperfTestDuration.Seconds())),
 				"-P", fmt.Sprint(iperfParallelClients), "--json")
@@ -121,50 +113,42 @@ func (s *Suite) TestBittwisterBandwidth() {
 	}
 }
 
-func (s *Suite) TestBittwisterPacketloss() {
-	s.T().Parallel()
-	// Setup
-
+func (s *Suite) TestNetShaperPacketloss() {
 	const (
+		namePrefix       = "ntshp-pl"
 		numOfPingPackets = 100
 		packetTimeout    = 1 * time.Second
 		gopingPort       = 8001
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit(ctx))
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
-	s.Require().NoError(err)
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterPacketloss test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
+	executor, err := mother.CloneWithName(namePrefix + "executor")
+	s.Require().NoError(err)
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 	type testCase struct {
@@ -184,22 +168,20 @@ func (s *Suite) TestBittwisterPacketloss() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
 		tc := tc
 		s.Run(tc.name, func() {
 			s.T().Logf("Target packetloss: %v%% \t tolerance: %v%%", tc.targetPacketlossRate, tc.tolerancePercent)
-
-			err = target.SetPacketLoss(tc.targetPacketlossRate)
-			s.Require().NoError(err)
+			s.Require().NoError(btSidecar.SetPacketLoss(tc.targetPacketlossRate))
 
 			s.T().Log("Starting packetloss test. It takes a while.")
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx, "goping", "ping", "-q",
+			output, err := executor.Execution().ExecuteCommand(ctx, "goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				"-t", packetTimeout.String(),
 				"-m", "packetloss",
@@ -224,50 +206,42 @@ func (s *Suite) TestBittwisterPacketloss() {
 	}
 }
 
-func (s *Suite) TestBittwisterLatency() {
-	s.T().Parallel()
-	// Setup
-
+func (s *Suite) TestNetShaperLatency() {
 	const (
+		namePrefix       = "ntshp-lat"
 		numOfPingPackets = 100
 		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit(ctx))
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
-	s.Require().NoError(err)
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterLatency test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
+	executor, err := mother.CloneWithName(namePrefix + "executor")
+	s.Require().NoError(err)
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
-	s.Require().NoError(target.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
 
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 
@@ -291,7 +265,7 @@ func (s *Suite) TestBittwisterLatency() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -299,14 +273,14 @@ func (s *Suite) TestBittwisterLatency() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max latency: %v ms \t tolerance: %v%%", tc.targetLatency.Milliseconds(), tc.tolerancePercent)
 
-			err = target.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
+			err = btSidecar.SetLatencyAndJitter(tc.targetLatency.Milliseconds(), 0)
 			s.Require().NoError(err)
 
 			s.T().Log("Starting latency test. It takes a while.")
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx,
+			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond
@@ -332,49 +306,42 @@ func (s *Suite) TestBittwisterLatency() {
 		})
 	}
 }
-func (s *Suite) TestBittwisterJitter() {
-	s.T().Parallel()
-	// Setup
-
+func (s *Suite) TestNetShaperJitter() {
 	const (
+		namePrefix       = "ntshp-jit"
 		numOfPingPackets = 100
 		gopingPort       = 8001
 		packetTimeout    = 1 * time.Second
 	)
 	ctx := context.Background()
 
-	mother, err := s.Knuu.NewInstance("mother")
+	mother, err := s.Knuu.NewInstance(namePrefix + "mother")
 	s.Require().NoError(err)
 
-	err = mother.SetImage(ctx, gopingImage)
+	err = mother.Build().SetImage(ctx, gopingImage)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mother.AddPortTCP(gopingPort))
-	s.Require().NoError(mother.Commit())
+	s.Require().NoError(mother.Network().AddPortTCP(gopingPort))
+	s.Require().NoError(mother.Build().Commit(ctx))
 
-	err = mother.SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
+	err = mother.Build().SetEnvironmentVariable("SERVE_ADDR", fmt.Sprintf("0.0.0.0:%d", gopingPort))
 	s.Require().NoError(err)
 
-	target, err := mother.CloneWithName("target")
+	target, err := mother.CloneWithName(namePrefix + "target")
 	s.Require().NoError(err)
 
-	executor, err := mother.CloneWithName("executor")
-	s.Require().NoError(err)
+	btSidecar := netshaper.New()
+	s.Require().NoError(target.Sidecars().Add(ctx, btSidecar))
 
-	s.T().Cleanup(func() {
-		s.T().Log("Tearing down TestBittwisterJitter test...")
-		err := instance.BatchDestroy(ctx, executor, target)
-		if err != nil {
-			s.T().Logf("error destroying instances: %v", err)
-		}
-	})
+	executor, err := mother.CloneWithName(namePrefix + "executor")
+	s.Require().NoError(err)
 
 	// Prepare ping executor & target
 
-	s.Require().NoError(target.EnableBitTwister())
-	s.Require().NoError(target.Start(ctx))
-	s.Require().NoError(target.BitTwister.WaitForStart(ctx))
-	s.Require().NoError(executor.Start(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
+	s.Require().NoError(btSidecar.WaitForStart(ctx))
+
+	s.Require().NoError(executor.Execution().Start(ctx))
 
 	// Perform the test
 
@@ -392,7 +359,7 @@ func (s *Suite) TestBittwisterJitter() {
 		}
 	}
 
-	targetIP, err := target.GetIP(ctx)
+	targetIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -400,14 +367,14 @@ func (s *Suite) TestBittwisterJitter() {
 		s.Run(tc.name, func() {
 			s.T().Logf("Max jitter: %v", tc.maxTargetJitter.Milliseconds())
 
-			err = target.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
+			err = btSidecar.SetLatencyAndJitter(0, tc.maxTargetJitter.Milliseconds())
 			s.Require().NoError(err)
 
 			s.T().Log("Starting jitter test. It takes a while.")
 			startTime := time.Now()
 
 			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
-			output, err := executor.ExecuteCommand(ctx,
+			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
 				// we need to make sure the client waits long enough for the server to respond

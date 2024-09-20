@@ -1,88 +1,49 @@
 package basic
 
 import (
-	"testing"
+	"context"
+	"strings"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/celestiaorg/knuu/pkg/knuu"
+	"github.com/celestiaorg/knuu/e2e"
 )
 
-func TestProbe(t *testing.T) {
-	t.Parallel()
-	// Setup
+func (s *Suite) TestProbe() {
+	const namePrefix = "probe"
+	ctx := context.Background()
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	// Ideally this has to be defined in the test suit setup
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	web, err := knuu.NewInstance("web")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = web.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image '%v':", err)
-	}
-	web.AddPortTCP(80)
-	_, err = web.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-	err = web.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
-	if err != nil {
-		t.Fatalf("Error adding volume: %v", err)
-	}
-	err = web.AddFile("../system/resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
-	if err != nil {
-		t.Fatalf("Error adding file '%v':", err)
-	}
+	web := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-web")
+
+	err = web.Storage().AddFile(resourcesHTML+"/index.html", e2e.NginxHTMLPath+"/index.html", "0:0")
+	s.Require().NoError(err)
+
 	livenessProbe := v1.Probe{
 		ProbeHandler: v1.ProbeHandler{
 			HTTPGet: &v1.HTTPGetAction{
 				Path: "/",
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: 80},
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: e2e.NginxPort},
 			},
 		},
 		InitialDelaySeconds: 10,
 	}
-	err = web.SetLivenessProbe(&livenessProbe)
-	if err != nil {
-		t.Fatalf("Error setting readiness probe '%v':", err)
-	}
-	err = web.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
-
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, web))
-	})
+	s.Require().NoError(web.Monitoring().SetLivenessProbe(&livenessProbe))
+	s.Require().NoError(web.Build().Commit(ctx))
 
 	// Test logic
+	webIP, err := web.Network().GetIP(ctx)
+	s.Require().NoError(err)
 
-	webIP, err := web.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP '%v':", err)
-	}
+	s.Require().NoError(web.Execution().Start(ctx))
 
-	err = web.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = web.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	wgetOutput, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	s.Require().NoError(err)
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", webIP)
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-
-	assert.Contains(t, wget, "Hello World!")
+	wgetOutput = strings.TrimSpace(wgetOutput)
+	s.Assert().Contains(wgetOutput, "Hello World!")
 }

@@ -9,6 +9,13 @@ import (
 )
 
 func (c *Client) CreateNamespace(ctx context.Context, name string) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateNamespace(name); err != nil {
+		return err
+	}
+
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -20,10 +27,11 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 		if !apierrs.IsAlreadyExists(err) {
 			return ErrCreatingNamespace.WithParams(name).Wrap(err)
 		}
-		c.logger.Debugf("Namespace %s already exists, continuing.\n", name)
+		c.logger.WithField("name", name).Debug("namespace already exists, continuing")
+		return nil
 	}
-	c.logger.Debugf("Namespace %s created.\n", name)
 
+	c.logger.WithField("name", name).Debug("namespace created")
 	return nil
 }
 
@@ -46,10 +54,10 @@ func (c *Client) NamespaceExists(ctx context.Context, name string) (bool, error)
 	}
 
 	if apierrs.IsNotFound(err) {
-		c.logger.Debugf("Namespace %s does not exist, err: %v", name, err)
+		c.logger.WithField("name", name).WithError(err).Debug("namespace does not exist")
 		return false, nil
 	}
 
-	c.logger.Errorf("Error getting namespace %s, err: %v", name, err)
+	c.logger.WithField("name", name).WithError(err).Error("getting namespace")
 	return false, err
 }

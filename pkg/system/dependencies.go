@@ -1,6 +1,8 @@
 package system
 
 import (
+	"sync"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -15,6 +17,20 @@ type SystemDependencies struct {
 	MinioClient  *minio.Minio
 	Logger       *logrus.Logger
 	Proxy        *traefik.Traefik
-	TestScope    string
+	Scope        string
 	StartTime    string
+	instancesMap sync.Map
+}
+
+func (s *SystemDependencies) AddInstanceName(name string) {
+	s.instancesMap.Store(name, struct{}{})
+}
+
+func (s *SystemDependencies) HasInstanceName(name string) bool {
+	_, exists := s.instancesMap.Load(name)
+	return exists
+}
+
+func (s *SystemDependencies) RemoveInstanceName(name string) {
+	s.instancesMap.Delete(name)
 }

@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/celestiaorg/knuu/pkg/minio"
+	"github.com/celestiaorg/knuu/pkg/sidecars/tshark"
 )
 
 const (
@@ -35,7 +35,7 @@ func TestTshark(t *testing.T) {
 	ctx := context.Background()
 
 	logger := logrus.New()
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultTestScope(), logger)
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
 	require.NoError(t, err, "error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient, logger)
@@ -43,65 +43,54 @@ func TestTshark(t *testing.T) {
 
 	kn, err := knuu.New(ctx, knuu.Options{MinioClient: minioClient, K8sClient: k8sClient})
 	require.NoError(t, err, "error creating knuu")
-
 	defer func() {
 		if err := kn.CleanUp(ctx); err != nil {
 			t.Logf("error cleaning up knuu: %v", err)
 		}
 	}()
 
-	scope := kn.Scope()
+	scope := kn.Scope
 	t.Logf("Test scope: %s", scope)
 
 	target, err := kn.NewInstance("busybox")
 	require.NoError(t, err, "error creating instance")
 
-	err = target.SetImage(ctx, "busybox")
-	require.NoError(t, err, "error setting image")
-
-	err = target.SetCommand("sleep", "infinity")
-	require.NoError(t, err, "error setting command")
+	require.NoError(t, target.Build().SetImage(ctx, "busybox"))
+	require.NoError(t, target.Build().SetStartCommand("sleep", "infinity"))
 
 	t.Log("getting minio configs")
 	minioConf, err := kn.MinioClient.GetConfigs(ctx)
 	require.NoError(t, err, "error getting S3 (minio) configs")
 
+	keyPrefix := "tshark/" + scope
+
+	tsc := &tshark.Tshark{
+		VolumeSize:     tsharkVolumeSize,
+		S3AccessKey:    minioConf.AccessKeyID,
+		S3SecretKey:    minioConf.SecretAccessKey,
+		S3Region:       s3Location,
+		S3Bucket:       s3BucketName,
+		CreateBucket:   true, // Since we fire up a fresh minio server, we need to create the bucket
+		S3KeyPrefix:    keyPrefix,
+		S3Endpoint:     minioConf.Endpoint,
+		UploadInterval: 1 * time.Second, // for sake of the test we keep this short
+	}
+
+	require.NoError(t, target.Sidecars().Add(ctx, tsc))
 	var (
-		filename  = target.K8sName() + instance.TsharkCaptureFileExtension + ".tar.gz" // compressed file extension
-		keyPrefix = "tshark/" + scope
-		fileKey   = filepath.Join(keyPrefix, filename)
+		filename = tsc.Instance().Name() + tshark.TsharkCaptureFileExtension
+		fileKey  = filepath.Join(keyPrefix, filename)
 	)
 
-	err = target.EnableTsharkCollector(
-		instance.TsharkCollectorConfig{
-			VolumeSize:     tsharkVolumeSize,
-			S3AccessKey:    minioConf.AccessKeyID,
-			S3SecretKey:    minioConf.SecretAccessKey,
-			S3Region:       s3Location,
-			S3Bucket:       s3BucketName,
-			CreateBucket:   true, // Since we fire up a fresh minio server, we need to create the bucket
-			S3KeyPrefix:    keyPrefix,
-			S3Endpoint:     minioConf.Endpoint,
-			UploadInterval: 1 * time.Second, // for sake of the test we keep this short
-			CompressFiles:  true,
-		},
-	)
-	require.NoError(t, err, "error enabling tshark collector")
-
-	err = target.Commit()
-	require.NoError(t, err, "error committing instance")
+	require.NoError(t, target.Build().Commit(ctx))
 
 	// Test logic
 
 	t.Log("starting target instance")
-	err = target.Start(ctx)
-	require.NoError(t, err, "error starting instance")
-
-	err = target.WaitInstanceIsRunning(ctx)
-	require.NoError(t, err, "error waiting for instance to be running")
+	require.NoError(t, target.Execution().Start(ctx))
 
 	// Perform a ping to do generate network traffic to allow tshark to capture it
-	_, err = target.ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
+	_, err = target.Execution().ExecuteCommand(ctx, "ping", "-c", "4", "google.com")
 	require.NoError(t, err, "error executing command")
 
 	url, err := kn.MinioClient.GetURL(ctx, fileKey, s3BucketName)

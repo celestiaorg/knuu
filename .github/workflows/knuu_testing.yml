@@ -19,7 +19,7 @@ jobs:
             timeout: 15m
           - pkg: "./e2e/system"
             timeout: 15m
-          - pkg: "./e2e/bittwister"
+          - pkg: "./e2e/netshaper"
             timeout: 60m
     runs-on: ubuntu-latest
 

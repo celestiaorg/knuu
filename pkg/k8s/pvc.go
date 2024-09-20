@@ -16,6 +16,19 @@ func (c *Client) CreatePersistentVolumeClaim(
 	labels map[string]string,
 	size resource.Quantity,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validatePVCName(name); err != nil {
+		return err
+	}
+	if err := validatePVCSize(size); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: c.namespace,
@@ -26,7 +39,7 @@ func (c *Client) CreatePersistentVolumeClaim(
 			AccessModes: []v1.PersistentVolumeAccessMode{
 				v1.ReadWriteOnce,
 			},
-			Resources: v1.ResourceRequirements{
+			Resources: v1.VolumeResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: size,
 				},
@@ -38,7 +51,7 @@ func (c *Client) CreatePersistentVolumeClaim(
 		return ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	c.logger.Debugf("PersistentVolumeClaim %s created", name)
+	c.logger.WithField("name", name).Debug("PersistentVolumeClaim created")
 	return nil
 }
 
@@ -56,7 +69,7 @@ func (c *Client) DeletePersistentVolumeClaim(ctx context.Context, name string) e
 		return ErrDeletingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	c.logger.Debugf("PersistentVolumeClaim %s deleted", name)
+	c.logger.WithField("name", name).Debug("PersistentVolumeClaim deleted")
 	return nil
 }
 

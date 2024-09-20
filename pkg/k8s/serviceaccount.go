@@ -8,6 +8,16 @@ import (
 )
 
 func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateServiceName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+
 	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -21,5 +31,8 @@ func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels m
 }
 
 func (c *Client) DeleteServiceAccount(ctx context.Context, name string) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	return c.clientset.CoreV1().ServiceAccounts(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

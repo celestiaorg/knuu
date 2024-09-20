@@ -14,6 +14,19 @@ func (c *Client) CreateRole(
 	labels map[string]string,
 	policyRules []rbacv1.PolicyRule,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateRoleName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	if err := validatePolicyRules(policyRules); err != nil {
+		return err
+	}
+
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -37,6 +50,19 @@ func (c *Client) CreateClusterRole(
 	labels map[string]string,
 	policyRules []rbacv1.PolicyRule,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateClusterRoleName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	if err := validatePolicyRules(policyRules); err != nil {
+		return err
+	}
+
 	_, err := c.clientset.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 	if err == nil || !errors.IsNotFound(err) {
 		return ErrClusterRoleAlreadyExists.WithParams(name).Wrap(err)

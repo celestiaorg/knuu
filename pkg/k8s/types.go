@@ -74,4 +74,8 @@ type KubeManager interface {
 	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	WaitForDeployment(ctx context.Context, name string) error
 	WaitForService(ctx context.Context, name string) error
+	Terminate()
+	AllPodsStatuses(ctx context.Context) ([]PodStatus, error)
+	PodStatus(ctx context.Context, name string) (PodStatus, error)
+	PrintAllPodsStatuses(ctx context.Context) error
 }

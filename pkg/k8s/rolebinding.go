@@ -14,6 +14,22 @@ func (c *Client) CreateRoleBinding(
 	labels map[string]string,
 	role, serviceAccount string,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateRoleBindingName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	if err := validateRoleName(role); err != nil {
+		return err
+	}
+	if err := validateServiceAccountName(serviceAccount); err != nil {
+		return err
+	}
+
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -47,6 +63,22 @@ func (c *Client) CreateClusterRoleBinding(
 	labels map[string]string,
 	clusterRole, serviceAccount string,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
+	if err := validateClusterRoleBindingName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	if err := validateRoleName(clusterRole); err != nil {
+		return err
+	}
+	if err := validateServiceAccountName(serviceAccount); err != nil {
+		return err
+	}
+
 	_, err := c.clientset.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 	if err == nil || !errors.IsNotFound(err) {
 		return ErrClusterRoleBindingAlreadyExists.WithParams(name).Wrap(err)

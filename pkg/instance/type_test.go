@@ -17,11 +17,6 @@ func TestInstanceType(t *testing.T) {
 			want: "BasicInstance", // Expected output
 		},
 		{
-			name: "ExecutorInstance",
-			in:   ExecutorInstance,
-			want: "ExecutorInstance",
-		},
-		{
 			name: "TimeoutHandlerInstance",
 			in:   TimeoutHandlerInstance,
 			want: "TimeoutHandlerInstance",

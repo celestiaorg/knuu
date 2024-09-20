@@ -2,164 +2,186 @@ package system
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"testing"
 	"time"
-
-	"github.com/celestiaorg/knuu/pkg/knuu"
 
 	"github.com/google/uuid"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/celestiaorg/knuu/e2e"
 )
 
-func TestFile(t *testing.T) {
-	t.Parallel()
+func (s *Suite) TestFile() {
+	const (
+		namePrefix = "file"
+		maxRetries = 3
+	)
+
 	// Setup
+	ctx := context.Background()
 
-	executor, err := knuu.NewExecutor()
-	if err != nil {
-		t.Fatalf("Error creating executor: %v", err)
-	}
+	s.T().Log("Creating executor instance")
+	executor, err := s.Executor.NewInstance(ctx, namePrefix+"-executor")
+	s.Require().NoError(err)
 
-	serverfile, err := knuu.NewInstance("serverfile")
-	if err != nil {
-		t.Fatalf("Error creating instance '%v':", err)
-	}
-	err = serverfile.SetImage("docker.io/nginx:latest")
-	if err != nil {
-		t.Fatalf("Error setting image '%v':", err)
-	}
-	serverfile.AddPortTCP(80)
-	_, err = serverfile.ExecuteCommand("mkdir", "-p", "/usr/share/nginx/html")
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-	err = serverfile.AddFile("resources/html/index.html", "/usr/share/nginx/html/index.html", "0:0")
-	if err != nil {
-		t.Fatalf("Error adding file '%v':", err)
-	}
-	err = serverfile.AddVolumeWithOwner("/usr/share/nginx/html", "1Gi", 0)
-	if err != nil {
-		t.Fatalf("Error adding volume: %v", err)
-	}
-	err = serverfile.Commit()
-	if err != nil {
-		t.Fatalf("Error committing instance: %v", err)
-	}
+	s.T().Log("Creating nginx instance with volume")
+	serverfile := s.CreateNginxInstanceWithVolume(ctx, namePrefix+"-serverfile")
 
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(executor.Instance, serverfile))
-	})
+	s.T().Log("Adding file to nginx instance")
+	err = s.RetryOperation(func() error {
+		return serverfile.Storage().AddFile(resourcesHTML+"/index.html", e2e.NginxHTMLPath+"/index.html", "0:0")
+	}, maxRetries)
+	s.Require().NoError(err, "Error adding file to nginx instance")
+
+	s.T().Log("Committing changes")
+	err = s.RetryOperation(func() error {
+		return serverfile.Build().Commit(ctx)
+	}, maxRetries)
+	s.Require().NoError(err, "Error committing changes")
 
 	// Test logic
+	s.T().Log("Getting server IP")
+	var serverfileIP string
+	err = s.RetryOperation(func() error {
+		var err error
+		serverfileIP, err = serverfile.Network().GetIP(ctx)
+		return err
+	}, maxRetries)
+	s.Require().NoError(err, "Error getting server IP")
 
-	serverfileIP, err := serverfile.GetIP()
-	if err != nil {
-		t.Fatalf("Error getting IP '%v':", err)
-	}
+	s.T().Log("Starting server")
+	err = s.RetryOperation(func() error {
+		return serverfile.Execution().Start(ctx)
+	}, maxRetries)
+	s.Require().NoError(err, "Error starting server")
 
-	err = serverfile.Start()
-	if err != nil {
-		t.Fatalf("Error starting instance: %v", err)
-	}
-	err = serverfile.WaitInstanceIsRunning()
-	if err != nil {
-		t.Fatalf("Error waiting for instance to be running: %v", err)
-	}
+	s.T().Log("Executing wget command")
+	var wget string
+	err = s.RetryOperation(func() error {
+		var err error
+		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+		return err
+	}, maxRetries)
+	s.Require().NoError(err, "Error executing wget command")
 
-	wget, err := executor.ExecuteCommand("wget", "-q", "-O", "-", serverfileIP)
-	if err != nil {
-		t.Fatalf("Error executing command '%v':", err)
-	}
-
-	assert.Contains(t, wget, "Hello World!")
+	s.T().Log("Asserting wget output")
+	s.Assert().Contains(wget, "Hello World!")
 }
 
-func TestDownloadFileFromRunningInstance(t *testing.T) {
-	t.Parallel()
-	// Setup
+func (s *Suite) TestDownloadFileFromRunningInstance() {
+	const (
+		namePrefix = "download-file-running"
+	)
 
-	target, err := knuu.NewInstance("target")
-	require.NoError(t, err, "Error creating instance")
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
 
-	require.NoError(t, target.SetImage("alpine:latest"), "Error setting image")
-	require.NoError(t, target.SetArgs("tail", "-f", "/dev/null"), "Error setting args") // Keep the container running
-	require.NoError(t, target.Commit(), "Error committing instance")
-	require.NoError(t, target.Start(), "Error starting instance")
-
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(target))
-	})
+	ctx := context.Background()
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	// Test logic
-	fileContent := "Hello World!"
-	filePath := "/hello.txt"
+	const (
+		fileContent = "Hello World!"
+		filePath    = "/hello.txt"
+	)
 
 	// Create a file in the target instance
-	out, err := target.ExecuteCommand("echo", "-n", fileContent, ">", filePath)
-	require.NoError(t, err, fmt.Sprintf("Error executing command: %v", out))
+	out, err := target.Execution().ExecuteCommand(ctx, "echo", "-n", fileContent, ">", filePath)
+	s.Require().NoError(err, "executing command output: %v", out)
 
-	gotContent, err := target.GetFileBytes(filePath)
-	require.NoError(t, err, "Error getting file bytes")
+	gotContent, err := target.Storage().GetFileBytes(ctx, filePath)
+	s.Require().NoError(err, "Error getting file bytes")
 
-	assert.Equal(t, fileContent, string(gotContent))
+	s.Assert().Equal(fileContent, string(gotContent))
 }
+func (s *Suite) TestDownloadFileFromBuilder() {
+	const namePrefix = "download-file-builder"
 
-func TestMinio(t *testing.T) {
-	t.Parallel()
-	// Setup
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
 
-	target, err := knuu.NewInstance("target")
-	require.NoError(t, err, "Error creating instance")
+	ctx := context.Background()
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
 
-	require.NoError(t, target.SetImage("alpine:latest"), "Error setting image")
-	require.NoError(t, target.SetArgs("tail", "-f", "/dev/null"), "Error setting args") // Keep the container running
-	require.NoError(t, target.Commit(), "Error committing instance")
-	require.NoError(t, target.Start(), "Error starting instance")
-
-	t.Cleanup(func() {
-		require.NoError(t, knuu.BatchDestroy(target))
+	s.T().Cleanup(func() {
+		if err := target.Execution().Destroy(ctx); err != nil {
+			s.T().Logf("error destroying instance: %v", err)
+		}
 	})
 
-	fileContent := "Hello World!"
-	contentName := uuid.New().String()
+	// Test logic
+	const (
+		fileContent = "Hello World!"
+		filePath    = "/hello.txt"
+	)
+
+	s.Require().NoError(target.Storage().AddFileBytes([]byte(fileContent), filePath, "0:0"))
+
+	// The commit is required to make the changes persistent to the image
+	s.Require().NoError(target.Build().Commit(ctx))
+
+	// Now test if the file can be downloaded correctly from the built image
+	gotContent, err := target.Storage().GetFileBytes(ctx, filePath)
+	s.Require().NoError(err, "Error getting file bytes")
+
+	s.Assert().Equal(fileContent, string(gotContent))
+}
+
+func (s *Suite) TestMinio() {
+	const (
+		namePrefix       = "minio"
+		minioBucketName  = "knuu-e2e-test"
+		minioPushTimeout = 1 * time.Minute
+	)
+	// Setup
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
+
+	ctx := context.Background()
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
+	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
+
+	var (
+		fileContent = "Hello World!"
+		contentName = uuid.New().String()
+	)
+	s.T().Logf("contentName: %v", contentName)
 
 	tmpFile, err := os.CreateTemp("", "hello.txt")
-	require.NoError(t, err, "Error creating temporary file")
+	s.Require().NoError(err, "Error creating temporary file")
 	defer os.Remove(tmpFile.Name())
 
-	fmt.Printf("contentName: %v\n", contentName)
-
 	_, err = tmpFile.WriteString(fileContent)
-	require.NoError(t, err, "Error writing to temporary file")
+	s.Require().NoError(err, "writing to temporary file")
 	tmpFile.Close()
 
 	// Write to file did not work, so need to open it again
 	tmpFile, err = os.Open(tmpFile.Name())
-	require.NoError(t, err, "Error opening temporary file")
+	s.Require().NoError(err, "opening temporary file")
 	defer tmpFile.Close()
 
-	fmt.Printf("tmpFile.Name(): %v\n", tmpFile.Name())
+	s.T().Logf("tmpFile name: %v", tmpFile.Name())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	mCtx, cancel := context.WithTimeout(ctx, minioPushTimeout)
 	defer cancel()
-	err = knuu.PushFileToMinio(ctx, contentName, tmpFile)
-	require.NoError(t, err, "Error pushing file to Minio")
+	err = s.Knuu.MinioClient.Push(mCtx, tmpFile, contentName, minioBucketName)
+	s.Require().NoError(err)
 
-	url, err := knuu.GetMinioURL(ctx, contentName)
-	require.NoError(t, err, "Error getting Minio URL")
+	url, err := s.Knuu.MinioClient.GetURL(ctx, contentName, minioBucketName)
+	s.Require().NoError(err)
 
 	resp, err := http.Get(url)
-	require.NoError(t, err, "Error downloading the file from URL")
+	s.Require().NoError(err)
 	defer resp.Body.Close()
 
 	gotContent, err := io.ReadAll(resp.Body)
-	require.NoError(t, err, "Error reading the response body")
+	s.Require().NoError(err)
 
-	assert.Equal(t, fileContent, string(gotContent))
+	s.Assert().Equal(fileContent, string(gotContent))
 }

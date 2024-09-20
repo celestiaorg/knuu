@@ -30,8 +30,7 @@ const (
 )
 
 type Kaniko struct {
-	system.SystemDependencies
-	ContentName string // Name of the content pushed to Minio
+	*system.SystemDependencies
 }
 
 var _ builder.Builder = &Kaniko{}
@@ -223,13 +222,13 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	// Create a SHA256 hash of for the name of the archive content
 	hash := sha256.New()
 	hash.Write(archiveData)
-	k.ContentName = hex.EncodeToString(hash.Sum(nil))
+	contentName := hex.EncodeToString(hash.Sum(nil))
 
-	if err := k.MinioClient.Push(ctx, bytes.NewReader(archiveData), k.ContentName, MinioBucketName); err != nil {
+	if err := k.MinioClient.Push(ctx, bytes.NewReader(archiveData), contentName, MinioBucketName); err != nil {
 		return nil, err
 	}
 
-	s3URL, err := k.MinioClient.GetURL(ctx, k.ContentName, MinioBucketName)
+	s3URL, err := k.MinioClient.GetURL(ctx, contentName, MinioBucketName)
 	if err != nil {
 		return nil, err
 	}
