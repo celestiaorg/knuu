@@ -36,6 +36,9 @@ func (c *Client) CreateDaemonSet(
 	initContainers []v1.Container,
 	containers []v1.Container,
 ) (*appv1.DaemonSet, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
 	if err := validateDaemonSetName(name); err != nil {
 		return nil, err
 	}

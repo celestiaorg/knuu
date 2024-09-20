@@ -14,6 +14,9 @@ func (c *Client) CreateRoleBinding(
 	labels map[string]string,
 	role, serviceAccount string,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateRoleBindingName(name); err != nil {
 		return err
 	}
@@ -60,6 +63,9 @@ func (c *Client) CreateClusterRoleBinding(
 	labels map[string]string,
 	clusterRole, serviceAccount string,
 ) error {
+	if c.terminated {
+		return ErrClientTerminated
+	}
 	if err := validateClusterRoleBindingName(name); err != nil {
 		return err
 	}

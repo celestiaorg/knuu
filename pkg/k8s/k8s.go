@@ -40,6 +40,7 @@ type Client struct {
 	dynamicClient   dynamic.Interface
 	namespace       string
 	logger          *logrus.Logger
+	terminated      bool // This flag is used to indicate that the process has been terminated by the user
 	// max duration for any pod to be in pending state, otherwise it triggers a notice to be shown
 	maxPendingDuration time.Duration
 }
@@ -87,6 +88,7 @@ func NewClientCustom(
 		dynamicClient:      dC,
 		namespace:          namespace,
 		logger:             logger,
+		terminated:         false,
 		maxPendingDuration: defaultMaxPendingDuration,
 	}
 	kc.namespace = SanitizeName(namespace)
@@ -95,6 +97,10 @@ func NewClientCustom(
 	}
 	kc.startPendingPodsWarningMonitor(ctx)
 	return kc, nil
+}
+
+func (c *Client) Terminate() {
+	c.terminated = true
 }
 
 func (c *Client) Clientset() kubernetes.Interface {
