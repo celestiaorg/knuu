@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"io"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -50,6 +51,7 @@ type KubeManager interface {
 	GetConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error)
 	GetDaemonSet(ctx context.Context, name string) (*appv1.DaemonSet, error)
 	GetFirstPodFromReplicaSet(ctx context.Context, name string) (*corev1.Pod, error)
+	GetLogStream(ctx context.Context, podName string, containerName string) (io.ReadCloser, error)
 	GetNamespace(ctx context.Context, name string) (*corev1.Namespace, error)
 	GetNetworkPolicy(ctx context.Context, name string) (*netv1.NetworkPolicy, error)
 	GetService(ctx context.Context, name string) (*corev1.Service, error)
