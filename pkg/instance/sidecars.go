@@ -36,12 +36,12 @@ func (s *sidecars) IsSidecar() bool {
 }
 
 // Add adds a sidecar to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing', 'Committed' or 'Stopped'
 func (s *sidecars) Add(ctx context.Context, sc SidecarManager) error {
 	if sc == nil {
 		return ErrSidecarIsNil
 	}
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingSidecarNotAllowed.WithParams(s.instance.state.String())
 	}
 

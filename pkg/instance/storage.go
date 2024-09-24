@@ -50,7 +50,7 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 	case StatePreparing:
 		s.instance.build.addFileToBuilder(src, dest, chown)
 		return nil
-	case StateCommitted:
+	case StateCommitted, StateStopped:
 		return s.addFileToInstance(dstPath, dest, chown)
 	}
 
@@ -64,9 +64,9 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 }
 
 // AddFolder adds a folder to the instance
-// This function can only be called in the state 'Preparing' or 'Committed'
+// This function can only be called in the state 'Preparing', 'Committed' or 'Stopped'
 func (s *storage) AddFolder(src string, dest string, chown string) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingFolderNotAllowed.WithParams(s.instance.state.String())
 	}
 
@@ -141,7 +141,7 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 
 // AddVolume adds a volume to the instance
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (s *storage) AddVolume(path string, size resource.Quantity) error {
 	// temporary feat, we will remove it once we can add multiple volumes
 	if len(s.volumes) > 0 {
@@ -155,9 +155,9 @@ func (s *storage) AddVolume(path string, size resource.Quantity) error {
 }
 
 // AddVolumeWithOwner adds a volume to the instance with the given owner
-// This function can only be called in the states 'Preparing' and 'Committed'
+// This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (s *storage) AddVolumeWithOwner(path string, size resource.Quantity, owner int64) error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingVolumeNotAllowed.WithParams(s.instance.state.String())
 	}
 	// temporary feat, we will remove it once we can add multiple volumes
@@ -295,7 +295,7 @@ func (s *storage) addFileToInstance(dstPath, dest, chown string) error {
 
 // checkStateForAddingFile checks if the current state allows adding a file
 func (s *storage) checkStateForAddingFile() error {
-	if !s.instance.IsInState(StatePreparing, StateCommitted) {
+	if !s.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingFileNotAllowed.WithParams(s.instance.state.String())
 	}
 	return nil

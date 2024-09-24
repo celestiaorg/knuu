@@ -21,9 +21,9 @@ func (i *Instance) Network() *network {
 }
 
 // AddPortTCP adds a TCP port to the instance
-// This function can be called in the states 'Preparing' and 'Committed'
+// This function can be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (n *network) AddPortTCP(port int) error {
-	if !n.instance.IsInState(StatePreparing, StateCommitted) {
+	if !n.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingPortNotAllowed.WithParams(n.instance.state.String())
 	}
 
@@ -97,9 +97,9 @@ func (n *network) PortForwardTCP(ctx context.Context, port int) (int, error) {
 }
 
 // AddPortUDP adds a UDP port to the instance
-// This function can be called in the states 'Preparing' and 'Committed'
+// This function can be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (n *network) AddPortUDP(port int) error {
-	if !n.instance.IsInState(StatePreparing, StateCommitted) {
+	if !n.instance.IsInState(StatePreparing, StateCommitted, StateStopped) {
 		return ErrAddingPortNotAllowed.WithParams(n.instance.state.String())
 	}
 
