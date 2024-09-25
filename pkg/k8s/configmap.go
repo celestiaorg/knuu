@@ -64,6 +64,48 @@ func (c *Client) CreateConfigMap(
 	return created, nil
 }
 
+func (c *Client) UpdateConfigMap(
+	ctx context.Context, name string,
+	labels, data map[string]string,
+) (*v1.ConfigMap, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
+
+	if err := validateConfigMapName(name); err != nil {
+		return nil, err
+	}
+	if err := validateLabels(labels); err != nil {
+		return nil, err
+	}
+	if err := validateConfigMapKeys(data); err != nil {
+		return nil, err
+	}
+
+	cm := prepareConfigMap(c.namespace, name, labels, data)
+	updated, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Update(ctx, cm, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, ErrUpdatingConfigmap.WithParams(name).Wrap(err)
+	}
+
+	return updated, nil
+}
+
+func (c *Client) CreateOrUpdateConfigMap(
+	ctx context.Context, name string,
+	labels, data map[string]string,
+) (*v1.ConfigMap, error) {
+	exists, err := c.ConfigMapExists(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return c.UpdateConfigMap(ctx, name, labels, data)
+	}
+
+	return c.CreateConfigMap(ctx, name, labels, data)
+}
+
 func (c *Client) DeleteConfigMap(ctx context.Context, name string) error {
 	exists, err := c.ConfigMapExists(ctx, name)
 	if err != nil {

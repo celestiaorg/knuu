@@ -136,4 +136,5 @@ var (
 	ErrClientTerminated                = errors.New("ClientTerminated", "terminated by user")
 	ErrListingPods                     = errors.New("ListingPods", "failed to list pods")
 	ErrGetPodStatus                    = errors.New("GetPodStatus", "failed to get pod status for pod %s")
+	ErrUpdatingConfigmap               = errors.New("UpdatingConfigmap", "failed to update configmap %s")
 )
