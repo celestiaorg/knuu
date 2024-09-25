@@ -20,6 +20,7 @@ type KubeManager interface {
 	CreateClusterRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateClusterRoleBinding(ctx context.Context, name string, labels map[string]string, clusterRole, serviceAccount string) error
 	CreateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
+	CreateOrUpdateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
 	CreateCustomResource(ctx context.Context, name string, gvr *schema.GroupVersionResource, obj *map[string]interface{}) error
 	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	CreateNamespace(ctx context.Context, name string) error
@@ -74,6 +75,7 @@ type KubeManager interface {
 	RunCommandInPod(ctx context.Context, podName, containerName string, cmd []string) (string, error)
 	ConfigMapExists(ctx context.Context, name string) (bool, error)
 	UpdateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
+	UpdateConfigMap(ctx context.Context, name string, labels, data map[string]string) (*corev1.ConfigMap, error)
 	WaitForDeployment(ctx context.Context, name string) error
 	WaitForService(ctx context.Context, name string) error
 	Terminate()

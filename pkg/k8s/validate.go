@@ -276,3 +276,13 @@ func validatePorts(ports []int) error {
 	}
 	return nil
 }
+
+func validateConfigMap(name string, labels, data map[string]string) error {
+	if err := validateConfigMapName(name); err != nil {
+		return err
+	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	return validateConfigMapKeys(data)
+}

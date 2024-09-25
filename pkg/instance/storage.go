@@ -351,14 +351,14 @@ func (s *storage) deployFiles(ctx context.Context) error {
 		data[keyName] = fileContent
 	}
 
-	// create configmap
-	_, err := s.instance.K8sClient.CreateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
+	// If the configmap already exists, we update it
+	// This ensures long-running tests and image upgrade tests function correctly.
+	_, err := s.instance.K8sClient.CreateOrUpdateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
 	if err != nil {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
 	s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
-
 	return nil
 }
 

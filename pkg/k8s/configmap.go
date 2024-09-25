@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -37,31 +38,60 @@ func (c *Client) CreateConfigMap(
 		return nil, ErrClientTerminated
 	}
 
-	if err := validateConfigMapName(name); err != nil {
+	if err := validateConfigMap(name, labels, data); err != nil {
 		return nil, err
-	}
-	if err := validateLabels(labels); err != nil {
-		return nil, err
-	}
-	if err := validateConfigMapKeys(data); err != nil {
-		return nil, err
-	}
-
-	exists, err := c.ConfigMapExists(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, ErrConfigmapAlreadyExists.WithParams(name)
 	}
 
 	cm := prepareConfigMap(c.namespace, name, labels, data)
 	created, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Create(ctx, cm, metav1.CreateOptions{})
-	if err != nil {
-		return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
+	if err == nil {
+		return created, nil
 	}
 
-	return created, nil
+	if apierrs.IsAlreadyExists(err) {
+		return nil, ErrConfigmapAlreadyExists.WithParams(name).Wrap(err)
+	}
+	return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
+}
+
+func (c *Client) UpdateConfigMap(
+	ctx context.Context, name string,
+	labels, data map[string]string,
+) (*v1.ConfigMap, error) {
+	if c.terminated {
+		return nil, ErrClientTerminated
+	}
+
+	if err := validateConfigMap(name, labels, data); err != nil {
+		return nil, err
+	}
+
+	cm := prepareConfigMap(c.namespace, name, labels, data)
+	updated, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Update(ctx, cm, metav1.UpdateOptions{})
+	if err == nil {
+		return updated, nil
+	}
+
+	if apierrs.IsNotFound(err) {
+		return nil, ErrConfigmapDoesNotExist.WithParams(name).Wrap(err)
+	}
+	return nil, ErrUpdatingConfigmap.WithParams(name).Wrap(err)
+}
+
+func (c *Client) CreateOrUpdateConfigMap(
+	ctx context.Context, name string,
+	labels, data map[string]string,
+) (*v1.ConfigMap, error) {
+	updated, err := c.UpdateConfigMap(ctx, name, labels, data)
+	if err == nil {
+		return updated, nil
+	}
+
+	if errors.Is(err, ErrConfigmapDoesNotExist) {
+		return c.CreateConfigMap(ctx, name, labels, data)
+	}
+
+	return nil, ErrUpdatingConfigmap.WithParams(name).Wrap(err)
 }
 
 func (c *Client) DeleteConfigMap(ctx context.Context, name string) error {
