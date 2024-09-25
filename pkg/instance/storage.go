@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -351,14 +352,28 @@ func (s *storage) deployFiles(ctx context.Context) error {
 		data[keyName] = fileContent
 	}
 
-	// create configmap
 	_, err := s.instance.K8sClient.CreateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
+	if err == nil {
+		s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
+		return nil
+	}
+
+	if !errors.Is(err, k8s.ErrConfigmapAlreadyExists) {
+		return ErrFailedToCreateConfigMap.Wrap(err)
+	}
+
+	// If the configmap already exists, delete it and recreate it.
+	// This ensures long-running tests and image upgrade tests function correctly.
+	if err := s.instance.K8sClient.DeleteConfigMap(ctx, s.instance.name); err != nil {
+		return err
+	}
+
+	_, err = s.instance.K8sClient.CreateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
 	if err != nil {
 		return ErrFailedToCreateConfigMap.Wrap(err)
 	}
 
 	s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
-
 	return nil
 }
 
