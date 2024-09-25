@@ -44,14 +44,14 @@ func (c *Client) CreateConfigMap(
 
 	cm := prepareConfigMap(c.namespace, name, labels, data)
 	created, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Create(ctx, cm, metav1.CreateOptions{})
-	if err != nil {
-		if !apierrs.IsAlreadyExists(err) {
-			return nil, ErrConfigmapAlreadyExists.WithParams(name).Wrap(err)
-		}
-		return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
+	if err == nil {
+		return created, nil
 	}
 
-	return created, nil
+	if apierrs.IsAlreadyExists(err) {
+		return nil, ErrConfigmapAlreadyExists.WithParams(name).Wrap(err)
+	}
+	return nil, ErrCreatingConfigmap.WithParams(name).Wrap(err)
 }
 
 func (c *Client) UpdateConfigMap(
@@ -68,14 +68,14 @@ func (c *Client) UpdateConfigMap(
 
 	cm := prepareConfigMap(c.namespace, name, labels, data)
 	updated, err := c.clientset.CoreV1().ConfigMaps(c.namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	if err != nil {
-		if !apierrs.IsNotFound(err) {
-			return nil, ErrConfigmapDoesNotExist.WithParams(name).Wrap(err)
-		}
-		return nil, ErrUpdatingConfigmap.WithParams(name).Wrap(err)
+	if err == nil {
+		return updated, nil
 	}
 
-	return updated, nil
+	if apierrs.IsNotFound(err) {
+		return nil, ErrConfigmapDoesNotExist.WithParams(name).Wrap(err)
+	}
+	return nil, ErrUpdatingConfigmap.WithParams(name).Wrap(err)
 }
 
 func (c *Client) CreateOrUpdateConfigMap(
