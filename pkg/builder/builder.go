@@ -14,7 +14,7 @@ type Builder interface {
 type BuilderOptions struct {
 	ImageName    string
 	BuildContext string
-	Args         []string
+	Args         []ArgInterface
 	Destination  string
 	Cache        *CacheOptions
 }

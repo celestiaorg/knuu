@@ -21,10 +21,11 @@ type BuilderFactory struct {
 	imageBuilder           builder.Builder
 	dockerFileInstructions []string
 	buildContext           string
+	args                   []builder.ArgInterface
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
-func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Builder) (*BuilderFactory, error) {
+func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Builder, args []builder.ArgInterface) (*BuilderFactory, error) {
 	if err := os.MkdirAll(buildContext, 0755); err != nil {
 		return nil, ErrFailedToCreateContextDir.Wrap(err)
 	}
@@ -34,6 +35,7 @@ func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Buil
 		dockerFileInstructions: []string{"FROM " + imageName},
 		buildContext:           buildContext,
 		imageBuilder:           imageBuilder,
+		args:                   args,
 	}, nil
 }
 
@@ -96,6 +98,7 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
 		BuildContext: builder.DirContext{Path: f.buildContext}.BuildContext(),
+		Args:         f.args,
 	})
 
 	qStatus := logrus.TextFormatter{}.DisableQuote
@@ -133,6 +136,7 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 		Destination:  imageName,
 		BuildContext: buildCtx,
 		Cache:        cOpts,
+		Args:         f.args,
 	})
 
 	qStatus := logrus.TextFormatter{}.DisableQuote

@@ -45,7 +45,7 @@ func (b *build) SetImagePullPolicy(pullPolicy v1.PullPolicy) {
 
 // SetImage sets the image of the instance.
 // It is only allowed in the 'None' and 'Preparing' states.
-func (b *build) SetImage(ctx context.Context, image string) error {
+func (b *build) SetImage(ctx context.Context, image string, args ...builder.ArgInterface) error {
 	if !b.instance.IsInState(StateNone, StatePreparing, StateStopped) {
 		if b.instance.sidecars.IsSidecar() {
 			return ErrSettingImageNotAllowedForSidecarsStarted
@@ -54,7 +54,7 @@ func (b *build) SetImage(ctx context.Context, image string) error {
 	}
 
 	// Use the builder to build a new image
-	factory, err := container.NewBuilderFactory(image, b.getBuildDir(), b.instance.ImageBuilder)
+	factory, err := container.NewBuilderFactory(image, b.getBuildDir(), b.instance.ImageBuilder, args)
 	if err != nil {
 		return ErrCreatingBuilder.Wrap(err)
 	}
@@ -66,7 +66,7 @@ func (b *build) SetImage(ctx context.Context, image string) error {
 
 // SetGitRepo builds the image from the given git repo, pushes it
 // to the registry under the given name and sets the image of the instance.
-func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) error {
+func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, args ...builder.ArgInterface) error {
 	if !b.instance.IsState(StateNone) {
 		return ErrSettingGitRepo.WithParams(b.instance.state.String())
 	}
@@ -80,7 +80,7 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext) e
 		return ErrGettingImageName.Wrap(err)
 	}
 
-	factory, err := container.NewBuilderFactory(imageName, b.getBuildDir(), b.instance.ImageBuilder)
+	factory, err := container.NewBuilderFactory(imageName, b.getBuildDir(), b.instance.ImageBuilder, args)
 	if err != nil {
 		return ErrCreatingBuilder.Wrap(err)
 	}
