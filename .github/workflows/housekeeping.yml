@@ -9,8 +9,8 @@ on:
 jobs:
   add-to-project-with-knuu-label:
     # ignore dependabot PRs
-    if: ${{ github.actor != 'dependabot[bot]' }}
-    name: Add issues and PRs to project and add knuu label
+    if: github.event.issues
+    name: Add issues to project and add knuu label
     uses: celestiaorg/.github/.github/workflows/reusable_housekeeping.yml@v0.4.1
     secrets: inherit
     permissions:
@@ -20,7 +20,7 @@ jobs:
       run-labels: true
       labels-to-add: "knuu"
       run-projects: true
-      project-url: https://github.com/orgs/celestiaorg/projects/27
+      project-url: https://github.com/orgs/celestiaorg/projects/38
 
   auto-add-reviewer:
     name: Auto add reviewer to PR
