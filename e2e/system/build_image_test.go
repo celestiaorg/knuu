@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
@@ -73,8 +74,6 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	})
 	s.Require().NoError(err)
 
-	s.Require().NoError(target.Build().SetStartCommand("sleep", "infinity"))
-
 	const (
 		filePath     = "/home/hello.txt"
 		expectedData = "Hello, world!"
@@ -89,6 +88,47 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 
 	gotData, err := target.Storage().GetFileBytes(ctx, filePath)
 	s.Require().NoError(err)
+
+	s.Assert().Equal([]byte(expectedData), gotData, "file bytes do not match.")
+}
+
+func (s *Suite) TestBuildWithBuildArgs() {
+	const (
+		namePrefix = "build-from-git-with-build-args"
+		maxRetries = 3
+
+		// This file is created by the dockerfile in the repo
+		// ref: https://github.com/celestiaorg/knuu/blob/test/build-from-git/Dockerfile
+		filePath     = "/test.txt"
+		expectedData = "Hello, build arg!"
+	)
+
+	s.T().Log("Creating new instance")
+	target, err := s.Knuu.NewInstance(namePrefix)
+	s.Require().NoError(err)
+
+	s.T().Log("Setting git repo")
+	ctx := context.Background()
+	err = target.Build().SetGitRepo(ctx,
+		builder.GitContext{
+			Repo:     gitRepo,
+			Branch:   gitBranch,
+			Username: "",
+			Password: "",
+		},
+		&builder.BuildArg{
+			Value: fmt.Sprintf("MESSAGE=%s", expectedData),
+		},
+	)
+	s.Require().NoError(err)
+	s.Require().NoError(target.Build().Commit(ctx))
+
+	s.Require().NoError(target.Execution().Start(ctx))
+
+	gotData, err := target.Storage().GetFileBytes(ctx, filePath)
+	s.Require().NoError(err)
+
+	gotData = []byte(strings.TrimSpace(string(gotData)))
 
 	s.Assert().Equal([]byte(expectedData), gotData, "file bytes do not match.")
 }

@@ -143,8 +143,10 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 		return nil, ErrParsingQuantity.Wrap(err)
 	}
 
-	parallelism := DefaultParallelism
-	backoffLimit := DefaultBackoffLimit
+	var (
+		parallelism  = DefaultParallelism
+		backoffLimit = DefaultBackoffLimit
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jobName,
@@ -158,15 +160,7 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 						{
 							Name:  kanikoContainerName,
 							Image: kanikoImage, // debug has a shell
-							Args: []string{
-								`--context=` + b.BuildContext,
-								// TODO: see if we need it or not
-								// --git gitoptions    Branch to clone if build context is a git repository (default branch=,single-branch=false,recurse-submodules=false)
-
-								// TODO: we might need to add some options to get the auth token for the registry
-								"--destination=" + b.Destination,
-								// "--verbosity=debug", // log level
-							},
+							Args:  prepareArgs(b),
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceEphemeralStorage: ephemeralStorage,
@@ -186,21 +180,6 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 			return nil, ErrMountingDir.Wrap(err)
 		}
 	}
-
-	// TODO: we need to add some configs to get the auth token for the cache repo
-	if b.Cache != nil && b.Cache.Enabled {
-		cacheArgs := []string{"--cache=true"}
-		if b.Cache.Dir != "" {
-			cacheArgs = append(cacheArgs, "--cache-dir="+b.Cache.Dir)
-		}
-		if b.Cache.Repo != "" {
-			cacheArgs = append(cacheArgs, "--cache-repo="+b.Cache.Repo)
-		}
-		job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, cacheArgs...)
-	}
-
-	// Add extra args
-	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, b.Args...)
 
 	return job, nil
 }
@@ -271,4 +250,34 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	job.Spec.Template.Spec.Containers[0].Args = append(job.Spec.Template.Spec.Containers[0].Args, "--context=tar://"+archiveFilePath)
 
 	return job, nil
+}
+
+func prepareArgs(b *builder.BuilderOptions) []string {
+	args := []string{
+		"--context=" + b.BuildContext,
+		// TODO: see if we need it or not
+		// --git gitoptions    Branch to clone if build context is a git repository (default branch=,single-branch=false,recurse-submodules=false)
+
+		// TODO: we might need to add some options to get the auth token for the registry
+		"--destination=" + b.Destination,
+		// "--verbosity=debug", // log level
+	}
+
+	// TODO: we need to add some configs to get the auth token for the cache repo
+	if b.Cache != nil && b.Cache.Enabled {
+		args = append(args, "--cache=true")
+		if b.Cache.Dir != "" {
+			args = append(args, "--cache-dir="+b.Cache.Dir)
+		}
+		if b.Cache.Repo != "" {
+			args = append(args, "--cache-repo="+b.Cache.Repo)
+		}
+	}
+
+	// Append other args e.g. build args
+	for _, a := range b.Args {
+		args = append(args, fmt.Sprintf("%s=%s", a.GetKey(), a.GetValue()))
+	}
+
+	return args
 }

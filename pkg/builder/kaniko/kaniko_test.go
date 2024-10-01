@@ -46,7 +46,7 @@ func TestKanikoBuilder(t *testing.T) {
 			ImageName:    testImage,
 			BuildContext: blCtx,
 			Destination:  testDestination,
-			Args:         []string{"--build-arg=value"},
+			Args:         []builder.ArgInterface{&builder.BuildArg{Value: "SOME_ARG=some_value"}},
 			Cache:        cacheOpts,
 		}
 
