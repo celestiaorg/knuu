@@ -108,6 +108,10 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		return ErrFailedToWriteDockerfile.Wrap(err)
 	}
 
+	if f.imageBuilder == nil {
+		return ErrImageBuilderNotSet
+	}
+
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
@@ -141,6 +145,10 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 	}
 
 	f.logger.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
+
+	if f.imageBuilder == nil {
+		return ErrImageBuilderNotSet
+	}
 
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    imageName,
@@ -202,9 +210,6 @@ func verifyOptions(opts BuilderFactoryOptions) error {
 	}
 	if opts.BuildContext == "" {
 		return ErrBuildContextEmpty
-	}
-	if opts.ImageBuilder == nil {
-		return ErrImageBuilderEmpty
 	}
 	if opts.Logger == nil {
 		return ErrLoggerEmpty
