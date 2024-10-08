@@ -169,7 +169,16 @@ func TestTsharkValidateConfig(t *testing.T) {
 }
 
 func TestTsharkClone(t *testing.T) {
-	testInstance, err := instance.New("testInstance", &system.SystemDependencies{})
+	testInstance, err := instance.New("testInstance",
+		&system.SystemDependencies{
+			Logger: logrus.New(),
+		})
+	require.NoError(t, err)
+
+	err = testInstance.Build().SetImage(context.Background(), "testImage")
+	require.NoError(t, err)
+
+	err = testInstance.Build().Commit(context.Background())
 	require.NoError(t, err)
 
 	tshark := &Tshark{
@@ -184,8 +193,8 @@ func TestTsharkClone(t *testing.T) {
 		UploadInterval: time.Minute * 5,
 		instance:       testInstance,
 	}
-
 	clonePrefixName := "test-clone-prefix"
+
 	clone, err := tshark.Clone(clonePrefixName)
 	require.NoError(t, err)
 
