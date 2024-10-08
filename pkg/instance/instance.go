@@ -137,7 +137,7 @@ func (i *Instance) CloneWithSuffix(suffix string) (*Instance, error) {
 }
 
 // CloneWithName creates a clone of the instance with a given name
-// This function can only be called in the state 'Committed'
+// This function can only be called in the state 'Committed' or 'Stopped'
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
