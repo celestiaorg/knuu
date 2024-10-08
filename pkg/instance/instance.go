@@ -141,6 +141,10 @@ func (i *Instance) CloneWithSuffix(suffix string) (*Instance, error) {
 // When cloning an instance that is a sidecar, the clone will be not a sidecar
 // When cloning an instance with sidecars, the sidecars will be cloned as well
 func (i *Instance) CloneWithName(name string) (*Instance, error) {
+	if !i.IsInState(StateCommitted, StateStopped) {
+		return nil, ErrCannotCloneInstance.WithParams(i.name, i.state)
+	}
+
 	clonedSidecars, err := i.sidecars.clone(name)
 	if err != nil {
 		return nil, err
