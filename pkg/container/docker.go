@@ -119,12 +119,7 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		Args:         f.args,
 	})
 
-	lf := f.logger.Formatter.(*logrus.TextFormatter)
-	qStatus := lf.DisableQuote
-	lf.DisableQuote = true
-	f.logger.Debug("build logs: ", logs)
-	lf.DisableQuote = qStatus
-
+	f.logDebugWithQuotesDisabled("build logs: ", logs)
 	return err
 }
 
@@ -158,12 +153,7 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 		Args:         f.args,
 	})
 
-	lf := f.logger.Formatter.(*logrus.TextFormatter)
-	qStatus := lf.DisableQuote
-	lf.DisableQuote = true
-	f.logger.Debug("build logs: ", logs)
-	lf.DisableQuote = qStatus
-
+	f.logDebugWithQuotesDisabled("build logs: ", logs)
 	return err
 }
 
@@ -215,4 +205,12 @@ func verifyOptions(opts BuilderFactoryOptions) error {
 		return ErrLoggerEmpty
 	}
 	return nil
+}
+
+func (f *BuilderFactory) logDebugWithQuotesDisabled(args ...interface{}) {
+	lf := f.logger.Formatter.(*logrus.TextFormatter)
+	qStatus := lf.DisableQuote
+	lf.DisableQuote = true
+	f.logger.Debug(args...)
+	lf.DisableQuote = qStatus
 }
