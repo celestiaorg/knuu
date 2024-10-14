@@ -220,4 +220,5 @@ var (
 	ErrAddingHostToProxyNotAllowed               = errors.New("AddingHostToProxyNotAllowed", "adding host to proxy is only allowed in state 'Started' and 'Preparing'. Current state is '%s'")
 	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
 	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
+	ErrCannotCloneInstance                       = errors.New("CannotCloneInstance", "cannot clone instance '%s' in state '%s'")
 )
