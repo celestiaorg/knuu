@@ -54,7 +54,13 @@ func (b *build) SetImage(ctx context.Context, image string, args ...builder.ArgI
 	}
 
 	// Use the builder to build a new image
-	factory, err := container.NewBuilderFactory(image, b.getBuildDir(), b.instance.ImageBuilder, args)
+	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
+		ImageName:    image,
+		BuildContext: b.getBuildDir(),
+		ImageBuilder: b.instance.ImageBuilder,
+		Args:         args,
+		Logger:       b.instance.Logger,
+	})
 	if err != nil {
 		return ErrCreatingBuilder.Wrap(err)
 	}
@@ -80,7 +86,13 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 		return ErrGettingImageName.Wrap(err)
 	}
 
-	factory, err := container.NewBuilderFactory(imageName, b.getBuildDir(), b.instance.ImageBuilder, args)
+	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
+		ImageName:    imageName,
+		BuildContext: b.getBuildDir(),
+		ImageBuilder: b.instance.ImageBuilder,
+		Args:         args,
+		Logger:       b.instance.Logger,
+	})
 	if err != nil {
 		return ErrCreatingBuilder.Wrap(err)
 	}

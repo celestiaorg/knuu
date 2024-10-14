@@ -25,4 +25,8 @@ var (
 	ErrReadingFile                    = errors.New("ReadingFile", "error reading file: %s")
 	ErrHashingFile                    = errors.New("HashingFile", "error hashing file %s")
 	ErrHashingBuildContext            = errors.New("HashingBuildContext", "error hashing build context")
+	ErrImageNameEmpty                 = errors.New("ImageNameEmpty", "image name is empty")
+	ErrBuildContextEmpty              = errors.New("BuildContextEmpty", "build context is empty")
+	ErrImageBuilderNotSet             = errors.New("ImageBuilderNotSet", "image builder is not set")
+	ErrLoggerEmpty                    = errors.New("LoggerEmpty", "logger is empty")
 )

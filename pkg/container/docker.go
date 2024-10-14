@@ -22,20 +22,34 @@ type BuilderFactory struct {
 	dockerFileInstructions []string
 	buildContext           string
 	args                   []builder.ArgInterface
+	logger                 *logrus.Logger
+}
+
+type BuilderFactoryOptions struct {
+	ImageName    string
+	BuildContext string
+	ImageBuilder builder.Builder
+	Args         []builder.ArgInterface
+	Logger       *logrus.Logger
 }
 
 // NewBuilderFactory creates a new instance of BuilderFactory.
-func NewBuilderFactory(imageName, buildContext string, imageBuilder builder.Builder, args []builder.ArgInterface) (*BuilderFactory, error) {
-	if err := os.MkdirAll(buildContext, 0755); err != nil {
+func NewBuilderFactory(opts BuilderFactoryOptions) (*BuilderFactory, error) {
+	if err := verifyOptions(opts); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(opts.BuildContext, 0755); err != nil {
 		return nil, ErrFailedToCreateContextDir.Wrap(err)
 	}
 
 	return &BuilderFactory{
-		imageNameFrom:          imageName,
-		dockerFileInstructions: []string{"FROM " + imageName},
-		buildContext:           buildContext,
-		imageBuilder:           imageBuilder,
-		args:                   args,
+		imageNameFrom:          opts.ImageName,
+		dockerFileInstructions: []string{"FROM " + opts.ImageName},
+		buildContext:           opts.BuildContext,
+		imageBuilder:           opts.ImageBuilder,
+		args:                   opts.Args,
+		logger:                 opts.Logger,
 	}, nil
 }
 
@@ -73,7 +87,7 @@ func (f *BuilderFactory) Changed() bool {
 // The image is identified by the provided name.
 func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string) error {
 	if !f.Changed() {
-		logrus.Debugf("No changes made to image %s, skipping push", f.imageNameFrom)
+		f.logger.Debugf("No changes made to image %s, skipping push", f.imageNameFrom)
 		return nil
 	}
 
@@ -94,6 +108,10 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		return ErrFailedToWriteDockerfile.Wrap(err)
 	}
 
+	if f.imageBuilder == nil {
+		return ErrImageBuilderNotSet
+	}
+
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
 		Destination:  f.imageNameTo, // in docker the image name and destination are the same
@@ -101,15 +119,7 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		Args:         f.args,
 	})
 
-	qStatus := logrus.TextFormatter{}.DisableQuote
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableQuote: true,
-	})
-	logrus.Debug("build logs: ", logs)
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableQuote: qStatus,
-	})
-
+	f.logDebugWithQuotesDisabled("build logs: ", logs)
 	return err
 }
 
@@ -129,7 +139,11 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 		return ErrFailedToGetDefaultCacheOptions.Wrap(err)
 	}
 
-	logrus.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
+	f.logger.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
+
+	if f.imageBuilder == nil {
+		return ErrImageBuilderNotSet
+	}
 
 	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
 		ImageName:    imageName,
@@ -139,16 +153,7 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 		Args:         f.args,
 	})
 
-	qStatus := logrus.TextFormatter{}.DisableQuote
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableQuote: true,
-	})
-
-	logrus.Debug("build logs: ", logs)
-
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableQuote: qStatus,
-	})
+	f.logDebugWithQuotesDisabled("build logs: ", logs)
 	return err
 }
 
@@ -184,7 +189,28 @@ func (f *BuilderFactory) GenerateImageHash() (string, error) {
 		return "", ErrHashingBuildContext.Wrap(err)
 	}
 
-	logrus.Debug("Generated image hash: ", fmt.Sprintf("%x", hasher.Sum(nil)))
+	f.logger.Debug("Generated image hash: ", fmt.Sprintf("%x", hasher.Sum(nil)))
 
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+func verifyOptions(opts BuilderFactoryOptions) error {
+	if opts.ImageName == "" {
+		return ErrImageNameEmpty
+	}
+	if opts.BuildContext == "" {
+		return ErrBuildContextEmpty
+	}
+	if opts.Logger == nil {
+		return ErrLoggerEmpty
+	}
+	return nil
+}
+
+func (f *BuilderFactory) logDebugWithQuotesDisabled(args ...interface{}) {
+	lf := f.logger.Formatter.(*logrus.TextFormatter)
+	qStatus := lf.DisableQuote
+	lf.DisableQuote = true
+	f.logger.Debug(args...)
+	lf.DisableQuote = qStatus
 }
