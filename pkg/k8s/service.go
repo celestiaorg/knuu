@@ -162,7 +162,7 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 	}
 }
 
-func (c *Client) GetServiceDNS(name string) string {
+func (c *Client) ServiceDNS(name string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
 }
 

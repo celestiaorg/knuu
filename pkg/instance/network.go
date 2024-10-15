@@ -2,7 +2,6 @@ package instance
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
@@ -120,47 +119,22 @@ func (n *network) AddPortUDP(port int) error {
 }
 
 // GetIP returns the IP of the instance
-// This function can only be called in the states 'Preparing' and 'Started'
+// This function can only be called in the states 'Started'
 func (n *network) GetIP(ctx context.Context) (string, error) {
-	// Check if i.kubernetesService already has the IP
-	if n.kubernetesService != nil && n.kubernetesService.Spec.ClusterIP != "" {
-		return n.kubernetesService.Spec.ClusterIP, nil
-	}
-	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := n.instance.K8sClient.GetService(ctx, n.instance.name)
-	if err != nil || svc == nil {
-		// Service does not exist, so we need to deploy it
-		err := n.deployService(ctx, n.portsTCP, n.portsUDP)
-		if err != nil {
-			return "", ErrDeployingServiceForInstance.WithParams(n.instance.name).Wrap(err)
-		}
-		svc, err = n.instance.K8sClient.GetService(ctx, n.instance.name)
-		if err != nil {
-			return "", ErrGettingServiceForInstance.WithParams(n.instance.name).Wrap(err)
-		}
+	if !n.instance.IsInState(StateStarted) {
+		return "", ErrGettingIPNotAllowed.WithParams(n.instance.state.String())
 	}
 
-	ip := svc.Spec.ClusterIP
-	if ip == "" {
-		return "", ErrGettingServiceIP.WithParams(n.instance.name)
+	pod, err := n.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, n.instance.name)
+	if err != nil {
+		return "", ErrGettingPodFromReplicaSet.WithParams(n.instance.name).Wrap(err)
 	}
 
-	// Update i.kubernetesService for future reference
-	n.kubernetesService = svc
-	return ip, nil
+	return pod.Status.PodIP, nil
 }
 
-// GetServiceEndpoint returns the endpoint of the service for the instance
-// This function can only be called in the state 'Started'
-func (n *network) GetServiceEndpoint(port int) (string, error) {
-	if !n.instance.IsInState(StateStarted) {
-		return "", ErrGettingServiceEndpointNotAllowed.WithParams(n.instance.state.String())
-	}
-	dns := n.instance.K8sClient.GetServiceDNS(n.instance.name)
-	if port == 0 {
-		return dns, nil
-	}
-	return fmt.Sprintf("%s:%d", dns, port), nil
+func (n *network) HostName() string {
+	return n.instance.K8sClient.ServiceDNS(n.instance.name)
 }
 
 // deployService deploys the service for the instance

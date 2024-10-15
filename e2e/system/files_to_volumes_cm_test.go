@@ -25,16 +25,10 @@ func (s *Suite) TestNoVolumesNoFiles() {
 
 	target := s.CreateNginxInstance(ctx, namePrefix+"-target")
 	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
-	// Test logic
-	s.Require().NoError(target.Execution().StartAsync(ctx))
-
-	webIP, err := target.Network().GetIP(ctx)
-	s.Require().NoError(err)
-
-	s.Require().NoError(target.Execution().WaitInstanceIsRunning(ctx))
-
-	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+	wget, err := executor.Execution().
+		ExecuteCommand(ctx, "wget", "-q", "-O", "-", target.Network().HostName())
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Welcome to nginx!")
@@ -59,12 +53,10 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	s.Require().NoError(target.Build().Commit(ctx))
 
 	// Test logic
-	s.Require().NoError(target.Execution().StartAsync(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
 
 	webIP, err := target.Network().GetIP(ctx)
 	s.Require().NoError(err)
-
-	s.Require().NoError(target.Execution().WaitInstanceIsRunning(ctx))
 
 	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	s.Require().NoError(err)
@@ -114,13 +106,10 @@ func (s *Suite) TestNoVolumesOneFile() {
 	}
 
 	for _, i := range instances {
-		webIP, err := i.Network().GetIP(ctx)
-		s.Require().NoError(err)
-
 		err = i.Execution().WaitInstanceIsRunning(ctx)
 		s.Require().NoError(err)
 
-		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
@@ -167,11 +156,9 @@ func (s *Suite) TestOneVolumeOneFile() {
 	}
 
 	for _, i := range instances {
-		webIP, err := i.Network().GetIP(ctx)
-		s.Require().NoError(err)
 		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 		s.Require().NoError(err)
 		wget = strings.TrimSpace(wget)
 
@@ -237,17 +224,15 @@ func (s *Suite) TestOneVolumeTwoFiles() {
 	}
 
 	for _, i := range instances {
-		webIP, err := i.Network().GetIP(ctx)
-		s.Require().NoError(err)
 		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wgetIndex, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wgetIndex, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 		s.Require().NoError(err)
 		wgetIndex = strings.TrimSpace(wgetIndex)
 		s.Assert().Equal("hello from 1", wgetIndex)
 
-		webIP2 := webIP + "/index-2.html"
-		wgetIndex2, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP2)
+		webHost2 := i.Network().HostName() + "/index-2.html"
+		wgetIndex2, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webHost2)
 		s.Require().NoError(err)
 		wgetIndex2 = strings.TrimSpace(wgetIndex2)
 		s.Assert().Equal("hello from 2", wgetIndex2)

@@ -58,7 +58,7 @@ type KubeManager interface {
 	GetService(ctx context.Context, name string) (*corev1.Service, error)
 	GetServiceEndpoint(ctx context.Context, name string) (string, error)
 	GetServiceIP(ctx context.Context, name string) (string, error)
-	GetServiceDNS(name string) string
+	ServiceDNS(name string) string
 	IsPodRunning(ctx context.Context, name string) (bool, error)
 	IsReplicaSetRunning(ctx context.Context, name string) (bool, error)
 	Namespace() string

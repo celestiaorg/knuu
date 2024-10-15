@@ -222,4 +222,5 @@ var (
 	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
 	ErrGettingServiceEndpointNotAllowed          = errors.New("GettingServiceEndpointNotAllowed", "getting service endpoint is only allowed in state 'Started'. Current state is '%s'")
 	ErrCannotCloneInstance                       = errors.New("CannotCloneInstance", "cannot clone instance '%s' in state '%s'")
+	ErrGettingIPNotAllowed                       = errors.New("GettingIPNotAllowed", "getting IP is allowed in state 'Started'. Current state is '%s'")
 )

@@ -38,12 +38,10 @@ func (s *Suite) TestHeadlessService() {
 	s.Require().NoError(err)
 
 	// Prepare ping executor & target
-
 	s.Require().NoError(target.Execution().Start(ctx))
 	s.Require().NoError(executor.Execution().Start(ctx))
 
-	targetEndpoint, err := target.Network().GetServiceEndpoint(gopingPort)
-	s.Require().NoError(err)
+	targetEndpoint := fmt.Sprintf("%s:%d", target.Network().HostName(), gopingPort)
 	s.T().Logf("targetEndpoint: %v", targetEndpoint)
 
 	s.T().Log("Starting ping test. It takes a while.")

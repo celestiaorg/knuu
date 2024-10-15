@@ -34,12 +34,10 @@ func (s *Suite) TestProbe() {
 	}
 	s.Require().NoError(web.Monitoring().SetLivenessProbe(&livenessProbe))
 	s.Require().NoError(web.Build().Commit(ctx))
+	s.Require().NoError(web.Execution().Start(ctx))
 
-	// Test logic
 	webIP, err := web.Network().GetIP(ctx)
 	s.Require().NoError(err)
-
-	s.Require().NoError(web.Execution().Start(ctx))
 
 	wgetOutput, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	s.Require().NoError(err)
