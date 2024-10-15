@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -147,6 +148,19 @@ func (n *network) GetIP(ctx context.Context) (string, error) {
 	// Update i.kubernetesService for future reference
 	n.kubernetesService = svc
 	return ip, nil
+}
+
+// GetServiceEndpoint returns the endpoint of the service for the instance
+// This function can only be called in the state 'Started'
+func (n *network) GetServiceEndpoint(port int) (string, error) {
+	if !n.instance.IsInState(StateStarted) {
+		return "", ErrGettingServiceEndpointNotAllowed.WithParams(n.instance.state.String())
+	}
+	dns := n.instance.K8sClient.GetServiceDNS(n.instance.name)
+	if port == 0 {
+		return dns, nil
+	}
+	return fmt.Sprintf("%s:%d", dns, port), nil
 }
 
 // deployService deploys the service for the instance

@@ -162,6 +162,11 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 	}
 }
 
+func (c *Client) GetServiceDNS(name string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
+}
+
+// TODO: refactor this function to use the service IP directly
 func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, error) {
 	srv, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -276,9 +281,10 @@ func prepareService(
 			Labels:    labels,
 		},
 		Spec: v1.ServiceSpec{
-			Ports:    servicePorts,
-			Selector: selectorMap,
-			Type:     v1.ServiceTypeClusterIP,
+			Ports:     servicePorts,
+			Selector:  selectorMap,
+			Type:      v1.ServiceTypeClusterIP,
+			ClusterIP: v1.ClusterIPNone, // Headless service
 		},
 	}
 	return svc, nil
