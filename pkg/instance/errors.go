@@ -221,4 +221,5 @@ var (
 	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
 	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
 	ErrGettingServiceEndpointNotAllowed          = errors.New("GettingServiceEndpointNotAllowed", "getting service endpoint is only allowed in state 'Started'. Current state is '%s'")
+	ErrCannotCloneInstance                       = errors.New("CannotCloneInstance", "cannot clone instance '%s' in state '%s'")
 )
