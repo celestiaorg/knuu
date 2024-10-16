@@ -120,6 +120,8 @@ func (n *network) AddPortUDP(port int) error {
 
 // GetIP returns the IP of the instance
 // This function can only be called in the states 'Started'
+// The IP is not persistent and can be changed when the pod is restarted
+// If a persistent IP is needed, use HostName() instead
 func (n *network) GetIP(ctx context.Context) (string, error) {
 	if !n.instance.IsInState(StateStarted) {
 		return "", ErrGettingIPNotAllowed.WithParams(n.instance.state.String())
@@ -128,6 +130,10 @@ func (n *network) GetIP(ctx context.Context) (string, error) {
 	pod, err := n.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, n.instance.name)
 	if err != nil {
 		return "", ErrGettingPodFromReplicaSet.WithParams(n.instance.name).Wrap(err)
+	}
+
+	if pod.Status.PodIP == "" {
+		return "", ErrPodIPNotReady.WithParams(pod.Name)
 	}
 
 	return pod.Status.PodIP, nil

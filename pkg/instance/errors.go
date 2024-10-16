@@ -223,4 +223,5 @@ var (
 	ErrGettingServiceEndpointNotAllowed          = errors.New("GettingServiceEndpointNotAllowed", "getting service endpoint is only allowed in state 'Started'. Current state is '%s'")
 	ErrCannotCloneInstance                       = errors.New("CannotCloneInstance", "cannot clone instance '%s' in state '%s'")
 	ErrGettingIPNotAllowed                       = errors.New("GettingIPNotAllowed", "getting IP is allowed in state 'Started'. Current state is '%s'")
+	ErrPodIPNotReady                             = errors.New("PodIPNotReady", "pod IP is not ready for pod '%s'")
 )

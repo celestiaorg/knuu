@@ -121,13 +121,48 @@ func (c *Client) DeleteService(ctx context.Context, name string) error {
 }
 
 func (c *Client) GetServiceIP(ctx context.Context, name string) (string, error) {
-	svc, err := c.GetService(ctx, name)
+	srv, err := c.GetService(ctx, name)
 	if err != nil {
 		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
-	return svc.Spec.ClusterIP, nil
+
+	if srv.Spec.Type == v1.ServiceTypeLoadBalancer {
+		// Use the LoadBalancer's external IP
+		if len(srv.Status.LoadBalancer.Ingress) > 0 {
+			return srv.Status.LoadBalancer.Ingress[0].IP, nil
+		}
+		return "", ErrLoadBalancerIPNotAvailable
+	}
+
+	if srv.Spec.Type != v1.ServiceTypeNodePort {
+		// Headless service does not have a cluster IP
+		if srv.Spec.ClusterIP == v1.ClusterIPNone {
+			return "", ErrHeadlessService.WithParams(name)
+		}
+		return srv.Spec.ClusterIP, nil
+	}
+
+	// Use the Node IP and NodePort
+	nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", ErrGettingNodes.Wrap(err)
+	}
+	if len(nodes.Items) == 0 {
+		return "", ErrNoNodesFound
+	}
+
+	// Use the first node for simplicity, you might need to handle multiple nodes
+	var nodeIP string
+	for _, address := range nodes.Items[0].Status.Addresses {
+		if address.Type == v1.NodeExternalIP {
+			nodeIP = address.Address
+			break
+		}
+	}
+	return nodeIP, nil
 }
 
+// WaitForService() works only for the services with publicly accessible IP
 func (c *Client) WaitForService(ctx context.Context, name string) error {
 	retryInterval := time.Duration(0)
 	for {
@@ -148,11 +183,13 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 		}
 
 		// Check if service is reachable
+		// Since this function is called from the client,
+		// we cannot use headless service as it is not accessible from outside the cluster
+		// so we use the service IP and port to check connectivity
 		endpoint, err := c.GetServiceEndpoint(ctx, name)
 		if err != nil {
 			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
 		}
-
 		if err := checkServiceConnectivity(endpoint); err != nil {
 			continue
 		}
@@ -166,43 +203,26 @@ func (c *Client) ServiceDNS(name string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
 }
 
-// TODO: refactor this function to use the service IP directly
 func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, error) {
-	srv, err := c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
+	ip, err := c.GetServiceIP(ctx, name)
 	if err != nil {
-		return "", ErrGettingService.WithParams(name).Wrap(err)
+		return "", ErrGettingServiceIP.WithParams(name).Wrap(err)
 	}
 
-	if srv.Spec.Type == v1.ServiceTypeLoadBalancer {
-		// Use the LoadBalancer's external IP
-		if len(srv.Status.LoadBalancer.Ingress) > 0 {
-			return fmt.Sprintf("%s:%d", srv.Status.LoadBalancer.Ingress[0].IP, srv.Spec.Ports[0].Port), nil
-		}
-		return "", ErrLoadBalancerIPNotAvailable
+	port, err := c.ServiceNodePort(ctx, name)
+	if err != nil {
+		return "", ErrGettingServiceNodePort.WithParams(name).Wrap(err)
 	}
 
-	if srv.Spec.Type == v1.ServiceTypeNodePort {
-		// Use the Node IP and NodePort
-		nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return "", ErrGettingNodes.Wrap(err)
-		}
-		if len(nodes.Items) == 0 {
-			return "", ErrNoNodesFound
-		}
+	return fmt.Sprintf("%s:%d", ip, port), nil
+}
 
-		// Use the first node for simplicity, you might need to handle multiple nodes
-		var nodeIP string
-		for _, address := range nodes.Items[0].Status.Addresses {
-			if address.Type == v1.NodeExternalIP {
-				nodeIP = address.Address
-				break
-			}
-		}
-		return fmt.Sprintf("%s:%d", nodeIP, srv.Spec.Ports[0].NodePort), nil
+func (c *Client) ServiceNodePort(ctx context.Context, name string) (int32, error) {
+	svc, err := c.GetService(ctx, name)
+	if err != nil {
+		return 0, ErrGettingService.WithParams(name).Wrap(err)
 	}
-
-	return fmt.Sprintf("%s:%d", srv.Spec.ClusterIP, srv.Spec.Ports[0].Port), nil
+	return svc.Spec.Ports[0].NodePort, nil
 }
 
 func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) {

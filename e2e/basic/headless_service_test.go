@@ -56,10 +56,10 @@ func (s *Suite) TestHeadlessService() {
 		s.Require().NoError(err)
 
 		elapsed := time.Since(startTime)
-		s.T().Logf("i: %d, test took %d seconds, output: `%s`", i, int64(elapsed.Seconds()), output)
+		s.T().Logf("i: %d, test took %.2f seconds, output: `%s`", i, elapsed.Seconds(), output)
 
 		gotPacketloss, err := strconv.ParseFloat(output, 64)
-		s.Require().NoError(err, fmt.Sprintf("error parsing output: `%s`", output))
+		s.Require().NoErrorf(err, "failed to parse output: `%s`", output)
 
 		s.Assert().Zero(gotPacketloss)
 	}
