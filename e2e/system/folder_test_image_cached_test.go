@@ -45,12 +45,9 @@ func (s *Suite) TestFolderCached() {
 	}
 
 	for _, i := range instances {
-		webIP, err := i.Network().GetIP(ctx)
-		s.Require().NoError(err)
-
 		s.Require().NoError(i.Execution().WaitInstanceIsRunning(ctx))
 
-		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 		s.Require().NoError(err)
 
 		s.Assert().Contains(wget, "Hello World!")

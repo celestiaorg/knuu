@@ -220,5 +220,8 @@ var (
 	ErrAddingHostToProxyNotAllowed               = errors.New("AddingHostToProxyNotAllowed", "adding host to proxy is only allowed in state 'Started' and 'Preparing'. Current state is '%s'")
 	ErrInstanceNameAlreadyExists                 = errors.New("InstanceNameAlreadyExists", "instance name '%s' already exists")
 	ErrSettingSidecarName                        = errors.New("SettingSidecarName", "error setting sidecar name with prefix '%s' for instance '%s'")
+	ErrGettingServiceEndpointNotAllowed          = errors.New("GettingServiceEndpointNotAllowed", "getting service endpoint is only allowed in state 'Started'. Current state is '%s'")
 	ErrCannotCloneInstance                       = errors.New("CannotCloneInstance", "cannot clone instance '%s' in state '%s'")
+	ErrGettingIPNotAllowed                       = errors.New("GettingIPNotAllowed", "getting IP is allowed in state 'Started'. Current state is '%s'")
+	ErrPodIPNotReady                             = errors.New("PodIPNotReady", "pod IP is not ready for pod '%s'")
 )

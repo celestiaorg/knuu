@@ -41,15 +41,6 @@ func (s *Suite) TestFile() {
 	s.Require().NoError(err, "Error committing changes")
 
 	// Test logic
-	s.T().Log("Getting server IP")
-	var serverfileIP string
-	err = s.RetryOperation(func() error {
-		var err error
-		serverfileIP, err = serverfile.Network().GetIP(ctx)
-		return err
-	}, maxRetries)
-	s.Require().NoError(err, "Error getting server IP")
-
 	s.T().Log("Starting server")
 	err = s.RetryOperation(func() error {
 		return serverfile.Execution().Start(ctx)
@@ -60,7 +51,7 @@ func (s *Suite) TestFile() {
 	var wget string
 	err = s.RetryOperation(func() error {
 		var err error
-		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfileIP)
+		wget, err = executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverfile.Network().HostName())
 		return err
 	}, maxRetries)
 	s.Require().NoError(err, "Error executing wget command")

@@ -137,4 +137,7 @@ var (
 	ErrListingPods                     = errors.New("ListingPods", "failed to list pods")
 	ErrGetPodStatus                    = errors.New("GetPodStatus", "failed to get pod status for pod %s")
 	ErrUpdatingConfigmap               = errors.New("UpdatingConfigmap", "failed to update configmap %s")
+	ErrGettingServiceIP                = errors.New("GettingServiceIP", "failed to get service IP for service %s")
+	ErrGettingServiceNodePort          = errors.New("GettingServiceNodePort", "failed to get service node port for service %s")
+	ErrHeadlessService                 = errors.New("HeadlessService", "headless service '%s' does not have a cluster IP, use DNS instead")
 )

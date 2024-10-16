@@ -21,12 +21,11 @@ func (s *Suite) TestFolder() {
 	require.NoError(s.T(), err)
 
 	require.NoError(s.T(), web.Build().Commit(ctx))
+	s.Require().NoError(web.Execution().Start(ctx))
 
 	// Test logic
 	webIP, err := web.Network().GetIP(ctx)
 	s.Require().NoError(err)
-
-	s.Require().NoError(web.Execution().Start(ctx))
 
 	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
 	s.Require().NoError(err)
