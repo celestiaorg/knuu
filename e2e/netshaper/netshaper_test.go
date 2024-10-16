@@ -265,6 +265,10 @@ func (s *Suite) TestNetShaperLatency() {
 		}
 	}
 
+	targetIP, err := target.Network().GetIP(ctx)
+	s.Require().NoError(err)
+	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
+
 	for _, tc := range tt {
 		tc := tc
 		s.Run(tc.name, func() {
@@ -276,7 +280,6 @@ func (s *Suite) TestNetShaperLatency() {
 			s.T().Log("Starting latency test. It takes a while.")
 			startTime := time.Now()
 
-			targetAddress := fmt.Sprintf("%s:%d", target.Network().HostName(), gopingPort)
 			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
@@ -356,6 +359,10 @@ func (s *Suite) TestNetShaperJitter() {
 		}
 	}
 
+	targetIP, err := target.Network().GetIP(ctx)
+	s.Require().NoError(err)
+	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
+
 	for _, tc := range tt {
 		tc := tc
 		s.Run(tc.name, func() {
@@ -367,7 +374,6 @@ func (s *Suite) TestNetShaperJitter() {
 			s.T().Log("Starting jitter test. It takes a while.")
 			startTime := time.Now()
 
-			targetAddress := fmt.Sprintf("%s:%d", target.Network().HostName(), gopingPort)
 			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
