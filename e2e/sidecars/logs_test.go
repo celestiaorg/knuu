@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
-const expectedLogMsg = "Hello World"
-
 func (s *Suite) TestLogsWithSidecar() {
-	const namePrefix = "logs-sidecar"
+	const (
+		namePrefix     = "logs-sidecar"
+		expectedLogMsg = "Hello World"
+		timeout        = 10 * time.Second
+		interval       = 1 * time.Second
+	)
 	ctx := context.Background()
 
 	// Create a new instance
@@ -31,15 +35,18 @@ func (s *Suite) TestLogsWithSidecar() {
 	s.Require().NoError(target.Execution().Start(ctx))
 
 	// Wait for a short duration to allow log generation
-	time.Sleep(5 * time.Second)
+	s.Require().Eventually(func() bool {
+		logStream, err := sidecar.Instance().Monitoring().Logs(ctx)
+		if err != nil {
+			return false
+		}
+		defer logStream.Close()
 
-	logStream, err := sidecar.Instance().Monitoring().Logs(ctx)
-	s.Require().NoError(err)
-	defer logStream.Close()
+		logs, err := io.ReadAll(logStream)
+		if err != nil {
+			return false
+		}
 
-	logs, err := io.ReadAll(logStream)
-	s.Require().NoError(err)
-
-	logOutput := string(logs)
-	s.Contains(logOutput, expectedLogMsg)
+		return strings.Contains(string(logs), expectedLogMsg)
+	}, timeout, interval, "failed to get expected log message")
 }

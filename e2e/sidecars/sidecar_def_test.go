@@ -42,6 +42,9 @@ func (s *testSidecar) PreStart(ctx context.Context) error {
 	if s.instance == nil {
 		return errors.New("instance not initialized")
 	}
+	if len(s.StartCommand) == 0 {
+		return errors.New("start command not configured")
+	}
 	return nil
 }
 
@@ -55,6 +58,7 @@ func (s *testSidecar) Clone(namePrefix string) (instance.SidecarManager, error) 
 		return nil, err
 	}
 	return &testSidecar{
-		instance: clone,
+		instance:     clone,
+		StartCommand: append([]string{}, s.StartCommand...),
 	}, nil
 }

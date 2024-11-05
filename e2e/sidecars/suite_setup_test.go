@@ -14,7 +14,7 @@ import (
 
 const (
 	testTimeout = time.Minute * 5 // the same time that is used in the ci/cd pipeline
-	alpineImage = "alpine:latest"
+	alpineImage = "alpine:3.20.3"
 )
 
 type Suite struct {

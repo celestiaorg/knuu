@@ -31,7 +31,7 @@ func (s *Suite) TestDownloadFileFromRunningSidecar() {
 	s.Require().NoError(err, "executing command output: %v", out)
 
 	gotContent, err := sidecar.Instance().Storage().GetFileBytes(ctx, filePath)
-	s.Require().NoError(err, "Error getting file bytes")
+	s.Require().NoError(err, "Failed to read file %s from sidecar: %v", filePath, err)
 
 	s.Assert().Equal(fileContent, string(gotContent))
 }
