@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/celestiaorg/knuu/e2e"
+	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -42,4 +43,17 @@ func (s *Suite) SetupSuite() {
 	s.Knuu.HandleStopSignal(ctx)
 
 	s.Executor.Kn = s.Knuu
+}
+
+func (s *Suite) startNewInstanceWithSidecar(ctx context.Context, namePrefix string, sidecar *testSidecar) *instance.Instance {
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
+	s.Require().NoError(err)
+
+	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
+	s.Require().NoError(target.Build().SetStartCommand("sh", "-c", "sleep infinity"))
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Sidecars().Add(ctx, sidecar))
+	s.Require().NoError(target.Execution().Start(ctx))
+
+	return target
 }

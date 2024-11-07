@@ -12,20 +12,12 @@ func (s *Suite) TestExecuteCommandInSidecar() {
 		command    = "echo " + cmdMsg
 	)
 
-	target, err := s.Knuu.NewInstance(namePrefix + "-target")
-	s.Require().NoError(err)
-
 	ctx := context.Background()
-	s.Require().NoError(target.Build().SetImage(ctx, alpineImage))
-	s.Require().NoError(target.Build().SetArgs("tail", "-f", "/dev/null")) // Keep the container running
-	s.Require().NoError(target.Build().Commit(ctx))
 
 	sidecar := &testSidecar{
 		StartCommand: []string{"sh", "-c", "sleep infinity"},
 	}
-
-	s.Require().NoError(target.Sidecars().Add(ctx, sidecar))
-	s.Require().NoError(target.Execution().Start(ctx))
+	s.startNewInstanceWithSidecar(ctx, namePrefix, sidecar)
 
 	// Create a file in the sidecar instance
 	out, err := sidecar.Instance().Execution().ExecuteCommand(ctx, command)
