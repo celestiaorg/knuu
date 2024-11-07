@@ -14,7 +14,7 @@ const (
 	prometheusPort   = observability.DefaultOtelMetricsPort
 	prometheusImage  = "prom/prometheus:latest"
 	prometheusConfig = "/etc/prometheus/prometheus.yml"
-	prometheusArgs   = "--config.file=/etc/prometheus/prometheus.yml"
+	prometheusArgs   = "--config.file=" + prometheusConfig
 
 	curlImage = "curlimages/curl:latest"
 	otlpPort  = observability.DefaultOtelOtlpPort
@@ -23,10 +23,13 @@ const (
 // TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
 func (s *Suite) TestObservabilityCollector() {
 	const (
-		namePrefix         = "observability"
-		targetStartCommand = "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 5; done"
+		namePrefix     = "observability"
+		scrapeInterval = "2s"
 	)
-	ctx := context.Background()
+	var (
+		targetStartCommand = fmt.Sprintf("while true; do curl -X POST http://localhost:%d/v1/traces; sleep 5; done", otlpPort)
+		ctx                = context.Background()
+	)
 
 	// Setup Prometheus
 	prometheus, err := s.Knuu.NewInstance(namePrefix + "-prometheus")
@@ -44,12 +47,12 @@ func (s *Suite) TestObservabilityCollector() {
 	// Add Prometheus config file
 	prometheusConfigContent := fmt.Sprintf(`
 global:
-  scrape_interval: '10s'
+  scrape_interval: '%s'
+
 scrape_configs:
   - job_name: 'otel-collector'
     static_configs:
-      - targets: ['otel-collector:%d']
-`, otlpPort)
+      - targets: ['otel-collector:%d']`, scrapeInterval, otlpPort)
 	s.Require().NoError(prometheus.Storage().AddFileBytes([]byte(prometheusConfigContent), prometheusConfig, "0:0"))
 
 	s.Require().NoError(prometheus.Build().SetArgs(prometheusArgs))
@@ -59,12 +62,12 @@ scrape_configs:
 	observabilitySidecar := observability.New()
 
 	s.Require().NoError(observabilitySidecar.SetOtelEndpoint(4318))
-	s.Require().NoError(observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", s.Knuu.Scope), "10s"))
+	s.Require().NoError(observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", s.Knuu.Scope), scrapeInterval))
 	s.Require().NoError(observabilitySidecar.SetJaegerEndpoint(14250, 6831, 14268))
 	s.Require().NoError(observabilitySidecar.SetOtlpExporter("prometheus:9090", "", ""))
 
 	// Create and start a target pod and configure it to use the obsySidecar to push metrics
-	target, err := s.Knuu.NewInstance(namePrefix + "target")
+	target, err := s.Knuu.NewInstance(namePrefix + "-target")
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().SetImage(ctx, curlImage))
@@ -73,15 +76,15 @@ scrape_configs:
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Sidecars().Add(ctx, observabilitySidecar))
+
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
 
 	// Wait for the target pod to push data to the otel collector
-	s.T().Log("Waiting one minute for the target pod to push data to the otel collector")
-	time.Sleep(1 * time.Minute)
+	s.T().Log("Waiting 20 seconds for the target pod to push data to the otel collector")
+	time.Sleep(20 * time.Second)
 
 	// Verify that data has been pushed to Prometheus
-
 	prometheusURL := fmt.Sprintf("%s/api/v1/query?query=up", prometheusEndpoint)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

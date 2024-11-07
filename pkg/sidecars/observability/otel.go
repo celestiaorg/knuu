@@ -359,6 +359,12 @@ func (o *Obsy) prepareMetricsForServicePipeline() Metrics {
 		metrics.Exporters = append(metrics.Exporters, prometheusRemoteWriteExporterName)
 	}
 	metrics.Processors = []string{attributesProcessorName}
+
+	// if no metrics receiver or exporter is added, remove any metrics pipeline
+	if len(metrics.Receivers) == 0 || len(metrics.Exporters) == 0 {
+		metrics = Metrics{}
+	}
+
 	return metrics
 }
 
@@ -377,6 +383,12 @@ func (o *Obsy) prepareTracesForServicePipeline() Traces {
 		traces.Exporters = append(traces.Exporters, jaegerExporterName)
 	}
 	traces.Processors = []string{attributesProcessorName}
+
+	// if no trace receiver or exporter is added, remove any trace pipeline
+	if len(traces.Receivers) == 0 || len(traces.Exporters) == 0 {
+		traces = Traces{}
+	}
+
 	return traces
 }
 
