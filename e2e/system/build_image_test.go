@@ -100,7 +100,7 @@ func (s *Suite) TestBuildWithBuildArgs() {
 		// This file is created by the dockerfile in the repo
 		// ref: https://github.com/celestiaorg/knuu/blob/test/build-from-git/Dockerfile
 		filePath     = "/test.txt"
-		expectedData = "Hello, build arg!"
+		expectedData = "Hello, World!"
 	)
 
 	s.T().Log("Creating new instance")
