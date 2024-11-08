@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/sidecars/observability"
@@ -18,16 +20,20 @@ const (
 
 	curlImage = "curlimages/curl:latest"
 	otlpPort  = observability.DefaultOtelOtlpPort
+
+	retryInterval = 1 * time.Second
+	retryTimeout  = 10 * time.Second
 )
 
 // TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
 func (s *Suite) TestObservabilityCollector() {
 	const (
-		namePrefix     = "observability"
-		scrapeInterval = "2s"
+		namePrefix             = "observability"
+		scrapeInterval         = "2s"
+		prometheusQueryTimeout = 30 * time.Second
 	)
 	var (
-		targetStartCommand = fmt.Sprintf("while true; do curl -X POST http://localhost:%d/v1/traces; sleep 5; done", otlpPort)
+		targetStartCommand = fmt.Sprintf("while true; do curl -X POST http://localhost:%d/v1/traces; sleep 2; done", otlpPort)
 		ctx                = context.Background()
 	)
 
@@ -80,26 +86,83 @@ scrape_configs:
 	s.Require().NoError(target.Build().Commit(ctx))
 	s.Require().NoError(target.Execution().Start(ctx))
 
-	// Wait for the target pod to push data to the otel collector
-	s.T().Log("Waiting 20 seconds for the target pod to push data to the otel collector")
-	time.Sleep(20 * time.Second)
-
 	// Verify that data has been pushed to Prometheus
-	prometheusURL := fmt.Sprintf("%s/api/v1/query?query=up", prometheusEndpoint)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	s.Require().Eventually(func() bool {
+		url := fmt.Sprintf("%s/api/v1/query?query=up", prometheusEndpoint)
+		ctx, cancel := context.WithTimeout(context.Background(), prometheusQueryTimeout)
+		defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", prometheusURL, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			s.T().Logf("Error creating request: %v", err)
+			return false
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			s.T().Logf("Error sending request: %v", err)
+			return false
+		}
+		if resp.StatusCode != http.StatusOK {
+			s.T().Logf("Prometheus API returned status code: %d", resp.StatusCode)
+			return false
+		}
+
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			s.T().Logf("Error reading response body: %v", err)
+			return false
+		}
+		return strings.Contains(string(body), "otel-collector")
+
+	}, retryTimeout, retryInterval, "otel-collector data source not found in Prometheus")
+}
+
+func (s *Suite) TestObservabilityCollectorWithLogging() {
+	const (
+		namePrefix         = "observability"
+		targetStartCommand = "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 2; done"
+	)
+	ctx := context.Background()
+
+	// Setup obsySidecar collector
+	obsySidecar := observability.New()
+
+	s.Require().NoError(obsySidecar.SetOtelEndpoint(4318))
+	s.Require().NoError(obsySidecar.SetLoggingExporter("debug"))
+
+	// Create and start a target pod and configure it to use the obsySidecar to push metrics
+	target, err := s.Knuu.NewInstance(namePrefix + "target")
 	s.Require().NoError(err)
 
-	resp, err := http.DefaultClient.Do(req)
-	s.Require().NoError(err)
-	s.Require().Equal(http.StatusOK, resp.StatusCode, "Prometheus API is not accessible")
+	s.Require().NoError(target.Build().SetImage(ctx, curlImage))
 
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	err = target.Build().SetStartCommand("sh", "-c", targetStartCommand)
 	s.Require().NoError(err)
-	s.Require().Contains(string(body), "otel-collector", "otel-collector data source not found in Prometheus")
 
-	s.T().Log("otel-collector data source is available in Prometheus")
+	s.Require().NoError(target.Sidecars().Add(ctx, obsySidecar))
+	s.Require().NoError(target.Build().Commit(ctx))
+	s.Require().NoError(target.Execution().Start(ctx))
+
+	// Verify that data has been pushed to the logging exporter
+	s.Require().Eventually(func() bool {
+		logsReader, err := obsySidecar.Instance().Monitoring().Logs(ctx)
+		if err != nil {
+			s.T().Logf("Error getting logs: %v", err)
+			return false
+		}
+		logsOutput, err := io.ReadAll(logsReader)
+		if err != nil {
+			s.T().Logf("Error reading logs: %v", err)
+			return false
+		}
+
+		loggingExporterPattern := regexp.MustCompile(`"kind": "exporter", "data_type": "metrics", "name": "logging"`)
+		if !loggingExporterPattern.Match(logsOutput) {
+			s.T().Logf("Logging exporter not found in the logs: `%s`", string(logsOutput))
+			return false
+		}
+		return true
+	}, retryTimeout, retryInterval, "Logging exporter not found in the logs")
 }

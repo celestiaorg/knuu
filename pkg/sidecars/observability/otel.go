@@ -22,6 +22,8 @@ const (
 	jaegerExporterName                = "jaeger"
 	prometheusExporterName            = "prometheus"
 	prometheusRemoteWriteExporterName = "prometheusremotewrite"
+	loggingExporterName               = "logging"
+	defaultLoggingExporterLogLevel    = "debug"
 	attributesProcessorName           = "attributes"
 
 	scopeAttributeKey = "scope"
@@ -112,6 +114,7 @@ type Exporters struct {
 	Jaeger                JaegerExporter                `yaml:"jaeger,omitempty"`
 	Prometheus            PrometheusExporter            `yaml:"prometheus,omitempty"`
 	PrometheusRemoteWrite PrometheusRemoteWriteExporter `yaml:"prometheusremotewrite,omitempty"`
+	Logging               LoggingExporter               `yaml:"logging,omitempty"`
 }
 
 type OTLPHTTPExporter struct {
@@ -135,6 +138,10 @@ type PrometheusExporter struct {
 type PrometheusRemoteWriteExporter struct {
 	Endpoint string `yaml:"endpoint,omitempty"`
 	TLS      TLS    `yaml:"tls,omitempty"`
+}
+
+type LoggingExporter struct {
+	LogLevel string `yaml:"loglevel,omitempty"`
 }
 
 type TLS struct {
@@ -319,6 +326,12 @@ func (o *Obsy) createPrometheusRemoteWriteExporter() PrometheusRemoteWriteExport
 	}
 }
 
+func (o *Obsy) createLoggingExporter() LoggingExporter {
+	return LoggingExporter{
+		LogLevel: o.obsyConfig.loggingExporterLogLevel,
+	}
+}
+
 func (o *Obsy) createExporters() Exporters {
 	exporters := Exporters{}
 
@@ -336,6 +349,10 @@ func (o *Obsy) createExporters() Exporters {
 
 	if o.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
 		exporters.PrometheusRemoteWrite = o.createPrometheusRemoteWriteExporter()
+	}
+
+	if o.obsyConfig.loggingExporterLogLevel != "" {
+		exporters.Logging = o.createLoggingExporter()
 	}
 
 	return exporters
@@ -357,6 +374,9 @@ func (o *Obsy) prepareMetricsForServicePipeline() Metrics {
 	}
 	if o.obsyConfig.prometheusRemoteWriteExporterEndpoint != "" {
 		metrics.Exporters = append(metrics.Exporters, prometheusRemoteWriteExporterName)
+	}
+	if o.obsyConfig.loggingExporterLogLevel != "" {
+		metrics.Exporters = append(metrics.Exporters, loggingExporterName)
 	}
 	metrics.Processors = []string{attributesProcessorName}
 
@@ -381,6 +401,9 @@ func (o *Obsy) prepareTracesForServicePipeline() Traces {
 	}
 	if o.obsyConfig.jaegerEndpoint != "" {
 		traces.Exporters = append(traces.Exporters, jaegerExporterName)
+	}
+	if o.obsyConfig.loggingExporterLogLevel != "" {
+		traces.Exporters = append(traces.Exporters, loggingExporterName)
 	}
 	traces.Processors = []string{attributesProcessorName}
 

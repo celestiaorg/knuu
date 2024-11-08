@@ -86,6 +86,19 @@ func (o *Obsy) SetPrometheusRemoteWriteExporter(endpoint string) error {
 	return nil
 }
 
+// SetLoggingExporter sets the logging exporter for the instance
+func (o *Obsy) SetLoggingExporter(logLevel string) error {
+	if err := o.validateStateForObsy("Logging exporter"); err != nil {
+		return err
+	}
+
+	if logLevel == "" {
+		logLevel = defaultLoggingExporterLogLevel
+	}
+	o.obsyConfig.loggingExporterLogLevel = logLevel
+	return nil
+}
+
 func (o *Obsy) validateStateForObsy(endpoint string) error {
 	if o.instance != nil && !o.instance.IsInState(instance.StateNone) {
 		return ErrSettingNotAllowed.WithParams(endpoint, o.instance.State().String())
