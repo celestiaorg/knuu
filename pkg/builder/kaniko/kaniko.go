@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -13,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
-	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
 
@@ -133,10 +133,7 @@ func (k *Kaniko) containerLogs(ctx context.Context, pod *v1.Pod) (string, error)
 }
 
 func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*batchv1.Job, error) {
-	jobName, err := names.NewRandomK8(kanikoJobNamePrefix)
-	if err != nil {
-		return nil, ErrGeneratingUUID.Wrap(err)
-	}
+	jobName := fmt.Sprintf("%s-%d", kanikoJobNamePrefix, time.Now().UnixNano())
 
 	ephemeralStorage, err := resource.ParseQuantity(EphemeralStorage)
 	if err != nil {

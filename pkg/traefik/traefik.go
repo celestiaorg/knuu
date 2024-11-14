@@ -17,7 +17,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 const (
@@ -52,21 +51,15 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 	}
 
 	// Create a dedicated service account for Traefik
-	serviceAccountName, err := names.NewRandomK8("traefik-service-account")
-	if err != nil {
-		return err
-	}
+	serviceAccountName := fmt.Sprintf("traefik-service-account-%d", time.Now().UnixNano())
 	if err := t.K8sClient.CreateServiceAccount(ctx, serviceAccountName, nil); err != nil {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
-	clusterRoleName, err := names.NewRandomK8(roleName)
-	if err != nil {
-		return err
-	}
+	clusterRoleName := fmt.Sprintf("%s-%d", roleName, time.Now().UnixNano())
 
 	// Define and create a ClusterRole for Traefik
-	err = t.K8sClient.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
+	err := t.K8sClient.CreateClusterRole(ctx, clusterRoleName, nil, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{""}, // Core group
 			Resources: []string{"pods", "endpoints", "secrets", "services"},
@@ -87,7 +80,6 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 			Verbs:     []string{"get", "list", "watch"},
 		},
 	})
-
 	if err != nil {
 		return ErrTraefikRoleCreationFailed.Wrap(err)
 	}
@@ -209,10 +201,7 @@ func (t *Traefik) Endpoint(ctx context.Context) (string, error) {
 }
 
 func (t *Traefik) AddHost(ctx context.Context, serviceName, prefix string, portTCP int) error {
-	middlewareName, err := names.NewRandomK8("strip-" + prefix)
-	if err != nil {
-		return ErrGeneratingRandomK8sName.Wrap(err)
-	}
+	middlewareName := fmt.Sprintf("middleware-%d", time.Now().UnixNano())
 
 	// middleware is required to strip the prefix from the service name
 	if err := t.createMiddleware(ctx, prefix, middlewareName); err != nil {
@@ -303,10 +292,7 @@ func (t *Traefik) createIngressRoute(
 		Resource: "ingressroutes",
 	}
 
-	ingressRouteName, err := names.NewRandomK8("ing-route-" + prefix)
-	if err != nil {
-		return ErrTraefikIngressRouteCreationFailed.Wrap(err)
-	}
+	ingressRouteName := fmt.Sprintf("ing-route-%d", time.Now().UnixNano())
 
 	ingressRoute := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -339,7 +325,7 @@ func (t *Traefik) createIngressRoute(
 		},
 	}
 
-	_, err = t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).
+	_, err := t.K8sClient.DynamicClient().Resource(ingressRouteGVR).Namespace(t.K8sClient.Namespace()).
 		Create(ctx, ingressRoute, metav1.CreateOptions{})
 	if err != nil {
 		return ErrTraefikIngressRouteCreationFailed.Wrap(err)

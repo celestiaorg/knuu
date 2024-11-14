@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
-	"github.com/celestiaorg/knuu/pkg/names"
 )
 
 type storage struct {
@@ -101,7 +101,6 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 			// copy file to destination path
 			return s.AddFile(path, filepath.Join(dest, relPath), chown)
 		})
-
 	if err != nil {
 		return ErrCopyingFolderToInstance.WithParams(src, s.instance.name).Wrap(err)
 	}
@@ -377,10 +376,7 @@ func (s *storage) readFileFromImage(ctx context.Context, filePath string) ([]byt
 	// extract the file from them, but it seems hacky and will run on the user's machine.
 	// Therefore, we will use the tmp instance to get the file from the image
 
-	tmpName, err := names.NewRandomK8("tmp-dl")
-	if err != nil {
-		return nil, err
-	}
+	tmpName := fmt.Sprintf("tmp-%d", time.Now().UnixNano())
 
 	ti, err := New(tmpName, s.instance.SystemDependencies)
 	if err != nil {
