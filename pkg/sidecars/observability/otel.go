@@ -343,7 +343,7 @@ func (o *Obsy) createExporters() Exporters {
 		exporters.Jaeger = o.createJaegerExporter()
 	}
 
-	if o.obsyConfig.prometheusEndpointPort != 0 {
+	if o.obsyConfig.prometheusExporterEndpoint != "" {
 		exporters.Prometheus = o.createPrometheusExporter()
 	}
 
