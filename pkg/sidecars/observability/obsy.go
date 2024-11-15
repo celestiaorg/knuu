@@ -75,6 +75,9 @@ type ObsyConfig struct {
 
 	// prometheusRemoteWriteExporterEndpoint is the endpoint of the prometheus remote write
 	prometheusRemoteWriteExporterEndpoint string
+
+	// loggingExporterLogLevel is the log level for the logging exporter
+	loggingExporterLogLevel string
 }
 
 func New() *Obsy {
