@@ -13,6 +13,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+type ServiceOptions struct {
+	Labels      map[string]string
+	SelectorMap map[string]string
+	TCPPorts    []int
+	UDPPorts    []int
+	NotHeadless bool
+}
+
 func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, error) {
 	if c.terminated {
 		return nil, ErrClientTerminated
@@ -20,30 +28,17 @@ func (c *Client) GetService(ctx context.Context, name string) (*v1.Service, erro
 	return c.clientset.CoreV1().Services(c.namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
-func (c *Client) CreateService(
-	ctx context.Context,
-	name string,
-	labels,
-	selectorMap map[string]string,
-	portsTCP,
-	portsUDP []int,
-) (*v1.Service, error) {
+func (c *Client) CreateService(ctx context.Context, name string, opts ServiceOptions) (*v1.Service, error) {
 	if c.terminated {
 		return nil, ErrClientTerminated
 	}
 	if err := validateServiceName(name); err != nil {
 		return nil, err
 	}
-	if err := validateLabels(labels); err != nil {
+	if err := validateServiceOptions(opts); err != nil {
 		return nil, err
 	}
-	if err := validateSelectorMap(selectorMap); err != nil {
-		return nil, err
-	}
-	if err := validatePorts(append(portsTCP, portsUDP...)); err != nil {
-		return nil, err
-	}
-	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
+	svc, err := prepareService(c.namespace, name, opts)
 	if err != nil {
 		return nil, ErrPreparingService.WithParams(name).Wrap(err)
 	}
@@ -59,30 +54,18 @@ func (c *Client) CreateService(
 	return serv, nil
 }
 
-func (c *Client) PatchService(
-	ctx context.Context,
-	name string,
-	labels,
-	selectorMap map[string]string,
-	portsTCP,
-	portsUDP []int,
-) (*v1.Service, error) {
+func (c *Client) PatchService(ctx context.Context, name string, opts ServiceOptions) (*v1.Service, error) {
 	if c.terminated {
 		return nil, ErrClientTerminated
 	}
 	if err := validateServiceName(name); err != nil {
 		return nil, err
 	}
-	if err := validateLabels(labels); err != nil {
+	if err := validateServiceOptions(opts); err != nil {
 		return nil, err
 	}
-	if err := validateSelectorMap(selectorMap); err != nil {
-		return nil, err
-	}
-	if err := validatePorts(append(portsTCP, portsUDP...)); err != nil {
-		return nil, err
-	}
-	svc, err := prepareService(c.namespace, name, labels, selectorMap, portsTCP, portsUDP)
+
+	svc, err := prepareService(c.namespace, name, opts)
 	if err != nil {
 		return nil, ErrPreparingService.WithParams(name).Wrap(err)
 	}
@@ -164,11 +147,22 @@ func (c *Client) GetServiceIP(ctx context.Context, name string) (string, error) 
 
 // WaitForService() works only for the services with publicly accessible IP
 func (c *Client) WaitForService(ctx context.Context, name string) error {
+	srv, err := c.GetService(ctx, name)
+	if err != nil {
+		return ErrGettingService.WithParams(name).Wrap(err)
+	}
+
+	// Since this function is called from the client,
+	// we cannot use headless service as it is not accessible from outside the cluster
+	if isHeadlessService(srv) {
+		return ErrCannotConnectToHeadlessService.WithParams(name)
+	}
+
 	retryInterval := time.Duration(0)
 	for {
 		select {
 		case <-ctx.Done():
-			return ErrTimeoutWaitingForServiceReady
+			return ErrTimeoutWaitingForServiceReady.WithParams(name)
 		case <-time.After(retryInterval):
 			// Reset to default interval
 			retryInterval = waitRetry
@@ -183,9 +177,7 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 		}
 
 		// Check if service is reachable
-		// Since this function is called from the client,
-		// we cannot use headless service as it is not accessible from outside the cluster
-		// so we use the service IP and port to check connectivity
+		// the service IP and port are used to check connectivity
 		endpoint, err := c.GetServiceEndpoint(ctx, name)
 		if err != nil {
 			return ErrGettingServiceEndpoint.WithParams(name).Wrap(err)
@@ -209,20 +201,40 @@ func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, e
 		return "", ErrGettingServiceIP.WithParams(name).Wrap(err)
 	}
 
-	port, err := c.ServiceNodePort(ctx, name)
+	port, err := c.ServicePort(ctx, name)
 	if err != nil {
-		return "", ErrGettingServiceNodePort.WithParams(name).Wrap(err)
+		return "", ErrGettingService.WithParams(name).Wrap(err)
 	}
 
 	return fmt.Sprintf("%s:%d", ip, port), nil
 }
 
-func (c *Client) ServiceNodePort(ctx context.Context, name string) (int32, error) {
+func (c *Client) ServicePort(ctx context.Context, name string) (int32, error) {
 	svc, err := c.GetService(ctx, name)
 	if err != nil {
 		return 0, ErrGettingService.WithParams(name).Wrap(err)
 	}
-	return svc.Spec.Ports[0].NodePort, nil
+
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+		if len(svc.Spec.Ports) > 0 {
+			return svc.Spec.Ports[0].Port, nil
+		}
+		return 0, ErrNoPortsFoundForLoadBalancerService.WithParams(name)
+	}
+
+	if svc.Spec.Type == v1.ServiceTypeNodePort {
+		if len(svc.Spec.Ports) > 0 && svc.Spec.Ports[0].NodePort != 0 {
+			return svc.Spec.Ports[0].NodePort, nil
+		}
+		return 0, ErrNoNodePortFoundForService.WithParams(name)
+	}
+
+	// Handle ClusterIP and other service types
+	if len(svc.Spec.Ports) > 0 {
+		return svc.Spec.Ports[0].Port, nil
+	}
+
+	return 0, ErrNoPortsFoundForService.WithParams(name)
 }
 
 func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) {
@@ -231,14 +243,61 @@ func (c *Client) isServiceReady(ctx context.Context, name string) (bool, error) 
 		return false, ErrGettingService.WithParams(name).Wrap(err)
 	}
 
+	if isHeadlessService(service) {
+		return c.isHeadlessServiceReady(ctx, service)
+	}
+
 	switch service.Spec.Type {
+	case v1.ServiceTypeNodePort:
+		return c.isNodePortServiceReady(ctx, service)
 	case v1.ServiceTypeLoadBalancer:
 		return len(service.Status.LoadBalancer.Ingress) > 0, nil
-	case v1.ServiceTypeNodePort:
-		return service.Spec.Ports[0].NodePort != 0, nil
 	default:
 		return len(service.Spec.ExternalIPs) > 0, nil
 	}
+}
+
+func (c *Client) isHeadlessServiceReady(ctx context.Context, service *v1.Service) (bool, error) {
+	// For headless services, we check if the service has any pods ready
+	pods, err := c.clientset.CoreV1().Pods(service.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{
+			MatchLabels: service.Spec.Selector,
+		}),
+	})
+	if err != nil {
+		return false, ErrGettingPodsForService.WithParams(service.Name).Wrap(err)
+	}
+	// Check if at least one pod is ready
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == v1.PodRunning {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *Client) isNodePortServiceReady(ctx context.Context, service *v1.Service) (bool, error) {
+	// Check if NodePort is valid
+	if service.Spec.Ports[0].NodePort == 0 {
+		return false, nil
+	}
+
+	// Check if at least one node with an ExternalIP is available
+	nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, ErrGettingNodes.Wrap(err)
+	}
+
+	for _, node := range nodes.Items {
+		for _, address := range node.Status.Addresses {
+			if address.Type == v1.NodeExternalIP && address.Address != "" {
+				// NodePort service is ready if we have an external IP available
+				return true, nil
+			}
+		}
+	}
+	// No node with ExternalIP found
+	return false, nil
 }
 
 func checkServiceConnectivity(serviceEndpoint string) error {
@@ -271,41 +330,46 @@ func buildPorts(tcpPorts, udpPorts []int) []v1.ServicePort {
 	return ports
 }
 
-func prepareService(
-	namespace, name string,
-	labels, selectorMap map[string]string,
-	tcpPorts, udpPorts []int,
-) (*v1.Service, error) {
+func prepareService(namespace, name string, opts ServiceOptions) (*v1.Service, error) {
 	if namespace == "" {
 		return nil, ErrNamespaceRequired
 	}
 	if name == "" {
 		return nil, ErrServiceNameRequired
 	}
-	if labels == nil {
-		labels = make(map[string]string)
+	if opts.Labels == nil {
+		opts.Labels = make(map[string]string)
 	}
-	if selectorMap == nil {
-		selectorMap = make(map[string]string)
+	if opts.SelectorMap == nil {
+		opts.SelectorMap = make(map[string]string)
 	}
 
-	servicePorts := buildPorts(tcpPorts, udpPorts)
+	servicePorts := buildPorts(opts.TCPPorts, opts.UDPPorts)
 	if len(servicePorts) == 0 {
 		return nil, ErrNoPortsSpecified.WithParams(name)
+	}
+
+	clusterIP := v1.ClusterIPNone
+	if opts.NotHeadless {
+		clusterIP = ""
 	}
 
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
-			Labels:    labels,
+			Labels:    opts.Labels,
 		},
 		Spec: v1.ServiceSpec{
 			Ports:     servicePorts,
-			Selector:  selectorMap,
+			Selector:  opts.SelectorMap,
 			Type:      v1.ServiceTypeClusterIP,
-			ClusterIP: v1.ClusterIPNone, // Headless service
+			ClusterIP: clusterIP,
 		},
 	}
 	return svc, nil
+}
+
+func isHeadlessService(srv *v1.Service) bool {
+	return srv.Spec.ClusterIP == v1.ClusterIPNone
 }

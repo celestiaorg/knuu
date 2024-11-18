@@ -94,24 +94,24 @@ scrape_configs:
 
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			s.T().Logf("Error creating request: %v", err)
+			s.T().Logf("Failed to create request: %v\tRetrying...", err)
 			return false
 		}
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			s.T().Logf("Error sending request: %v", err)
+			s.T().Logf("Failed to get response: %v\tRetrying...", err)
 			return false
 		}
 		if resp.StatusCode != http.StatusOK {
-			s.T().Logf("Prometheus API returned status code: %d", resp.StatusCode)
+			s.T().Logf("Prometheus API returned status code: %d\tRetrying...", resp.StatusCode)
 			return false
 		}
 
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			s.T().Logf("Error reading response body: %v", err)
+			s.T().Logf("Failed to read response body: %v\tRetrying...", err)
 			return false
 		}
 		return strings.Contains(string(body), "otel-collector")

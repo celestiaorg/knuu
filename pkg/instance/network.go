@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 )
@@ -151,12 +152,16 @@ func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) e
 	}
 
 	var (
-		serviceName    = n.instance.name
-		labels         = n.instance.execution.Labels()
-		labelSelectors = labels
+		serviceName = n.instance.name
+		labels      = n.instance.execution.Labels()
 	)
 
-	srv, err := n.instance.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := n.instance.K8sClient.CreateService(ctx, serviceName, k8s.ServiceOptions{
+		Labels:      labels,
+		SelectorMap: labels,
+		TCPPorts:    portsTCP,
+		UDPPorts:    portsUDP,
+	})
 	if err != nil {
 		return ErrDeployingService.WithParams(n.instance.name).Wrap(err)
 	}
@@ -176,12 +181,16 @@ func (n *network) patchService(ctx context.Context, portsTCP, portsUDP []int) er
 	}
 
 	var (
-		serviceName    = n.instance.name
-		labels         = n.instance.execution.Labels()
-		labelSelectors = labels
+		serviceName = n.instance.name
+		labels      = n.instance.execution.Labels()
 	)
 
-	srv, err := n.instance.K8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := n.instance.K8sClient.PatchService(ctx, serviceName, k8s.ServiceOptions{
+		Labels:      labels,
+		SelectorMap: labels,
+		TCPPorts:    portsTCP,
+		UDPPorts:    portsUDP,
+	})
 	if err != nil {
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}
