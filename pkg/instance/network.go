@@ -5,9 +5,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 type network struct {
