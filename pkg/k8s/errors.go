@@ -145,4 +145,5 @@ var (
 	ErrNoPortsFoundForLoadBalancerService = errors.New("NoPortsFoundForLoadBalancerService", "no ports found for LoadBalancer service %s")
 	ErrNoNodePortFoundForService          = errors.New("NoNodePortFoundForService", "no NodePort found for service %s")
 	ErrNoPortsFoundForService             = errors.New("NoPortsFoundForService", "no ports found for service %s")
+	ErrNoValidNodeIPFound                 = errors.New("NoValidNodeIPFound", "no valid node IP found for service %s")
 )

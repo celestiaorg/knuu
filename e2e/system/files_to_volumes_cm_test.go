@@ -55,7 +55,7 @@ func (s *Suite) TestOneVolumeNoFiles() {
 	// Test logic
 	s.Require().NoError(target.Execution().Start(ctx))
 
-	webIP, err := target.Network().GetIP(ctx)
+	webIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)

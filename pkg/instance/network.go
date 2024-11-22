@@ -120,11 +120,11 @@ func (n *network) AddPortUDP(port int) error {
 	return nil
 }
 
-// GetIP returns the IP of the instance
+// GetEphemeralIP returns the ephemeral IP of the instance
 // This function can only be called in the states 'Started'
 // The IP is not persistent and can be changed when the pod is restarted
 // If a persistent IP is needed, use HostName() instead
-func (n *network) GetIP(ctx context.Context) (string, error) {
+func (n *network) GetEphemeralIP(ctx context.Context) (string, error) {
 	if !n.instance.IsInState(StateStarted) {
 		return "", ErrGettingIPNotAllowed.WithParams(n.instance.state.String())
 	}

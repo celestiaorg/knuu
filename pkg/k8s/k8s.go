@@ -32,6 +32,9 @@ const (
 
 	// if any pod is pending for more than this duration, a warning is logged
 	defaultMaxPendingDuration = 60 * time.Second
+
+	// defaultClusterDomain is the default cluster domain
+	defaultClusterDomain = "cluster.local"
 )
 
 type Client struct {
@@ -39,15 +42,28 @@ type Client struct {
 	discoveryClient discovery.DiscoveryInterface
 	dynamicClient   dynamic.Interface
 	namespace       string
+	clusterDomain   string
 	logger          *logrus.Logger
 	terminated      bool // This flag is used to indicate that the process has been terminated by the user
 	// max duration for any pod to be in pending state, otherwise it triggers a notice to be shown
 	maxPendingDuration time.Duration
 }
 
+type ClientOptions struct {
+	clusterDomain string
+}
+
+type Option func(*ClientOptions)
+
+func WithClusterDomain(clusterDomain string) Option {
+	return func(o *ClientOptions) {
+		o.clusterDomain = clusterDomain
+	}
+}
+
 var _ KubeManager = &Client{}
 
-func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*Client, error) {
+func NewClient(ctx context.Context, namespace string, logger *logrus.Logger, options ...Option) (*Client, error) {
 	config, err := getClusterConfig()
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
@@ -71,7 +87,8 @@ func NewClient(ctx context.Context, namespace string, logger *logrus.Logger) (*C
 	if err != nil {
 		return nil, ErrCreatingDynamicClient.Wrap(err)
 	}
-	return NewClientCustom(ctx, cs, dc, dC, namespace, logger)
+
+	return NewClientCustom(ctx, cs, dc, dC, namespace, logger, options...)
 }
 
 func NewClientCustom(
@@ -81,12 +98,20 @@ func NewClientCustom(
 	dC dynamic.Interface,
 	namespace string,
 	logger *logrus.Logger,
+	options ...Option,
 ) (*Client, error) {
+	opts := &ClientOptions{
+		clusterDomain: defaultClusterDomain,
+	}
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	kc := &Client{
 		clientset:          cs,
 		discoveryClient:    dc,
 		dynamicClient:      dC,
-		namespace:          namespace,
+		clusterDomain:      opts.clusterDomain,
 		logger:             logger,
 		terminated:         false,
 		maxPendingDuration: defaultMaxPendingDuration,

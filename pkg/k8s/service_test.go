@@ -482,7 +482,7 @@ func (s *TestSuite) TestWaitForService() {
 				defer listener.Close()
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Microsecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
 
 			err := s.client.WaitForService(ctx, tt.svcName)

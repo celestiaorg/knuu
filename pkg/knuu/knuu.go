@@ -39,17 +39,19 @@ const (
 
 type Knuu struct {
 	*system.SystemDependencies
-	stopMu sync.Mutex
+	stopMu        sync.Mutex
+	clusterDomain string
 }
 
 type Options struct {
-	K8sClient    k8s.KubeManager
-	MinioClient  *minio.Minio
-	ImageBuilder builder.Builder
-	Scope        string
-	ProxyEnabled bool
-	Timeout      time.Duration
-	Logger       *logrus.Logger
+	K8sClient     k8s.KubeManager
+	MinioClient   *minio.Minio
+	ImageBuilder  builder.Builder
+	Scope         string
+	ProxyEnabled  bool
+	Timeout       time.Duration
+	Logger        *logrus.Logger
+	ClusterDomain string // optional, if not set, "cluster.local" will be used
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
@@ -66,6 +68,7 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			Scope:        opts.Scope,
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
+		clusterDomain: opts.ClusterDomain,
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
@@ -203,7 +206,12 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 
 	if k.K8sClient == nil {
 		var err error
-		k.K8sClient, err = k8s.NewClient(ctx, k.Scope, k.Logger)
+		if k.clusterDomain != "" {
+			k.K8sClient, err = k8s.NewClient(ctx, k.Scope, k.Logger, k8s.WithClusterDomain(k.clusterDomain))
+		} else {
+			k.K8sClient, err = k8s.NewClient(ctx, k.Scope, k.Logger)
+		}
+
 		if err != nil {
 			return ErrCannotInitializeK8s.Wrap(err)
 		}

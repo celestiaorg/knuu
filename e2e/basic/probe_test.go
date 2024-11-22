@@ -36,7 +36,7 @@ func (s *Suite) TestProbe() {
 	s.Require().NoError(web.Build().Commit(ctx))
 	s.Require().NoError(web.Execution().Start(ctx))
 
-	webIP, err := web.Network().GetIP(ctx)
+	webIP, err := web.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	wgetOutput, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)

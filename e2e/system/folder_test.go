@@ -24,7 +24,7 @@ func (s *Suite) TestFolder() {
 	s.Require().NoError(web.Execution().Start(ctx))
 
 	// Test logic
-	webIP, err := web.Network().GetIP(ctx)
+	webIP, err := web.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)

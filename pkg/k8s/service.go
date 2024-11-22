@@ -137,10 +137,14 @@ func (c *Client) GetServiceIP(ctx context.Context, name string) (string, error) 
 	// Use the first node for simplicity, you might need to handle multiple nodes
 	var nodeIP string
 	for _, address := range nodes.Items[0].Status.Addresses {
-		if address.Type == v1.NodeExternalIP {
+		if address.Type == v1.NodeExternalIP || address.Type == v1.NodeInternalIP {
 			nodeIP = address.Address
 			break
 		}
+	}
+
+	if nodeIP == "" {
+		return "", ErrNoValidNodeIPFound.WithParams(name)
 	}
 	return nodeIP, nil
 }
@@ -192,7 +196,7 @@ func (c *Client) WaitForService(ctx context.Context, name string) error {
 }
 
 func (c *Client) ServiceDNS(name string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
+	return fmt.Sprintf("%s.%s.svc.%s", name, c.namespace, c.clusterDomain)
 }
 
 func (c *Client) GetServiceEndpoint(ctx context.Context, name string) (string, error) {

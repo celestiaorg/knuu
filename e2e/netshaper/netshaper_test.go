@@ -72,7 +72,7 @@ func (s *Suite) TestNetShaperBandwidth() {
 		}
 	}
 
-	iperfServerIP, err := iperfServer.Network().GetIP(ctx)
+	iperfServerIP, err := iperfServer.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -168,7 +168,7 @@ func (s *Suite) TestNetShaperPacketloss() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -265,7 +265,7 @@ func (s *Suite) TestNetShaperLatency() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 
@@ -359,7 +359,7 @@ func (s *Suite) TestNetShaperJitter() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 
