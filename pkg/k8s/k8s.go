@@ -107,6 +107,13 @@ func NewClientCustom(
 		opt(opts)
 	}
 
+	if err := validateDNS1123Subdomain(
+		opts.clusterDomain,
+		ErrInvalidClusterDomain.WithParams(opts.clusterDomain),
+	); err != nil {
+		return nil, err
+	}
+
 	kc := &Client{
 		clientset:          cs,
 		discoveryClient:    dc,
