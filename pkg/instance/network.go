@@ -7,6 +7,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 type network struct {
@@ -118,35 +120,29 @@ func (n *network) AddPortUDP(port int) error {
 	return nil
 }
 
-// GetIP returns the IP of the instance
-// This function can only be called in the states 'Preparing' and 'Started'
-func (n *network) GetIP(ctx context.Context) (string, error) {
-	// Check if i.kubernetesService already has the IP
-	if n.kubernetesService != nil && n.kubernetesService.Spec.ClusterIP != "" {
-		return n.kubernetesService.Spec.ClusterIP, nil
-	}
-	// If not, proceed with the existing logic to deploy the service and get the IP
-	svc, err := n.instance.K8sClient.GetService(ctx, n.instance.name)
-	if err != nil || svc == nil {
-		// Service does not exist, so we need to deploy it
-		err := n.deployService(ctx, n.portsTCP, n.portsUDP)
-		if err != nil {
-			return "", ErrDeployingServiceForInstance.WithParams(n.instance.name).Wrap(err)
-		}
-		svc, err = n.instance.K8sClient.GetService(ctx, n.instance.name)
-		if err != nil {
-			return "", ErrGettingServiceForInstance.WithParams(n.instance.name).Wrap(err)
-		}
+// GetEphemeralIP returns the ephemeral IP of the instance
+// This function can only be called in the states 'Started'
+// The IP is not persistent and can be changed when the pod is restarted
+// If a persistent IP is needed, use HostName() instead
+func (n *network) GetEphemeralIP(ctx context.Context) (string, error) {
+	if !n.instance.IsInState(StateStarted) {
+		return "", ErrGettingIPNotAllowed.WithParams(n.instance.state.String())
 	}
 
-	ip := svc.Spec.ClusterIP
-	if ip == "" {
-		return "", ErrGettingServiceIP.WithParams(n.instance.name)
+	pod, err := n.instance.K8sClient.GetFirstPodFromReplicaSet(ctx, n.instance.name)
+	if err != nil {
+		return "", ErrGettingPodFromReplicaSet.WithParams(n.instance.name).Wrap(err)
 	}
 
-	// Update i.kubernetesService for future reference
-	n.kubernetesService = svc
-	return ip, nil
+	if pod.Status.PodIP == "" {
+		return "", ErrPodIPNotReady.WithParams(pod.Name)
+	}
+
+	return pod.Status.PodIP, nil
+}
+
+func (n *network) HostName() string {
+	return n.instance.K8sClient.ServiceDNS(n.instance.name)
 }
 
 // deployService deploys the service for the instance
@@ -157,12 +153,16 @@ func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) e
 	}
 
 	var (
-		serviceName    = n.instance.name
-		labels         = n.instance.execution.Labels()
-		labelSelectors = labels
+		serviceName = n.instance.name
+		labels      = n.instance.execution.Labels()
 	)
 
-	srv, err := n.instance.K8sClient.CreateService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := n.instance.K8sClient.CreateService(ctx, serviceName, k8s.ServiceOptions{
+		Labels:      labels,
+		SelectorMap: labels,
+		TCPPorts:    portsTCP,
+		UDPPorts:    portsUDP,
+	})
 	if err != nil {
 		return ErrDeployingService.WithParams(n.instance.name).Wrap(err)
 	}
@@ -182,12 +182,16 @@ func (n *network) patchService(ctx context.Context, portsTCP, portsUDP []int) er
 	}
 
 	var (
-		serviceName    = n.instance.name
-		labels         = n.instance.execution.Labels()
-		labelSelectors = labels
+		serviceName = n.instance.name
+		labels      = n.instance.execution.Labels()
 	)
 
-	srv, err := n.instance.K8sClient.PatchService(ctx, serviceName, labels, labelSelectors, portsTCP, portsUDP)
+	srv, err := n.instance.K8sClient.PatchService(ctx, serviceName, k8s.ServiceOptions{
+		Labels:      labels,
+		SelectorMap: labels,
+		TCPPorts:    portsTCP,
+		UDPPorts:    portsUDP,
+	})
 	if err != nil {
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
 	}

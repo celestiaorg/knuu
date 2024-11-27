@@ -29,7 +29,7 @@ type KubeManager interface {
 	CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error)
 	CreateRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
 	CreateRoleBinding(ctx context.Context, name string, labels map[string]string, role, serviceAccount string) error
-	CreateService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
+	CreateService(ctx context.Context, name string, opts ServiceOptions) (*corev1.Service, error)
 	CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error
 	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error)
 	DaemonSetExists(ctx context.Context, name string) (bool, error)
@@ -58,6 +58,8 @@ type KubeManager interface {
 	GetService(ctx context.Context, name string) (*corev1.Service, error)
 	GetServiceEndpoint(ctx context.Context, name string) (string, error)
 	GetServiceIP(ctx context.Context, name string) (string, error)
+	ServiceDNS(name string) string
+	ServicePort(ctx context.Context, name string) (int32, error)
 	IsPodRunning(ctx context.Context, name string) (bool, error)
 	IsReplicaSetRunning(ctx context.Context, name string) (bool, error)
 	Namespace() string
@@ -65,7 +67,7 @@ type KubeManager interface {
 	NetworkPolicyExists(ctx context.Context, name string) bool
 	NewFile(source, dest string) *File
 	NewVolume(path string, size resource.Quantity, owner int64) *Volume
-	PatchService(ctx context.Context, name string, labels, selectorMap map[string]string, portsTCP, portsUDP []int) (*corev1.Service, error)
+	PatchService(ctx context.Context, name string, opts ServiceOptions) (*corev1.Service, error)
 	PortForwardPod(ctx context.Context, podName string, localPort, remotePort int) error
 	ReplicaSetExists(ctx context.Context, name string) (bool, error)
 	ReplacePod(ctx context.Context, podConfig PodConfig) (*corev1.Pod, error)
