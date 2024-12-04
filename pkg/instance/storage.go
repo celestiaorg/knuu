@@ -20,7 +20,6 @@ type storage struct {
 	instance *Instance
 	volumes  []*k8s.Volume
 	files    []*k8s.File
-	fsGroup  int64
 }
 
 func (i *Instance) Storage() *storage {
@@ -41,7 +40,7 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		return err
 	}
 
-	dstPath, err := s.copyFileToBuildDir(src, dest)
+	buildDirPath, err := s.copyFileToBuildDir(src, dest)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		s.instance.build.addFileToBuilder(src, dest, chown)
 		return nil
 	case StateCommitted, StateStopped:
-		return s.addFileToInstance(dstPath, dest, chown)
+		return s.addFileToInstance(buildDirPath, dest, chown)
 	}
 
 	s.instance.Logger.WithFields(logrus.Fields{
@@ -249,46 +248,55 @@ func (s *storage) copyFileToBuildDir(src, dest string) (string, error) {
 		return "", ErrCreatingDirectory.Wrap(err)
 	}
 
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return "", ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
-	}
-	defer dst.Close()
-
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return "", ErrFailedToOpenSrcFile.WithParams(src).Wrap(err)
 	}
 	defer srcFile.Close()
 
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return "", ErrFailedToGetSrcFileInfo.WithParams(src).Wrap(err)
+	}
+
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, srcInfo.Mode().Perm())
+	if err != nil {
+		return "", ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
+	}
+	defer dst.Close()
+
 	if _, err := io.Copy(dst, srcFile); err != nil {
 		return "", ErrFailedToCopyFile.WithParams(src, dstPath).Wrap(err)
+	}
+
+	// Ensure the destination file has the same permissions as the source file
+	if err := os.Chmod(dstPath, srcInfo.Mode().Perm()); err != nil {
+		return "", ErrFailedToSetPermissions.WithParams(dstPath).Wrap(err)
 	}
 
 	return dstPath, nil
 }
 
-func (s *storage) addFileToInstance(dstPath, dest, chown string) error {
-	srcInfo, err := os.Stat(dstPath)
+func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
+	srcInfo, err := os.Stat(srcPath)
 	if os.IsNotExist(err) || srcInfo.IsDir() {
-		return ErrSrcDoesNotExistOrIsDirectory.WithParams(dstPath).Wrap(err)
+		return ErrSrcDoesNotExistOrIsDirectory.WithParams(srcPath).Wrap(err)
 	}
 
-	file := s.instance.K8sClient.NewFile(dstPath, dest)
+	// get the permission of the src file
+	permission := fmt.Sprintf("%o", srcInfo.Mode().Perm())
+
 	parts := strings.Split(chown, ":")
 	if len(parts) != 2 {
-		return ErrInvalidFormat
+		return ErrInvalidFormat.WithParams(chown)
 	}
+	for _, part := range parts {
+		if _, err := strconv.ParseInt(part, 10, 64); err != nil {
+			return ErrFailedToConvertToInt64.WithParams(part).Wrap(err)
+		}
+	}
+	file := s.instance.K8sClient.NewFile(srcPath, dest, chown, permission)
 
-	group, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return ErrFailedToConvertToInt64.Wrap(err)
-	}
-
-	if s.fsGroup != 0 && s.fsGroup != group {
-		return ErrAllFilesMustHaveSameGroup
-	}
-	s.fsGroup = group
 	s.files = append(s.files, file)
 	return nil
 }
@@ -439,6 +447,5 @@ func (s *storage) clone() *storage {
 		instance: nil,
 		volumes:  volumesCopy,
 		files:    filesCopy,
-		fsGroup:  s.fsGroup,
 	}
 }

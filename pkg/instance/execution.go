@@ -411,7 +411,6 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		Name:               e.instance.name,
 		Labels:             e.Labels(),
 		ServiceAccountName: e.instance.name,
-		FsGroup:            e.instance.storage.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 	}

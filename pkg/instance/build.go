@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -13,8 +14,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/container"
 )
-
-const buildDirBase = "/tmp/knuu"
 
 type build struct {
 	instance        *Instance
@@ -226,7 +225,11 @@ func getImageRegistry(imageName string) (string, error) {
 
 // getBuildDir returns the build directory for the instance
 func (b *build) getBuildDir() string {
-	return filepath.Join(buildDirBase, b.instance.name)
+	tmpDir, err := os.MkdirTemp("", "knuu-build-*")
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(tmpDir, b.instance.name)
 }
 
 // addFileToBuilder adds a file to the builder
