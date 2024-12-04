@@ -384,6 +384,8 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		StartupProbe:    e.instance.monitoring.startupProbe,
 		Files:           e.instance.storage.files,
 		SecurityContext: e.instance.security.prepareSecurityContext(),
+		TCPPorts:        e.instance.network.portsTCP,
+		UDPPorts:        e.instance.network.portsUDP,
 	}
 
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)

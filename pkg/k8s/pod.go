@@ -51,6 +51,8 @@ type ContainerConfig struct {
 	StartupProbe    *v1.Probe           // Startup probe for the container
 	Files           []*File             // Files to add to the Pod
 	SecurityContext *v1.SecurityContext // Security context for the container
+	TCPPorts        []int               // TCP ports to expose on the Pod
+	UDPPorts        []int               // UDP ports to expose on the Pod
 }
 
 type PodConfig struct {
@@ -521,6 +523,25 @@ func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) v1
 	}
 }
 
+func buildPodPorts(tcpPorts, udpPorts []int) []v1.ContainerPort {
+	ports := make([]v1.ContainerPort, 0, len(tcpPorts)+len(udpPorts))
+	for _, port := range tcpPorts {
+		ports = append(ports, v1.ContainerPort{
+			Name:          fmt.Sprintf("tcp-%d", port),
+			Protocol:      v1.ProtocolTCP,
+			ContainerPort: int32(port),
+		})
+	}
+	for _, port := range udpPorts {
+		ports = append(ports, v1.ContainerPort{
+			Name:          fmt.Sprintf("udp-%d", port),
+			Protocol:      v1.ProtocolUDP,
+			ContainerPort: int32(port),
+		})
+	}
+	return ports
+}
+
 // prepareContainer creates a v1.Container from a given ContainerConfig.
 func prepareContainer(config ContainerConfig) v1.Container {
 	return v1.Container{
@@ -532,6 +553,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 		Env:             buildEnv(config.Env),
 		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes, config.Files),
 		Resources:       buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest),
+		Ports:           buildPodPorts(config.TCPPorts, config.UDPPorts),
 		LivenessProbe:   config.LivenessProbe,
 		ReadinessProbe:  config.ReadinessProbe,
 		StartupProbe:    config.StartupProbe,
