@@ -29,6 +29,7 @@ const (
 	podFilesConfigmapNameSuffix = "-config"
 
 	initContainerNameSuffix = "-init"
+	initContainerImage      = "nicolaka/netshoot"
 	defaultContainerUser    = 0
 )
 
@@ -594,7 +595,7 @@ func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.C
 	return []v1.Container{
 		{
 			Name:  config.Name + initContainerNameSuffix,
-			Image: config.Image,
+			Image: initContainerImage,
 			SecurityContext: &v1.SecurityContext{
 				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
@@ -619,9 +620,11 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
+		sidecarInitContainer := c.prepareInitContainers(sidecarConfig, true)
 		sidecarContainer := prepareContainer(sidecarConfig)
 		sidecarVolumes := preparePodVolumes(sidecarConfig)
 
+		podSpec.InitContainers = append(podSpec.InitContainers, sidecarInitContainer...)
 		podSpec.Containers = append(podSpec.Containers, sidecarContainer)
 		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}

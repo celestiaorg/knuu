@@ -130,6 +130,9 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 	if _, err := tmpfile.Write(bytes); err != nil {
 		return err
 	}
+	if err := tmpfile.Chmod(0644); err != nil {
+		return err
+	}
 	if err := tmpfile.Close(); err != nil {
 		return err
 	}
