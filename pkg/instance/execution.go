@@ -405,6 +405,8 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 			StartupProbe:    sidecar.Instance().monitoring.startupProbe,
 			Files:           sidecar.Instance().storage.files,
 			SecurityContext: sidecar.Instance().security.prepareSecurityContext(),
+			TCPPorts:        sidecar.Instance().network.portsTCP,
+			UDPPorts:        sidecar.Instance().network.portsUDP,
 		})
 	}
 
