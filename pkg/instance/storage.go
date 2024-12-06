@@ -256,6 +256,13 @@ func (s *storage) validateFileArgs(src, dest, chown string) error {
 	if !strings.Contains(chown, ":") || len(strings.Split(chown, ":")) != 2 {
 		return ErrChownMustBeInFormatUserGroup
 	}
+
+	parts := strings.Split(chown, ":")
+	for _, part := range parts {
+		if _, err := strconv.ParseInt(part, 10, 64); err != nil {
+			return ErrFailedToConvertToInt64.WithParams(part).Wrap(err)
+		}
+	}
 	return nil
 }
 
@@ -307,15 +314,6 @@ func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
 	// get the permission of the src file
 	permission := fmt.Sprintf("%o", srcInfo.Mode().Perm())
 
-	parts := strings.Split(chown, ":")
-	if len(parts) != 2 {
-		return ErrInvalidFormat.WithParams(chown)
-	}
-	for _, part := range parts {
-		if _, err := strconv.ParseInt(part, 10, 64); err != nil {
-			return ErrFailedToConvertToInt64.WithParams(part).Wrap(err)
-		}
-	}
 	file := s.instance.K8sClient.NewFile(srcPath, dest, chown, permission)
 
 	s.files = append(s.files, file)
