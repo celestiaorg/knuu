@@ -115,7 +115,15 @@ func (s *TestSuite) TestCreateService() {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			svc, err := s.client.CreateService(context.Background(), tt.svcName, tt.labels, tt.selectorMap, tt.portsTCP, tt.portsUDP)
+			svc, err := s.client.CreateService(
+				context.Background(),
+				tt.svcName,
+				k8s.ServiceOptions{
+					Labels:      tt.labels,
+					SelectorMap: tt.selectorMap,
+					TCPPorts:    tt.portsTCP,
+					UDPPorts:    tt.portsUDP,
+				})
 			if tt.expectedErr != nil {
 				s.Require().Error(err)
 				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
@@ -174,7 +182,15 @@ func (s *TestSuite) TestPatchService() {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			svc, err := s.client.PatchService(context.Background(), tt.svcName, tt.labels, tt.selectorMap, tt.portsTCP, tt.portsUDP)
+			svc, err := s.client.PatchService(
+				context.Background(),
+				tt.svcName,
+				k8s.ServiceOptions{
+					Labels:      tt.labels,
+					SelectorMap: tt.selectorMap,
+					TCPPorts:    tt.portsTCP,
+					UDPPorts:    tt.portsUDP,
+				})
 			if tt.expectedErr != nil {
 				s.Require().Error(err)
 				s.Assert().Equal(tt.expectedErr.Error(), err.Error())
@@ -315,7 +331,7 @@ func (s *TestSuite) TestWaitForService() {
 	}{
 		{
 			name:            "successful wait load balancer",
-			svcName:         "test-service",
+			svcName:         "test-service-load-balancer",
 			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodeLoadBalancerPort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
@@ -323,7 +339,7 @@ func (s *TestSuite) TestWaitForService() {
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &v1.Service{
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      "test-service",
+									Name:      "test-service-load-balancer",
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
@@ -350,7 +366,7 @@ func (s *TestSuite) TestWaitForService() {
 		},
 		{
 			name:            "successful wait node port",
-			svcName:         "test-service",
+			svcName:         "test-service-node-port",
 			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodePort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
@@ -358,7 +374,7 @@ func (s *TestSuite) TestWaitForService() {
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &v1.Service{
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      "test-service",
+									Name:      "test-service-node-port",
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
@@ -397,7 +413,7 @@ func (s *TestSuite) TestWaitForService() {
 		},
 		{
 			name:            "successful wait cluster IP",
-			svcName:         "test-service",
+			svcName:         "test-service-cluster-ip",
 			serviceEndpoint: fmt.Sprintf("%s:%d", testNodeIP, testNodePort),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
@@ -405,7 +421,7 @@ func (s *TestSuite) TestWaitForService() {
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, &v1.Service{
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      "test-service",
+									Name:      "test-service-cluster-ip",
 									Namespace: s.namespace,
 								},
 								Spec: v1.ServiceSpec{
@@ -449,7 +465,9 @@ func (s *TestSuite) TestWaitForService() {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCheckingServiceReady.Wrap(errInternalServerError),
+			expectedErr: k8s.ErrGettingService.
+				WithParams("error-service").
+				Wrap(errInternalServerError),
 		},
 	}
 
@@ -464,7 +482,7 @@ func (s *TestSuite) TestWaitForService() {
 				defer listener.Close()
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
 
 			err := s.client.WaitForService(ctx, tt.svcName)
@@ -528,8 +546,11 @@ func (s *TestSuite) TestGetServiceEndpoint() {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedEP:  "",
-			expectedErr: k8s.ErrGettingService.Wrap(errInternalServerError),
+			expectedEP: "",
+			expectedErr: k8s.ErrGettingServiceIP.
+				WithParams("error-service").
+				Wrap(k8s.ErrGettingService.
+					Wrap(errInternalServerError)),
 		},
 	}
 

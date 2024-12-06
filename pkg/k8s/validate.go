@@ -286,3 +286,16 @@ func validateConfigMap(name string, labels, data map[string]string) error {
 	}
 	return validateConfigMapKeys(data)
 }
+
+func validateServiceOptions(options ServiceOptions) error {
+	if err := validateLabels(options.Labels); err != nil {
+		return err
+	}
+	if err := validatePorts(options.TCPPorts); err != nil {
+		return err
+	}
+	if err := validatePorts(options.UDPPorts); err != nil {
+		return err
+	}
+	return validateSelectorMap(options.SelectorMap)
+}

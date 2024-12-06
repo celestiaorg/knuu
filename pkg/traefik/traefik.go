@@ -310,13 +310,15 @@ func (t *Traefik) createIngressRoute(
 						"kind":  "Rule",
 						"services": []interface{}{
 							map[string]interface{}{
-								"name": serviceName,
-								"port": port,
+								"name":      serviceName,
+								"namespace": t.K8sClient.Namespace(),
+								"port":      port,
 							},
 						},
 						"middlewares": []interface{}{
 							map[string]interface{}{
-								"name": middlewareName,
+								"name":      middlewareName,
+								"namespace": t.K8sClient.Namespace(),
 							},
 						},
 					},

@@ -62,10 +62,7 @@ func (s *Suite) TestEnvToJSON() {
 
 	// Test logic
 	for _, i := range instances {
-		webIP, err := i.Network().GetIP(ctx)
-		s.Require().NoError(err)
-
-		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+		wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 		s.Require().NoError(err)
 
 		expectedBytes, err := json.Marshal(envVars)

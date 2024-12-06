@@ -51,9 +51,6 @@ func (s *Suite) TestNetShaperBandwidth() {
 
 	s.Require().NoError(iperfClient.Execution().Start(ctx))
 
-	iperfServerIP, err := iperfServer.Network().GetIP(ctx)
-	s.Require().NoError(err)
-
 	// Perform the test
 	type testCase struct {
 		name             string
@@ -74,6 +71,9 @@ func (s *Suite) TestNetShaperBandwidth() {
 			tolerancePercent: rand.Intn(10) + 40,
 		}
 	}
+
+	iperfServerIP, err := iperfServer.Network().GetEphemeralIP(ctx)
+	s.Require().NoError(err)
 
 	for _, tc := range tt {
 		tc := tc
@@ -168,7 +168,7 @@ func (s *Suite) TestNetShaperPacketloss() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
 
 	for _, tc := range tt {
@@ -265,8 +265,9 @@ func (s *Suite) TestNetShaperLatency() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
+	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 
 	for _, tc := range tt {
 		tc := tc
@@ -279,7 +280,6 @@ func (s *Suite) TestNetShaperLatency() {
 			s.T().Log("Starting latency test. It takes a while.")
 			startTime := time.Now()
 
-			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),
@@ -359,8 +359,9 @@ func (s *Suite) TestNetShaperJitter() {
 		}
 	}
 
-	targetIP, err := target.Network().GetIP(ctx)
+	targetIP, err := target.Network().GetEphemeralIP(ctx)
 	s.Require().NoError(err)
+	targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 
 	for _, tc := range tt {
 		tc := tc
@@ -373,7 +374,6 @@ func (s *Suite) TestNetShaperJitter() {
 			s.T().Log("Starting jitter test. It takes a while.")
 			startTime := time.Now()
 
-			targetAddress := fmt.Sprintf("%s:%d", targetIP, gopingPort)
 			output, err := executor.Execution().ExecuteCommand(ctx,
 				"goping", "ping", "-q",
 				"-c", fmt.Sprint(numOfPingPackets),

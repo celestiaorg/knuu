@@ -63,16 +63,11 @@ func (s *Suite) TestFileCached() {
 
 	for _, i := range instances {
 		err := s.RetryOperation(func() error {
-			webIP, err := i.Network().GetIP(ctx)
-			if err != nil {
-				return fmt.Errorf("getting IP: %w", err)
-			}
-
 			if err := i.Execution().WaitInstanceIsRunning(ctx); err != nil {
 				return fmt.Errorf("waiting for instance to run: %w", err)
 			}
 
-			wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", webIP)
+			wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", i.Network().HostName())
 			if err != nil {
 				return fmt.Errorf("executing wget: %w", err)
 			}

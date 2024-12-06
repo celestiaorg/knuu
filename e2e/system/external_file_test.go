@@ -41,14 +41,9 @@ func (s *Suite) TestExternalFile() {
 	s.Require().NoError(err)
 
 	s.Require().NoError(server.Build().Commit(ctx))
-
-	// Test logic
-	serverIP, err := server.Network().GetIP(ctx)
-	s.Require().NoError(err)
-
 	s.Require().NoError(server.Execution().Start(ctx))
 
-	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", serverIP)
+	wget, err := executor.Execution().ExecuteCommand(ctx, "wget", "-q", "-O", "-", server.Network().HostName())
 	s.Require().NoError(err)
 
 	s.Assert().Contains(wget, "Hello World!")
