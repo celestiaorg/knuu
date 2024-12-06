@@ -22,6 +22,8 @@ type storage struct {
 	files    []*k8s.File
 }
 
+const defaultFilePermission = 0644
+
 func (i *Instance) Storage() *storage {
 	return i.storage
 }
@@ -142,7 +144,7 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 	if _, err := tmpfile.Write(bytes); err != nil {
 		return err
 	}
-	if err := tmpfile.Chmod(0644); err != nil {
+	if err := tmpfile.Chmod(defaultFilePermission); err != nil {
 		return err
 	}
 	if err := tmpfile.Close(); err != nil {
