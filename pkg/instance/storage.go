@@ -53,11 +53,15 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		return s.addFileToInstance(buildDirPath, dest, chown)
 	}
 
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"file":      dest,
 		"instance":  s.instance.name,
 		"state":     s.instance.state,
-		"build_dir": s.instance.build.getBuildDir(),
+		"build_dir": buildDir,
 	}).Debug("added file")
 	return nil
 }
@@ -91,7 +95,11 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 			if err != nil {
 				return err
 			}
-			dstPath := filepath.Join(s.instance.build.getBuildDir(), dest, relPath)
+			buildDir, err := s.instance.build.getBuildDir()
+			if err != nil {
+				return ErrGettingBuildDir.Wrap(err)
+			}
+			dstPath := filepath.Join(buildDir, dest, relPath)
 
 			if info.IsDir() {
 				// create directory at destination path
@@ -105,11 +113,15 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, s.instance.name).Wrap(err)
 	}
 
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"folder":    dest,
 		"instance":  s.instance.name,
 		"state":     s.instance.state,
-		"build_dir": s.instance.build.getBuildDir(),
+		"build_dir": buildDir,
 	}).Debug("added folder")
 	return nil
 }
@@ -246,7 +258,11 @@ func (s *storage) validateFileArgs(src, dest, chown string) error {
 }
 
 func (s *storage) copyFileToBuildDir(src, dest string) (string, error) {
-	dstPath := filepath.Join(s.instance.build.getBuildDir(), dest)
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return "", ErrGettingBuildDir.Wrap(err)
+	}
+	dstPath := filepath.Join(buildDir, dest)
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return "", ErrCreatingDirectory.Wrap(err)
 	}

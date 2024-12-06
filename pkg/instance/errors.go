@@ -83,6 +83,7 @@ var (
 	ErrSettingGitRepo                            = errors.New("SettingGitRepo", "setting git repo is only allowed in state 'None'. Current state is '%s'")
 	ErrGettingBuildContext                       = errors.New("GettingBuildContext", "error getting build context")
 	ErrGettingImageName                          = errors.New("GettingImageName", "error getting image name")
+	ErrGettingBuildDir                           = errors.New("GettingBuildDir", "error getting build directory")
 	ErrSettingImageNotAllowedForSidecars         = errors.New("SettingImageNotAllowedForSidecars", "setting image is not allowed for sidecars")
 	ErrSettingCommand                            = errors.New("SettingCommand", "setting command is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")
 	ErrSettingArgsNotAllowed                     = errors.New("SettingArgsNotAllowed", "setting args is only allowed in state 'Preparing' or 'Committed'. Current state is '%s")

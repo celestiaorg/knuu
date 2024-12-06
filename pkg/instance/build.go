@@ -52,10 +52,15 @@ func (b *build) SetImage(ctx context.Context, image string, args ...builder.ArgI
 		return ErrSettingImageNotAllowed.WithParams(b.instance.state.String())
 	}
 
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+
 	// Use the builder to build a new image
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
 		ImageName:    image,
-		BuildContext: b.getBuildDir(),
+		BuildContext: buildDir,
 		ImageBuilder: b.instance.ImageBuilder,
 		Args:         args,
 		Logger:       b.instance.Logger,
@@ -85,9 +90,14 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 		return ErrGettingImageName.Wrap(err)
 	}
 
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
 		ImageName:    imageName,
-		BuildContext: b.getBuildDir(),
+		BuildContext: buildDir,
 		ImageBuilder: b.instance.ImageBuilder,
 		Args:         args,
 		Logger:       b.instance.Logger,
@@ -224,12 +234,12 @@ func getImageRegistry(imageName string) (string, error) {
 }
 
 // getBuildDir returns the build directory for the instance
-func (b *build) getBuildDir() string {
+func (b *build) getBuildDir() (string, error) {
 	tmpDir, err := os.MkdirTemp("", "knuu-build-*")
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return filepath.Join(tmpDir, b.instance.name)
+	return filepath.Join(tmpDir, b.instance.name), nil
 }
 
 // addFileToBuilder adds a file to the builder
