@@ -16,6 +16,8 @@ import (
 	"github.com/celestiaorg/knuu/pkg/names"
 )
 
+const maxTotalFilesBytes = 1024 * 1024
+
 type storage struct {
 	instance *Instance
 	volumes  []*k8s.Volume
@@ -51,6 +53,13 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		s.instance.build.addFileToBuilder(src, dest, chown)
 		return nil
 	case StateCommitted, StateStopped:
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			return ErrFailedToGetFileSize.Wrap(err)
+		}
+		if srcInfo.Size() > maxTotalFilesBytes {
+			return ErrFileTooLargeCommitted.WithParams(src)
+		}
 		return s.addFileToInstance(dstPath, dest, chown)
 	}
 
@@ -274,6 +283,23 @@ func (s *storage) addFileToInstance(dstPath, dest, chown string) error {
 		return ErrSrcDoesNotExistOrIsDirectory.WithParams(dstPath).Wrap(err)
 	}
 
+	size := int64(0)
+	for _, file := range s.files {
+		srcInfo, err := os.Stat(file.Source)
+		if err != nil {
+			return ErrFailedToGetFileSize.Wrap(err)
+		}
+		size += srcInfo.Size()
+	}
+	srcInfo, err = os.Stat(dstPath)
+	if err != nil {
+		return ErrFailedToGetFileSize.Wrap(err)
+	}
+	size += srcInfo.Size()
+	if size > maxTotalFilesBytes {
+		return ErrTotalFilesSizeTooLarge.WithParams(dstPath)
+	}
+
 	file := s.instance.K8sClient.NewFile(dstPath, dest)
 	parts := strings.Split(chown, ":")
 	if len(parts) != 2 {
@@ -307,7 +333,10 @@ func (s *storage) deployVolume(ctx context.Context) error {
 	for _, volume := range s.volumes {
 		totalSize.Add(volume.Size)
 	}
-	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
+	err := s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
+	if err != nil {
+		return ErrFailedToCreatePersistentVolumeClaim.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"total_size": totalSize.String(),
 		"instance":   s.instance.name,
