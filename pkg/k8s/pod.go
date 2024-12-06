@@ -442,23 +442,6 @@ func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.V
 
 	var containerFiles []v1.VolumeMount
 
-	// for n, file := range files {
-	// 	shouldAddFile := true
-	// 	for _, volume := range volumes {
-	// 		if strings.HasPrefix(file.Dest, volume.Path) {
-	// 			shouldAddFile = false
-	// 			break
-	// 		}
-	// 	}
-	// 	if shouldAddFile {
-	// 		containerFiles = append(containerFiles, v1.VolumeMount{
-	// 			Name:      name + podFilesConfigmapNameSuffix,
-	// 			MountPath: file.Dest,
-	// 			SubPath:   fmt.Sprintf("%d", n),
-	// 		})
-	// 	}
-	// }
-
 	return append(containerVolumes, containerFiles...)
 }
 

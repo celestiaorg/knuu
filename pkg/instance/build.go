@@ -24,6 +24,7 @@ type build struct {
 	args            []string
 	env             map[string]string
 	imageCache      *sync.Map
+	buildDir        string
 }
 
 func (i *Instance) Build() *build {
@@ -235,6 +236,10 @@ func getImageRegistry(imageName string) (string, error) {
 
 // getBuildDir returns the build directory for the instance
 func (b *build) getBuildDir() (string, error) {
+	if b.buildDir != "" {
+		return b.buildDir, nil
+	}
+
 	tmpDir, err := os.MkdirTemp("", "knuu-build-*")
 	if err != nil {
 		return "", err
