@@ -27,7 +27,7 @@ func (n *network) AddHost(ctx context.Context, port int) (host string, err error
 		serviceName = n.instance.parentInstance.name
 	}
 
-	prefix := fmt.Sprintf("%s-%d", serviceName, port)
+	prefix := fmt.Sprintf("%s-%s-%d", n.instance.Scope, serviceName, port)
 	if err := n.instance.Proxy.AddHost(ctx, serviceName, prefix, port); err != nil {
 		return "", ErrAddingToProxy.WithParams(serviceName).Wrap(err)
 	}
