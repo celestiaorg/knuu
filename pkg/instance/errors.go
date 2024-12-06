@@ -103,7 +103,7 @@ var (
 	ErrCreatingDirectory                         = errors.New("CreatingDirectory", "error creating directory")
 	ErrFailedToCreateDestFile                    = errors.New("FailedToCreateDestFile", "failed to create destination file '%s'")
 	ErrFailedToOpenSrcFile                       = errors.New("FailedToOpenSrcFile", "failed to open source file '%s'")
-	ErrFailedToGetSrcFileInfo                    = errors.New("FailedToGetSrcFileInfo", "failed to get source file info for")
+	ErrFailedToGetSrcFileInfo                    = errors.New("FailedToGetSrcFileInfo", "failed to get source file info for %s")
 	ErrFailedToCopyFile                          = errors.New("FailedToCopyFile", "failed to copy from source '%s' to destination '%s'")
 	ErrFailedToSetPermissions                    = errors.New("FailedToSetPermissions", "failed to set permissions for destination file")
 	ErrSrcDoesNotExistOrIsDirectory              = errors.New("SrcDoesNotExistOrIsDirectory", "src '%s' does not exist or is a directory")
