@@ -89,13 +89,12 @@ func (r *resources) deployStorage(ctx context.Context) error {
 			return ErrDeployingVolumeForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
-	if len(r.instance.storage.files) == 0 {
-		return nil
+	if len(r.instance.storage.files) != 0 {
+		if err := r.instance.storage.deployFiles(ctx); err != nil {
+			return ErrDeployingFilesForInstance.WithParams(r.instance.name).Wrap(err)
+		}
 	}
 
-	if err := r.instance.storage.deployFiles(ctx); err != nil {
-		return ErrDeployingFilesForInstance.WithParams(r.instance.name).Wrap(err)
-	}
 	return nil
 }
 
@@ -123,8 +122,7 @@ func (r *resources) destroyResources(ctx context.Context) error {
 	}
 
 	if len(r.instance.storage.files) != 0 {
-		err := r.instance.storage.destroyFiles(ctx)
-		if err != nil {
+		if err := r.instance.storage.destroyFiles(ctx); err != nil {
 			return ErrDestroyingFilesForInstance.WithParams(r.instance.name).Wrap(err)
 		}
 	}
