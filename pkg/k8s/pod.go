@@ -26,12 +26,10 @@ const (
 	// knuuPath is the path where the knuu volume is mounted
 	knuuPath = "/knuu"
 
-	// 0777 is used so that the files are usable by any user in the container without needing to change permissions
-	defaultFileModeForVolume = 0777
-
 	podFilesConfigmapNameSuffix = "-config"
 
 	initContainerNameSuffix = "-init"
+	initContainerImage      = "nicolaka/netshoot"
 	defaultContainerUser    = 0
 )
 
@@ -51,6 +49,8 @@ type ContainerConfig struct {
 	StartupProbe    *v1.Probe           // Startup probe for the container
 	Files           []*File             // Files to add to the Pod
 	SecurityContext *v1.SecurityContext // Security context for the container
+	TCPPorts        []int               // TCP ports to expose on the Pod
+	UDPPorts        []int               // UDP ports to expose on the Pod
 }
 
 type PodConfig struct {
@@ -72,8 +72,10 @@ type Volume struct {
 }
 
 type File struct {
-	Source string
-	Dest   string
+	Source     string
+	Dest       string
+	Chown      string
+	Permission string
 }
 
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
@@ -102,10 +104,12 @@ func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Vo
 	}
 }
 
-func (c *Client) NewFile(source, dest string) *File {
+func (c *Client) NewFile(source, dest, chown, permission string) *File {
 	return &File{
-		Source: source,
-		Dest:   dest,
+		Source:     source,
+		Dest:       dest,
+		Chown:      chown,
+		Permission: permission,
 	}
 }
 
@@ -382,6 +386,16 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 		podVolumes = append(podVolumes, podVolume)
 	}
 
+	if volumesAmount == 0 && filesAmount != 0 {
+		podVolume := v1.Volume{
+			Name: name,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}
+		podVolumes = append(podVolumes, podVolume)
+	}
+
 	if filesAmount != 0 {
 		podFiles := v1.Volume{
 			Name: name + podFilesConfigmapNameSuffix,
@@ -390,7 +404,7 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 					LocalObjectReference: v1.LocalObjectReference{
 						Name: name,
 					},
-					DefaultMode: ptr.To[int32](defaultFileModeForVolume),
+					DefaultMode: ptr.To[int32](0600),
 				},
 			},
 		}
@@ -415,24 +429,21 @@ func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.V
 		)
 	}
 
-	var containerFiles []v1.VolumeMount
-
-	for n, file := range files {
-		shouldAddFile := true
-		for _, volume := range volumes {
-			if strings.HasPrefix(file.Dest, volume.Path) {
-				shouldAddFile = false
-				break
-			}
+	if len(volumes) == 0 && len(files) != 0 {
+		uniquePaths := make(map[string]bool)
+		for _, file := range files {
+			uniquePaths[filepath.Dir(file.Dest)] = true
 		}
-		if shouldAddFile {
-			containerFiles = append(containerFiles, v1.VolumeMount{
-				Name:      name + podFilesConfigmapNameSuffix,
-				MountPath: file.Dest,
-				SubPath:   fmt.Sprintf("%d", n),
+		for path := range uniquePaths {
+			containerVolumes = append(containerVolumes, v1.VolumeMount{
+				Name:      name,
+				MountPath: path,
+				SubPath:   strings.TrimPrefix(path, "/"),
 			})
 		}
 	}
+
+	var containerFiles []v1.VolumeMount
 
 	return append(containerVolumes, containerFiles...)
 }
@@ -443,11 +454,27 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 		return []v1.VolumeMount{} // return empty slice if no volumes are specified
 	}
 
-	containerVolumes := []v1.VolumeMount{
-		{
+	var containerVolumes []v1.VolumeMount
+	// if the user want do add volumes, we need to mount the knuu path
+	if len(volumes) != 0 {
+		containerVolumes = append(containerVolumes, v1.VolumeMount{
 			Name:      name,
-			MountPath: knuuPath, // set the path to "/knuu" as per the requirements
-		},
+			MountPath: knuuPath,
+		})
+	}
+	// if the user don't want to add volumes, but want to add files, we need to mount the knuu path for the init container
+	if len(volumes) == 0 && len(files) != 0 {
+		uniquePaths := make(map[string]bool)
+		for _, file := range files {
+			uniquePaths[filepath.Dir(file.Dest)] = true
+		}
+		for path := range uniquePaths {
+			containerVolumes = append(containerVolumes, v1.VolumeMount{
+				Name:      name,
+				MountPath: knuuPath + path,
+				SubPath:   strings.TrimPrefix(path, "/"),
+			})
+		}
 	}
 
 	var containerFiles []v1.VolumeMount
@@ -484,26 +511,33 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 			cmds = append(cmds, parentDirCmd)
 			dirsProcessed[folder] = true
 		}
-		copyFileToKnuu := fmt.Sprintf("cp %s %s && ", file.Dest, filepath.Join(knuuPath, file.Dest))
-		cmds = append(cmds, copyFileToKnuu)
+		chown := file.Chown
+		permission := file.Permission
+		addFileToKnuu := fmt.Sprintf("cp %s %s && ", file.Dest, filepath.Join(knuuPath, file.Dest))
+		if chown != "" {
+			addFileToKnuu += fmt.Sprintf("chown %s %s && ", chown, filepath.Join(knuuPath, file.Dest))
+		}
+		if permission != "" {
+			addFileToKnuu += fmt.Sprintf("chmod %s %s && ", permission, filepath.Join(knuuPath, file.Dest))
+		}
+		cmds = append(cmds, addFileToKnuu)
 	}
 
 	// for each volume, copy the contents of the volume to the knuu volume
-	for i, volume := range volumes {
+	for _, volume := range volumes {
 		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
 		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then mkdir -p %s && cp -r %s/* %s && chown -R %d:%d %s",
 			volume.Path, volume.Path, knuuVolumePath, volume.Path,
 			knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
-		if i < len(volumes)-1 {
-			cmd += " ;fi && "
-		} else {
-			cmd += " ;fi"
-		}
+		cmd += " ;fi && "
 		cmds = append(cmds, cmd)
 	}
 
 	fullCommand := strings.Join(cmds, "")
 	commands = append(commands, fullCommand)
+	if strings.HasSuffix(fullCommand, " && ") {
+		commands[len(commands)-1] = strings.TrimSuffix(commands[len(commands)-1], " && ")
+	}
 
 	c.logger.WithField("command", fullCommand).Debug("init container command")
 	return commands
@@ -522,6 +556,25 @@ func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) v1
 	}
 }
 
+func buildPodPorts(tcpPorts, udpPorts []int) []v1.ContainerPort {
+	ports := make([]v1.ContainerPort, 0, len(tcpPorts)+len(udpPorts))
+	for _, port := range tcpPorts {
+		ports = append(ports, v1.ContainerPort{
+			Name:          fmt.Sprintf("tcp-%d", port),
+			Protocol:      v1.ProtocolTCP,
+			ContainerPort: int32(port),
+		})
+	}
+	for _, port := range udpPorts {
+		ports = append(ports, v1.ContainerPort{
+			Name:          fmt.Sprintf("udp-%d", port),
+			Protocol:      v1.ProtocolUDP,
+			ContainerPort: int32(port),
+		})
+	}
+	return ports
+}
+
 // prepareContainer creates a v1.Container from a given ContainerConfig.
 func prepareContainer(config ContainerConfig) v1.Container {
 	return v1.Container{
@@ -533,6 +586,7 @@ func prepareContainer(config ContainerConfig) v1.Container {
 		Env:             buildEnv(config.Env),
 		VolumeMounts:    buildContainerVolumes(config.Name, config.Volumes, config.Files),
 		Resources:       buildResources(config.MemoryRequest, config.MemoryLimit, config.CPURequest),
+		Ports:           buildPodPorts(config.TCPPorts, config.UDPPorts),
 		LivenessProbe:   config.LivenessProbe,
 		ReadinessProbe:  config.ReadinessProbe,
 		StartupProbe:    config.StartupProbe,
@@ -542,35 +596,14 @@ func prepareContainer(config ContainerConfig) v1.Container {
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
 func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
-	if strings.HasPrefix(config.Name, "registry-build-from-git") {
-		if exists, err := c.ConfigMapExists(context.Background(), "ttlsh-registry-certs"); err == nil && exists {
-			return []v1.Container{
-				{
-					Name:  "init-container",
-					Image: "debian:bullseye-slim",
-					// SecurityContext: &v1.SecurityContext{
-					// 	RunAsUser: ptr.To[int64](defaultContainerUser),
-					// },
-					Command: []string{"sh", "-c", "apt-get update && apt-get install -y ca-certificates && cp /certs/cert.pem /usr/local/share/ca-certificates/registry-cert.crt && update-ca-certificates"},
-					VolumeMounts: []v1.VolumeMount{
-						{
-							Name:      "cert-volume",
-							MountPath: "/certs",
-						},
-					},
-				},
-			}
-		}
-	}
-
-	if !init || len(config.Volumes) == 0 {
+	if !init || (len(config.Volumes) == 0 && len(config.Files) == 0) {
 		return nil
 	}
 
 	return []v1.Container{
 		{
 			Name:  config.Name + initContainerNameSuffix,
-			Image: config.Image,
+			Image: initContainerImage,
 			SecurityContext: &v1.SecurityContext{
 				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
@@ -588,7 +621,6 @@ func preparePodVolumes(config ContainerConfig) []v1.Volume {
 func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 	podSpec := v1.PodSpec{
 		ServiceAccountName: spec.ServiceAccountName,
-		SecurityContext:    &v1.PodSecurityContext{FSGroup: &spec.FsGroup},
 		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
 		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
@@ -612,9 +644,11 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
+		sidecarInitContainer := c.prepareInitContainers(sidecarConfig, true)
 		sidecarContainer := prepareContainer(sidecarConfig)
 		sidecarVolumes := preparePodVolumes(sidecarConfig)
 
+		podSpec.InitContainers = append(podSpec.InitContainers, sidecarInitContainer...)
 		podSpec.Containers = append(podSpec.Containers, sidecarContainer)
 		podSpec.Volumes = append(podSpec.Volumes, sidecarVolumes...)
 	}

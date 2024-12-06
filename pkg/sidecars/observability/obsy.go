@@ -20,7 +20,7 @@ const (
 	otelAgentName = "otel-agent"
 	// %s will be replaced with the otelCollectorVersion
 	otelAgentConfigFile            = "/etc/otel-agent.yaml"
-	otelAgentConfigFilePermissions = "0:0"
+	otelAgentConfigFilePermissions = "10001:10001"
 
 	otelCollectorCommand   = "/otelcol-contrib"
 	otelCollectorConfigArg = "--config=/etc/otel-agent.yaml"

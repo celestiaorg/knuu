@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -14,8 +15,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/container"
 )
 
-const buildDirBase = "/tmp/knuu"
-
 type build struct {
 	instance        *Instance
 	imageName       string
@@ -25,6 +24,7 @@ type build struct {
 	args            []string
 	env             map[string]string
 	imageCache      *sync.Map
+	buildDir        string
 }
 
 func (i *Instance) Build() *build {
@@ -53,10 +53,15 @@ func (b *build) SetImage(ctx context.Context, image string, args ...builder.ArgI
 		return ErrSettingImageNotAllowed.WithParams(b.instance.state.String())
 	}
 
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+
 	// Use the builder to build a new image
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
 		ImageName:    image,
-		BuildContext: b.getBuildDir(),
+		BuildContext: buildDir,
 		ImageBuilder: b.instance.ImageBuilder,
 		Args:         args,
 		Logger:       b.instance.Logger,
@@ -88,9 +93,20 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 	}
 	b.imageName = resolvedImage.ToString()
 
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+	b.imageName = resolvedImage.ToString()
+
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
 		ImageName:    b.imageName,
-		BuildContext: b.getBuildDir(),
+		BuildContext: buildDir,
 		ImageBuilder: b.instance.ImageBuilder,
 		Args:         args,
 		Logger:       b.instance.Logger,
@@ -226,8 +242,16 @@ func getImageRegistry(imageName string) (string, error) {
 }
 
 // getBuildDir returns the build directory for the instance
-func (b *build) getBuildDir() string {
-	return filepath.Join(buildDirBase, b.instance.name)
+func (b *build) getBuildDir() (string, error) {
+	if b.buildDir != "" {
+		return b.buildDir, nil
+	}
+
+	tmpDir, err := os.MkdirTemp("", "knuu-build-*")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(tmpDir, b.instance.name), nil
 }
 
 // addFileToBuilder adds a file to the builder

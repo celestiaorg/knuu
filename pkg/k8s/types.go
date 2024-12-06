@@ -66,7 +66,7 @@ type KubeManager interface {
 	Namespace() string
 	NamespaceExists(ctx context.Context, name string) (bool, error)
 	NetworkPolicyExists(ctx context.Context, name string) bool
-	NewFile(source, dest string) *File
+	NewFile(source, dest, chown, permission string) *File
 	NewVolume(path string, size resource.Quantity, owner int64) *Volume
 	PatchService(ctx context.Context, name string, opts ServiceOptions) (*corev1.Service, error)
 	PortForwardPod(ctx context.Context, podName string, localPort, remotePort int) error

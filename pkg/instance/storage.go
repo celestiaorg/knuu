@@ -16,12 +16,15 @@ import (
 	"github.com/celestiaorg/knuu/pkg/names"
 )
 
+const maxTotalFilesBytes = 1024 * 1024
+
 type storage struct {
 	instance *Instance
 	volumes  []*k8s.Volume
 	files    []*k8s.File
-	fsGroup  int64
 }
+
+const defaultFilePermission = 0644
 
 func (i *Instance) Storage() *storage {
 	return i.storage
@@ -41,7 +44,7 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		return err
 	}
 
-	dstPath, err := s.copyFileToBuildDir(src, dest)
+	buildDirPath, err := s.copyFileToBuildDir(src, dest)
 	if err != nil {
 		return err
 	}
@@ -51,14 +54,25 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		s.instance.build.addFileToBuilder(src, dest, chown)
 		return nil
 	case StateCommitted, StateStopped:
-		return s.addFileToInstance(dstPath, dest, chown)
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			return ErrFailedToGetFileSize.Wrap(err)
+		}
+		if srcInfo.Size() > maxTotalFilesBytes {
+			return ErrFileTooLargeCommitted.WithParams(src)
+		}
+		return s.addFileToInstance(buildDirPath, dest, chown)
 	}
 
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"file":      dest,
 		"instance":  s.instance.name,
 		"state":     s.instance.state,
-		"build_dir": s.instance.build.getBuildDir(),
+		"build_dir": buildDir,
 	}).Debug("added file")
 	return nil
 }
@@ -92,7 +106,11 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 			if err != nil {
 				return err
 			}
-			dstPath := filepath.Join(s.instance.build.getBuildDir(), dest, relPath)
+			buildDir, err := s.instance.build.getBuildDir()
+			if err != nil {
+				return ErrGettingBuildDir.Wrap(err)
+			}
+			dstPath := filepath.Join(buildDir, dest, relPath)
 
 			if info.IsDir() {
 				// create directory at destination path
@@ -106,11 +124,15 @@ func (s *storage) AddFolder(src string, dest string, chown string) error {
 		return ErrCopyingFolderToInstance.WithParams(src, s.instance.name).Wrap(err)
 	}
 
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"folder":    dest,
 		"instance":  s.instance.name,
 		"state":     s.instance.state,
-		"build_dir": s.instance.build.getBuildDir(),
+		"build_dir": buildDir,
 	}).Debug("added folder")
 	return nil
 }
@@ -129,6 +151,9 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 	defer os.Remove(tmpfile.Name())
 
 	if _, err := tmpfile.Write(bytes); err != nil {
+		return err
+	}
+	if err := tmpfile.Chmod(defaultFilePermission); err != nil {
 		return err
 	}
 	if err := tmpfile.Close(); err != nil {
@@ -240,20 +265,25 @@ func (s *storage) validateFileArgs(src, dest, chown string) error {
 	if !strings.Contains(chown, ":") || len(strings.Split(chown, ":")) != 2 {
 		return ErrChownMustBeInFormatUserGroup
 	}
+
+	parts := strings.Split(chown, ":")
+	for _, part := range parts {
+		if _, err := strconv.ParseInt(part, 10, 64); err != nil {
+			return ErrFailedToConvertToInt64.WithParams(part).Wrap(err)
+		}
+	}
 	return nil
 }
 
 func (s *storage) copyFileToBuildDir(src, dest string) (string, error) {
-	dstPath := filepath.Join(s.instance.build.getBuildDir(), dest)
+	buildDir, err := s.instance.build.getBuildDir()
+	if err != nil {
+		return "", ErrGettingBuildDir.Wrap(err)
+	}
+	dstPath := filepath.Join(buildDir, dest)
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return "", ErrCreatingDirectory.Wrap(err)
 	}
-
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return "", ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
-	}
-	defer dst.Close()
 
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -261,34 +291,57 @@ func (s *storage) copyFileToBuildDir(src, dest string) (string, error) {
 	}
 	defer srcFile.Close()
 
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return "", ErrFailedToGetSrcFileInfo.WithParams(src).Wrap(err)
+	}
+
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, srcInfo.Mode().Perm())
+	if err != nil {
+		return "", ErrFailedToCreateDestFile.WithParams(dstPath).Wrap(err)
+	}
+	defer dst.Close()
+
 	if _, err := io.Copy(dst, srcFile); err != nil {
 		return "", ErrFailedToCopyFile.WithParams(src, dstPath).Wrap(err)
+	}
+
+	// Ensure the destination file has the same permissions as the source file
+	if err := os.Chmod(dstPath, srcInfo.Mode().Perm()); err != nil {
+		return "", ErrFailedToSetPermissions.WithParams(dstPath).Wrap(err)
 	}
 
 	return dstPath, nil
 }
 
-func (s *storage) addFileToInstance(dstPath, dest, chown string) error {
-	srcInfo, err := os.Stat(dstPath)
+func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
+	srcInfo, err := os.Stat(srcPath)
 	if os.IsNotExist(err) || srcInfo.IsDir() {
-		return ErrSrcDoesNotExistOrIsDirectory.WithParams(dstPath).Wrap(err)
+		return ErrSrcDoesNotExistOrIsDirectory.WithParams(srcPath).Wrap(err)
 	}
 
-	file := s.instance.K8sClient.NewFile(dstPath, dest)
-	parts := strings.Split(chown, ":")
-	if len(parts) != 2 {
-		return ErrInvalidFormat
-	}
+	// get the permission of the src file
+	permission := fmt.Sprintf("%o", srcInfo.Mode().Perm())
 
-	group, err := strconv.ParseInt(parts[1], 10, 64)
+	size := int64(0)
+	for _, file := range s.files {
+		srcInfo, err := os.Stat(file.Source)
+		if err != nil {
+			return ErrFailedToGetFileSize.Wrap(err)
+		}
+		size += srcInfo.Size()
+	}
+	srcInfo, err = os.Stat(srcPath)
 	if err != nil {
-		return ErrFailedToConvertToInt64.Wrap(err)
+		return ErrFailedToGetFileSize.Wrap(err)
+	}
+	size += srcInfo.Size()
+	if size > maxTotalFilesBytes {
+		return ErrTotalFilesSizeTooLarge.WithParams(srcPath)
 	}
 
-	if s.fsGroup != 0 && s.fsGroup != group {
-		return ErrAllFilesMustHaveSameGroup
-	}
-	s.fsGroup = group
+	file := s.instance.K8sClient.NewFile(srcPath, dest, chown, permission)
+
 	s.files = append(s.files, file)
 	return nil
 }
@@ -307,7 +360,10 @@ func (s *storage) deployVolume(ctx context.Context) error {
 	for _, volume := range s.volumes {
 		totalSize.Add(volume.Size)
 	}
-	s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
+	err := s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
+	if err != nil {
+		return ErrFailedToCreatePersistentVolumeClaim.Wrap(err)
+	}
 	s.instance.Logger.WithFields(logrus.Fields{
 		"total_size": totalSize.String(),
 		"instance":   s.instance.name,
@@ -439,6 +495,5 @@ func (s *storage) clone() *storage {
 		instance: nil,
 		volumes:  volumesCopy,
 		files:    filesCopy,
-		fsGroup:  s.fsGroup,
 	}
 }

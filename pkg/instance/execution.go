@@ -385,6 +385,8 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		StartupProbe:    e.instance.monitoring.startupProbe,
 		Files:           e.instance.storage.files,
 		SecurityContext: e.instance.security.prepareSecurityContext(),
+		TCPPorts:        e.instance.network.portsTCP,
+		UDPPorts:        e.instance.network.portsUDP,
 	}
 
 	sidecarConfigs := make([]k8s.ContainerConfig, 0)
@@ -404,6 +406,8 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 			StartupProbe:    sidecar.Instance().monitoring.startupProbe,
 			Files:           sidecar.Instance().storage.files,
 			SecurityContext: sidecar.Instance().security.prepareSecurityContext(),
+			TCPPorts:        sidecar.Instance().network.portsTCP,
+			UDPPorts:        sidecar.Instance().network.portsUDP,
 		})
 	}
 
@@ -412,7 +416,6 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		Name:               e.instance.name,
 		Labels:             e.Labels(),
 		ServiceAccountName: e.instance.name,
-		FsGroup:            e.instance.storage.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 		ImagePullSecrets:   []v1.LocalObjectReference{{Name: "registry-cert-secret"}},
