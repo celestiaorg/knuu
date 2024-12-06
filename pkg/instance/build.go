@@ -97,12 +97,6 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 	if err != nil {
 		return ErrGettingBuildDir.Wrap(err)
 	}
-	b.imageName = resolvedImage.ToString()
-
-	buildDir, err := b.getBuildDir()
-	if err != nil {
-		return ErrGettingBuildDir.Wrap(err)
-	}
 
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
 		ImageName:    b.imageName,

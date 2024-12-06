@@ -627,21 +627,6 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 		// ImagePullSecrets:   spec.ImagePullSecrets,
 	}
 
-	// TODO: FIXME Remove this
-	if strings.HasPrefix(spec.Name, "registry-build-from-git") {
-		if exists, err := c.ConfigMapExists(context.Background(), "ttlsh-registry-certs"); err == nil && exists {
-			podSpec.Volumes = append(podSpec.Volumes, v1.Volume{
-				Name: "cert-volume",
-				VolumeSource: v1.VolumeSource{
-					ConfigMap: &v1.ConfigMapVolumeSource{
-						LocalObjectReference: v1.LocalObjectReference{Name: "ttlsh-registry-certs"},
-						DefaultMode:          ptr.To[int32](defaultFileModeForVolume),
-					},
-				},
-			})
-		}
-	}
-
 	// Prepare sidecar containers and append to the pod spec
 	for _, sidecarConfig := range spec.SidecarConfigs {
 		sidecarInitContainer := c.prepareInitContainers(sidecarConfig, true)
