@@ -322,7 +322,7 @@ func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
 
 	// get the permission of the src file
 	permission := fmt.Sprintf("%o", srcInfo.Mode().Perm())
-  
+
 	size := int64(0)
 	for _, file := range s.files {
 		srcInfo, err := os.Stat(file.Source)
@@ -331,19 +331,13 @@ func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
 		}
 		size += srcInfo.Size()
 	}
-	srcInfo, err = os.Stat(dstPath)
+	srcInfo, err = os.Stat(srcPath)
 	if err != nil {
 		return ErrFailedToGetFileSize.Wrap(err)
 	}
 	size += srcInfo.Size()
 	if size > maxTotalFilesBytes {
-		return ErrTotalFilesSizeTooLarge.WithParams(dstPath)
-	}
-
-	file := s.instance.K8sClient.NewFile(dstPath, dest)
-	parts := strings.Split(chown, ":")
-	if len(parts) != 2 {
-		return ErrInvalidFormat
+		return ErrTotalFilesSizeTooLarge.WithParams(srcPath)
 	}
 
 	file := s.instance.K8sClient.NewFile(srcPath, dest, chown, permission)
