@@ -16,6 +16,8 @@ import (
 	"github.com/celestiaorg/knuu/pkg/names"
 )
 
+const maxTotalFilesBytes = 1024 * 1024
+
 type storage struct {
 	instance *Instance
 	volumes  []*k8s.Volume
@@ -55,7 +57,7 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		if err != nil {
 			return ErrFailedToGetFileSize.Wrap(err)
 		}
-		if srcInfo.Size() > 1024*1024 {
+		if srcInfo.Size() > maxTotalFilesBytes {
 			return ErrFileTooLargeCommitted.WithParams(src)
 		}
 		return s.addFileToInstance(dstPath, dest, chown)
@@ -294,7 +296,7 @@ func (s *storage) addFileToInstance(dstPath, dest, chown string) error {
 		return ErrFailedToGetFileSize.Wrap(err)
 	}
 	size += srcInfo.Size()
-	if size > 1024*1024 {
+	if size > maxTotalFilesBytes {
 		return ErrTotalFilesSizeTooLarge.WithParams(dstPath)
 	}
 
