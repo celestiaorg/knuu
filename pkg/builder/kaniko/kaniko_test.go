@@ -38,16 +38,11 @@ func TestKanikoBuilder(t *testing.T) {
 
 	t.Run("BuildSuccess", func(t *testing.T) {
 		blCtx := "git://github.com/mojtaba-esk/sample-docker"
-		cacheOpts := &builder.CacheOptions{}
-		cacheOpts, err := cacheOpts.Default(blCtx)
-		require.NoError(t, err, "GetDefaultCacheOptions should succeed")
-
-		buildOptions := &builder.BuilderOptions{
+		buildOptions := builder.BuilderOptions{
 			ImageName:    testImage,
 			BuildContext: blCtx,
-			Destination:  testDestination,
 			Args:         []builder.ArgInterface{&builder.BuildArg{Value: "SOME_ARG=some_value"}},
-			Cache:        cacheOpts,
+			Cache:        kb.CacheOptions(),
 		}
 
 		var (
@@ -71,10 +66,9 @@ func TestKanikoBuilder(t *testing.T) {
 	})
 
 	t.Run("BuildWithContextCancellation", func(t *testing.T) {
-		buildOptions := &builder.BuilderOptions{
+		buildOptions := builder.BuilderOptions{
 			ImageName:    testImage,
 			BuildContext: "git://example.com/repo",
-			Destination:  testDestination,
 		}
 
 		// Cancel the context to simulate cancellation during the build
@@ -124,34 +118,5 @@ func createPodFromJob(job *batchv1.Job) *v1.Pod {
 				},
 			},
 		},
-	}
-}
-
-func TestGetDefaultCacheOptions(t *testing.T) {
-	t.Parallel()
-
-	tt := []struct {
-		buildContext  string
-		expectedRepo  string
-		expectedError bool
-	}{
-		{"git://example.com/repo", "ttl.sh/fd46c51aa5aff87d0f8a329fc578ffcb3b43f8db8aff920d0d01429e15eb9850:24h", false},
-		{"", "", true},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.buildContext, func(t *testing.T) {
-			cacheOptions := &builder.CacheOptions{}
-			cacheOptions, err := cacheOptions.Default(tc.buildContext)
-
-			if tc.expectedError {
-				assert.Error(t, err, "Expected an error, but got none")
-				assert.Nil(t, cacheOptions, "Cache options should be nil on error")
-			} else {
-				assert.NoError(t, err, "Unexpected error")
-				assert.NotNil(t, cacheOptions, "Cache options should not be nil")
-				assert.Equal(t, tc.expectedRepo, cacheOptions.Repo, "Unexpected cache repo value")
-			}
-		})
 	}
 }

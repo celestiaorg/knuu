@@ -22,6 +22,9 @@ const (
 	kanikoContainerName = "kaniko-container"
 	kanikoJobNamePrefix = "kaniko-build-job"
 
+	kanikoRegistryCertsVolName   = "registry-certs"
+	kanikoRegistryCertsMountPath = "/kaniko/certs/"
+
 	DefaultParallelism  = int32(1)
 	DefaultBackoffLimit = int32(5)
 
@@ -31,12 +34,28 @@ const (
 
 type Kaniko struct {
 	*system.SystemDependencies
+	Registry *RegistryOptions
+}
+
+// RegistryOptions contains the options for the registry
+type RegistryOptions struct {
+	Address    string
+	Cert       []byte
+	SecretName string
 }
 
 var _ builder.Builder = &Kaniko{}
 
-func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs string, err error) {
-	job, err := k.prepareJob(ctx, b)
+func (k *Kaniko) Build(ctx context.Context, b builder.BuilderOptions) (logs string, err error) {
+	if b.ImageName == "" {
+		image, err := k.ResolveImageName(b.BuildContext)
+		if err != nil {
+			return "", err
+		}
+		b.ImageName = image.ToString()
+	}
+
+	job, err := k.prepareJob(ctx, &b)
 	if err != nil {
 		return "", ErrPreparingJob.Wrap(err)
 	}
@@ -66,6 +85,40 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 	}
 
 	return logs, nil
+}
+
+func (k *Kaniko) CacheOptions() *builder.CacheOptions {
+	if k.Registry == nil {
+		return builder.DefaultCacheOptions()
+	}
+
+	return &builder.CacheOptions{
+		Enabled: true,
+		Repo:    builder.ImageWithRegistry(builder.DefaultCacheRepoName, k.Registry.Address),
+	}
+}
+
+func (k *Kaniko) ResolveImageName(buildContext string) (*builder.ResolvedImage, error) {
+	imageName, err := builder.DefaultImageName(buildContext)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		registry = builder.DefaultRegistryAddress
+		tag      = builder.DefaultImageTTL
+	)
+
+	if k.Registry != nil {
+		registry = k.Registry.Address
+		tag = builder.DefaultImageTag // Use default tag instead of TTL if custom registry
+	}
+
+	return &builder.ResolvedImage{
+		Name:     imageName,
+		Registry: registry,
+		Tag:      tag,
+	}, nil
 }
 
 func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
@@ -160,14 +213,30 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 						{
 							Name:  kanikoContainerName,
 							Image: kanikoImage, // debug has a shell
-							Args:  prepareArgs(b),
+							Args:  k.prepareArgs(b),
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceEphemeralStorage: ephemeralStorage,
 								},
 							},
+							// VolumeMounts: []v1.VolumeMount{
+							// 	{
+							// 		Name:      kanikoRegistryCertsVolName,
+							// 		MountPath: kanikoRegistryCertsMountPath,
+							// 	},
+							// },
 						},
 					},
+					// Volumes: []v1.Volume{
+					// 	{
+					// 		Name: kanikoRegistryCertsVolName,
+					// 		VolumeSource: v1.VolumeSource{
+					// 			Secret: &v1.SecretVolumeSource{
+					// 				SecretName: k.Registry.SecretName,
+					// 			},
+					// 		},
+					// 	},
+					// },
 					RestartPolicy: "Never", // Ensure that the Pod does not restart
 				},
 			},
@@ -252,18 +321,13 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	return job, nil
 }
 
-func prepareArgs(b *builder.BuilderOptions) []string {
+func (k *Kaniko) prepareArgs(b *builder.BuilderOptions) []string {
 	args := []string{
 		"--context=" + b.BuildContext,
-		// TODO: see if we need it or not
-		// --git gitoptions    Branch to clone if build context is a git repository (default branch=,single-branch=false,recurse-submodules=false)
-
-		// TODO: we might need to add some options to get the auth token for the registry
-		"--destination=" + b.Destination,
-		// "--verbosity=debug", // log level
+		"--destination=" + b.ImageName,
+		"--skip-tls-verify", // Skip TLS verification for all registries
 	}
 
-	// TODO: we need to add some configs to get the auth token for the cache repo
 	if b.Cache != nil && b.Cache.Enabled {
 		args = append(args, "--cache=true")
 		if b.Cache.Dir != "" {

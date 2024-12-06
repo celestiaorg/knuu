@@ -54,14 +54,15 @@ type ContainerConfig struct {
 }
 
 type PodConfig struct {
-	Namespace          string            // Kubernetes namespace of the Pod
-	Name               string            // Name to assign to the Pod
-	Labels             map[string]string // Labels to apply to the Pod
-	ServiceAccountName string            // ServiceAccount to assign to Pod
-	FsGroup            int64             // FSGroup to apply to the Pod
-	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
-	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
-	Annotations        map[string]string // Annotations to apply to the Pod
+	Namespace          string                    // Kubernetes namespace of the Pod
+	Name               string                    // Name to assign to the Pod
+	Labels             map[string]string         // Labels to apply to the Pod
+	ServiceAccountName string                    // ServiceAccount to assign to Pod
+	FsGroup            int64                     // FSGroup to apply to the Pod
+	ContainerConfig    ContainerConfig           // ContainerConfig for the Pod
+	SidecarConfigs     []ContainerConfig         // SideCarConfigs for the Pod
+	Annotations        map[string]string         // Annotations to apply to the Pod
+	ImagePullSecrets   []v1.LocalObjectReference // Image pull secrets for the container
 }
 
 type Volume struct {
@@ -541,6 +542,27 @@ func prepareContainer(config ContainerConfig) v1.Container {
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
 func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
+	if strings.HasPrefix(config.Name, "registry-build-from-git") {
+		if exists, err := c.ConfigMapExists(context.Background(), "ttlsh-registry-certs"); err == nil && exists {
+			return []v1.Container{
+				{
+					Name:  "init-container",
+					Image: "debian:bullseye-slim",
+					// SecurityContext: &v1.SecurityContext{
+					// 	RunAsUser: ptr.To[int64](defaultContainerUser),
+					// },
+					Command: []string{"sh", "-c", "apt-get update && apt-get install -y ca-certificates && cp /certs/cert.pem /usr/local/share/ca-certificates/registry-cert.crt && update-ca-certificates"},
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "cert-volume",
+							MountPath: "/certs",
+						},
+					},
+				},
+			}
+		}
+	}
+
 	if !init || len(config.Volumes) == 0 {
 		return nil
 	}
@@ -570,6 +592,22 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
 		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
+		// ImagePullSecrets:   spec.ImagePullSecrets,
+	}
+
+	// TODO: FIXME Remove this
+	if strings.HasPrefix(spec.Name, "registry-build-from-git") {
+		if exists, err := c.ConfigMapExists(context.Background(), "ttlsh-registry-certs"); err == nil && exists {
+			podSpec.Volumes = append(podSpec.Volumes, v1.Volume{
+				Name: "cert-volume",
+				VolumeSource: v1.VolumeSource{
+					ConfigMap: &v1.ConfigMapVolumeSource{
+						LocalObjectReference: v1.LocalObjectReference{Name: "ttlsh-registry-certs"},
+						DefaultMode:          ptr.To[int32](defaultFileModeForVolume),
+					},
+				},
+			})
+		}
 	}
 
 	// Prepare sidecar containers and append to the pod spec

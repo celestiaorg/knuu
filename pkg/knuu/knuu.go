@@ -16,6 +16,7 @@ import (
 
 	"github.com/celestiaorg/knuu/pkg/builder"
 	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
+	"github.com/celestiaorg/knuu/pkg/builder/registry"
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/log"
@@ -39,19 +40,21 @@ const (
 
 type Knuu struct {
 	*system.SystemDependencies
-	stopMu        sync.Mutex
-	clusterDomain string
+	stopMu               sync.Mutex
+	clusterDomain        string
+	localRegistryEnabled bool
 }
 
 type Options struct {
-	K8sClient     k8s.KubeManager
-	MinioClient   *minio.Minio
-	ImageBuilder  builder.Builder
-	Scope         string
-	ProxyEnabled  bool
-	Timeout       time.Duration
-	Logger        *logrus.Logger
-	ClusterDomain string // optional, if not set, "cluster.local" will be used
+	K8sClient            k8s.KubeManager
+	MinioClient          *minio.Minio
+	ImageBuilder         builder.Builder
+	Scope                string
+	ProxyEnabled         bool
+	LocalRegistryEnabled bool // if true, a local registry will be deployed and docker images will be pushed to it
+	Timeout              time.Duration
+	Logger               *logrus.Logger
+	ClusterDomain        string // optional, if not set, "cluster.local" will be used
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
@@ -68,7 +71,8 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			Scope:        opts.Scope,
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
-		clusterDomain: opts.ClusterDomain,
+		clusterDomain:        opts.ClusterDomain,
+		localRegistryEnabled: opts.LocalRegistryEnabled,
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
@@ -171,6 +175,49 @@ func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeout
 	return nil
 }
 
+func (k *Knuu) setupDefaultImageBuilder(ctx context.Context) error {
+	if k.ImageBuilder != nil {
+		return nil
+	}
+
+	if !k.localRegistryEnabled {
+		k.ImageBuilder = &kaniko.Kaniko{
+			SystemDependencies: k.SystemDependencies,
+		}
+		return nil
+	}
+
+	rgIns, err := k.NewInstance(registry.TtlShInstanceName)
+	if err != nil {
+		return ErrCannotCreateLocalRegistry.Wrap(err)
+	}
+	rg, err := registry.NewTtlSh(ctx, rgIns, registry.TtlShOptions{})
+	if err != nil {
+		return ErrCannotCreateLocalRegistry.Wrap(err)
+	}
+
+	_, err = k.K8sClient.CreateConfigMap(ctx,
+		"ttlsh-registry-certs",
+		nil,
+		map[string]string{
+			"cert.pem": string(rg.Cert()),
+		})
+	if err != nil {
+		return err
+	}
+
+	k.ImageBuilder = &kaniko.Kaniko{
+		SystemDependencies: k.SystemDependencies,
+		Registry: &kaniko.RegistryOptions{
+			Address:    rg.GetAddress(),
+			Cert:       rg.Cert(),
+			SecretName: registry.TtlShSecretName,
+		},
+	}
+
+	return nil
+}
+
 func DefaultScope() string {
 	t := time.Now()
 	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
@@ -217,10 +264,8 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		}
 	}
 
-	if k.ImageBuilder == nil {
-		k.ImageBuilder = &kaniko.Kaniko{
-			SystemDependencies: k.SystemDependencies,
-		}
+	if err := k.setupDefaultImageBuilder(ctx); err != nil {
+		return err
 	}
 
 	return nil

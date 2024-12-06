@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/sirupsen/logrus"
 )
@@ -414,6 +415,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		FsGroup:            e.instance.storage.fsGroup,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
+		ImagePullSecrets:   []v1.LocalObjectReference{{Name: "registry-cert-secret"}},
 	}
 
 	return k8s.ReplicaSetConfig{

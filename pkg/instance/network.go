@@ -16,6 +16,7 @@ type network struct {
 	portsTCP          []int
 	portsUDP          []int
 	kubernetesService *v1.Service
+	notHeadless       bool
 }
 
 func (i *Instance) Network() *network {
@@ -145,6 +146,10 @@ func (n *network) HostName() string {
 	return n.instance.K8sClient.ServiceDNS(n.instance.name)
 }
 
+func (n *network) SetHeadless(headless bool) {
+	n.notHeadless = !headless
+}
+
 // deployService deploys the service for the instance
 func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) error {
 	// a sidecar instance should use the parent instance's service
@@ -162,6 +167,7 @@ func (n *network) deployService(ctx context.Context, portsTCP, portsUDP []int) e
 		SelectorMap: labels,
 		TCPPorts:    portsTCP,
 		UDPPorts:    portsUDP,
+		NotHeadless: n.notHeadless,
 	})
 	if err != nil {
 		return ErrDeployingService.WithParams(n.instance.name).Wrap(err)
@@ -191,6 +197,7 @@ func (n *network) patchService(ctx context.Context, portsTCP, portsUDP []int) er
 		SelectorMap: labels,
 		TCPPorts:    portsTCP,
 		UDPPorts:    portsUDP,
+		NotHeadless: n.notHeadless,
 	})
 	if err != nil {
 		return ErrPatchingService.WithParams(serviceName).Wrap(err)
