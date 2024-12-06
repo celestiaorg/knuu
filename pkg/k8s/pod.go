@@ -452,12 +452,14 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 	}
 
 	var containerVolumes []v1.VolumeMount
+	// if the user want do add volumes, we need to mount the knuu path
 	if len(volumes) != 0 {
 		containerVolumes = append(containerVolumes, v1.VolumeMount{
 			Name:      name,
 			MountPath: knuuPath,
 		})
 	}
+	// if the user don't want to add volumes, but want to add files, we need to mount the knuu path for the init container
 	if len(volumes) == 0 && len(files) != 0 {
 		uniquePaths := make(map[string]bool)
 		for _, file := range files {
