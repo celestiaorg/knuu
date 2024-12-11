@@ -171,15 +171,13 @@ func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeout
 	return nil
 }
 
-func (k *Knuu) setupDefaultImageBuilder() error {
+func (k *Knuu) setupDefaultImageBuilder() (err error) {
 	if k.ImageBuilder != nil {
 		return nil
 	}
 
-	k.ImageBuilder = &kaniko.Kaniko{
-		SystemDependencies: k.SystemDependencies,
-	}
-	return nil
+	k.ImageBuilder, err = kaniko.New(k.SystemDependencies, nil)
+	return err
 }
 
 func DefaultScope() string {
