@@ -9,9 +9,12 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/celestiaorg/knuu/e2e"
+	"github.com/celestiaorg/knuu/pkg/builder/kaniko"
+	"github.com/celestiaorg/knuu/pkg/builder/registry"
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 	"github.com/celestiaorg/knuu/pkg/minio"
+	"github.com/celestiaorg/knuu/pkg/system"
 )
 
 const (
@@ -33,19 +36,33 @@ func (s *Suite) SetupSuite() {
 		logger = logrus.New()
 	)
 
-	logger.SetLevel(logrus.DebugLevel)
-
 	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
 	s.Require().NoError(err, "Error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient, logger)
 	s.Require().NoError(err, "Error creating minio client")
 
+	// registry, err := registry.NewScaleway("fr-par", "test-moji", "username", "password")
+	// s.Require().NoError(err)
+
+	registry := registry.Registry(nil)
+
+	imageBuilder, err := kaniko.New(
+		&system.SystemDependencies{
+			K8sClient:   k8sClient,
+			MinioClient: minioClient,
+			Logger:      logger,
+		},
+		registry,
+	)
+	s.Require().NoError(err)
+
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		LocalRegistryEnabled: true,
-		K8sClient:            k8sClient,
-		MinioClient:          minioClient, // needed for build from git tests
-		Timeout:              testTimeout,
+		K8sClient:    k8sClient,
+		MinioClient:  minioClient, // needed for build from git tests
+		Timeout:      testTimeout,
+		ImageBuilder: imageBuilder,
+		Logger:       logger,
 	})
 	s.Require().NoError(err)
 

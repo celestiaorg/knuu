@@ -31,4 +31,8 @@ var (
 	ErrDeletingMinioContent             = errors.New("DeletingMinioContent", "error deleting Minio content")
 	ErrParsingQuantity                  = errors.New("ParsingQuantity", "error parsing quantity")
 	ErrMinioFailedToGetDeployment       = errors.New("MinioFailedToGetDeployment", "Minio failed to get deployment")
+	ErrSystemDependenciesRequired       = errors.New("SystemDependenciesRequired", "system dependencies are required")
+	ErrK8sClientRequired                = errors.New("K8sClientRequired", "K8s client is required")
+	ErrMinioClientRequired              = errors.New("MinioClientRequired", "Minio client is required")
+	ErrSettingUpRegistryConfig          = errors.New("SettingUpRegistryConfig", "error setting up registry config")
 )

@@ -12,14 +12,35 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/builder/registry"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 type Docker struct {
 	K8sClientset kubernetes.Interface
 	K8sNamespace string
+	// currently works only with the default registry (ttl.sh)
+	// No need to implement other registries, as this pkg (docker builder) is going to be deprecated
+	registry registry.Registry
 }
 
 var _ builder.Builder = &Docker{}
+
+func New(k8sClient k8s.KubeManager, reg registry.Registry) (*Docker, error) {
+	if reg == nil {
+		reg = registry.NewDefault()
+	}
+
+	if k8sClient == nil {
+		return nil, ErrK8sClientRequired
+	}
+
+	return &Docker{
+		K8sClientset: k8sClient.Clientset(),
+		K8sNamespace: k8sClient.Namespace(),
+		registry:     reg,
+	}, nil
+}
 
 func (d *Docker) Build(_ context.Context, b builder.BuilderOptions) (logs string, err error) {
 	if builder.IsGitContext(b.BuildContext) {
@@ -74,19 +95,19 @@ func (d *Docker) Build(_ context.Context, b builder.BuilderOptions) (logs string
 }
 
 func (d *Docker) CacheOptions() *builder.CacheOptions {
-	return builder.DefaultCacheOptions()
+	return &builder.CacheOptions{
+		Enabled: true,
+		Dir:     "",
+		Repo:    d.registry.ResolvedImage(builder.DefaultCacheRepoName, "").ToString(),
+	}
 }
 
-func (d *Docker) ResolveImageName(buildContext string) (*builder.ResolvedImage, error) {
+func (d *Docker) DefaultImage(buildContext string) (*registry.ResolvedImage, error) {
 	imageName, err := builder.DefaultImageName(buildContext)
 	if err != nil {
 		return nil, err
 	}
-	return &builder.ResolvedImage{
-		Name:     imageName,
-		Registry: builder.DefaultRegistryAddress,
-		Tag:      builder.DefaultImageTTL,
-	}, nil
+	return d.registry.ResolvedImage(imageName, builder.DefaultImageTTL), nil
 }
 
 func runCommand(cmd *exec.Cmd) (logs string, err error) {

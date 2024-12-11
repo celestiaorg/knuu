@@ -87,7 +87,7 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 		return ErrGettingBuildContext.Wrap(err)
 	}
 
-	resolvedImage, err := b.instance.ImageBuilder.ResolveImageName(bCtx)
+	resolvedImage, err := b.instance.ImageBuilder.DefaultImage(bCtx)
 	if err != nil {
 		return err
 	}

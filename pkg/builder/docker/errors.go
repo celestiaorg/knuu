@@ -14,4 +14,5 @@ var (
 	ErrFailedToPushImage          = errors.New("FailedToPushImage", "failed to push image")
 	ErrFailedToRemoveContextDir   = errors.New("FailedToRemoveContextDir", "failed to remove context directory")
 	ErrGitContextNotSupported     = errors.New("GitContextNotSupported", "git context is not supported in the docker builder")
+	ErrK8sClientRequired          = errors.New("K8sClientRequired", "K8s client is required")
 )
