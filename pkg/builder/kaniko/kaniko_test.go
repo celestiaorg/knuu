@@ -29,11 +29,13 @@ func TestKanikoBuilder(t *testing.T) {
 	k8sCS := fake.NewSimpleClientset()
 	k8sClient, err := k8s.NewClientCustom(context.Background(), k8sCS, k8sCS.Discovery(), nil, k8sNamespace, logrus.New())
 	require.NoError(t, err)
-	kb := &Kaniko{
-		SystemDependencies: &system.SystemDependencies{
+	kb, err := New(
+		&system.SystemDependencies{
 			K8sClient: k8sClient,
 		},
-	}
+		nil,
+	)
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	t.Run("BuildSuccess", func(t *testing.T) {

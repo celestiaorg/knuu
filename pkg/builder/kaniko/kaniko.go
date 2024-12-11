@@ -41,7 +41,7 @@ type Kaniko struct {
 
 var _ builder.Builder = &Kaniko{}
 
-// sysDeps.K8sClient and sysDeps.MinioClient are required
+// sysDeps.K8sClient is required and sysDeps.MinioClient is required if building from dir
 // if reg is nil, it will use the default registry (ttl.sh)
 func New(sysDeps *system.SystemDependencies, reg registry.Registry) (*Kaniko, error) {
 	if reg == nil {
@@ -54,10 +54,6 @@ func New(sysDeps *system.SystemDependencies, reg registry.Registry) (*Kaniko, er
 
 	if sysDeps.K8sClient == nil {
 		return nil, ErrK8sClientRequired
-	}
-
-	if sysDeps.MinioClient == nil {
-		return nil, ErrMinioClientRequired
 	}
 
 	return &Kaniko{
@@ -257,6 +253,10 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 // As kaniko also supports directly tar.gz archives, no need to extract it,
 // we just need to set the context to tar://<path-to-archive>
 func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
+	if k.MinioClient == nil {
+		return nil, ErrMinioClientRequired
+	}
+
 	// Create the tar.gz archive
 	archiveData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
 	if err != nil {
