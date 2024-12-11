@@ -54,14 +54,15 @@ type ContainerConfig struct {
 }
 
 type PodConfig struct {
-	Namespace          string            // Kubernetes namespace of the Pod
-	Name               string            // Name to assign to the Pod
-	Labels             map[string]string // Labels to apply to the Pod
-	ServiceAccountName string            // ServiceAccount to assign to Pod
-	FsGroup            int64             // FSGroup to apply to the Pod
-	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
-	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
-	Annotations        map[string]string // Annotations to apply to the Pod
+	Namespace          string                    // Kubernetes namespace of the Pod
+	Name               string                    // Name to assign to the Pod
+	Labels             map[string]string         // Labels to apply to the Pod
+	ServiceAccountName string                    // ServiceAccount to assign to Pod
+	FsGroup            int64                     // FSGroup to apply to the Pod
+	ContainerConfig    ContainerConfig           // ContainerConfig for the Pod
+	SidecarConfigs     []ContainerConfig         // SideCarConfigs for the Pod
+	Annotations        map[string]string         // Annotations to apply to the Pod
+	ImagePullSecrets   []v1.LocalObjectReference // Image pull secrets for the container
 }
 
 type Volume struct {
@@ -623,6 +624,7 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
 		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
+		// ImagePullSecrets:   spec.ImagePullSecrets,
 	}
 
 	// Prepare sidecar containers and append to the pod spec
