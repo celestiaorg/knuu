@@ -417,6 +417,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		ServiceAccountName: e.instance.name,
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
+		NodeSelector:       e.instance.build.nodeSelector,
 	}
 
 	return k8s.ReplicaSetConfig{

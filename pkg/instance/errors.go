@@ -114,6 +114,7 @@ var (
 	ErrSrcDoesNotExistOrIsNotDirectory           = errors.New("SrcDoesNotExistOrIsNotDirectory", "src '%s' does not exist or is not a directory")
 	ErrCopyingFolderToInstance                   = errors.New("CopyingFolderToInstance", "error copying folder '%s' to instance '%s")
 	ErrSettingUserNotAllowed                     = errors.New("SettingUserNotAllowed", "setting user is only allowed in state 'Preparing'. Current state is '%s")
+	ErrSettingNodeSelectorNotAllowed             = errors.New("SettingNodeSelectorNotAllowed", "setting node selector is only allowed in state 'Preparing'. Current state is '%s")
 	ErrSettingUser                               = errors.New("SettingUser", "error setting user '%s' for instance '%s")
 	ErrCommittingNotAllowed                      = errors.New("CommittingNotAllowed", "committing is only allowed in state 'Preparing'. Current state is '%s")
 	ErrGettingImageRegistry                      = errors.New("GettingImageRegistry", "error getting image registry")
