@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,7 +18,6 @@ import (
 	"github.com/celestiaorg/knuu/pkg/builder/registry"
 	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
-	"github.com/sirupsen/logrus"
 )
 
 const (
