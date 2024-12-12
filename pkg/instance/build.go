@@ -244,7 +244,8 @@ func (b *build) getBuildDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(tmpDir, b.instance.name), nil
+	b.buildDir = filepath.Join(tmpDir, b.instance.name)
+	return b.buildDir, nil
 }
 
 // addFileToBuilder adds a file to the builder
