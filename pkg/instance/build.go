@@ -30,6 +30,7 @@ type build struct {
 	env             map[string]string
 	imageCache      *sync.Map
 	buildDir        string
+	nodeSelector    map[string]string
 }
 
 func (i *Instance) Build() *build {
@@ -212,6 +213,15 @@ func (b *build) buildInitImage(ctx context.Context) error {
 
 	b.initImageName = imageName
 	return factory.PushBuilderImage(ctx, imageName)
+}
+
+func (b *build) SetNodeSelector(nodeSelector map[string]string) error {
+	if !b.instance.IsInState(StatePreparing, StateCommitted) {
+		return ErrSettingNodeSelectorNotAllowed.WithParams(b.instance.state.String())
+	}
+
+	b.nodeSelector = nodeSelector
+	return nil
 }
 
 // Commit commits the instance
