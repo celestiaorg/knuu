@@ -231,4 +231,6 @@ var (
 	ErrFailedToGetFileSize                       = errors.New("FailedToGetFileSize", "failed to get file size")
 	ErrFileTooLargeCommitted                     = errors.New("FileTooLargeCommitted", "file '%s' is too large (max 1MiB) to add after instance is committed")
 	ErrTotalFilesSizeTooLarge                    = errors.New("TotalFilesSizeTooLarge", "total files size is too large (max 1MiB)")
+	ErrFileAlreadyExistsInTheVolumePath          = errors.New("FileAlreadyExistsInTheVolumePath", "file %s already exists in the volume path %s")
+	ErrBuildingInitImageNotAllowed               = errors.New("BuildingInitImageNotAllowed", "building init image is only allowed in state 'Preparing'. Current state is '%s'")
 )

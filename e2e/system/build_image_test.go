@@ -19,7 +19,6 @@ func (s *Suite) TestBuildFromGit() {
 	// Setup
 	ctx := context.Background()
 
-	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
 	s.Require().NoError(err, "Error creating new instance")
 
@@ -61,7 +60,6 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 	// Setup
 	ctx := context.Background()
 
-	s.T().Log("Creating new instance")
 	target, err := s.Knuu.NewInstance(namePrefix)
 	s.Require().NoError(err)
 
@@ -79,7 +77,7 @@ func (s *Suite) TestBuildFromGitWithModifications() {
 		expectedData = "Hello, world!"
 	)
 
-	err = target.Storage().AddFileBytes([]byte(expectedData), filePath, "root:root")
+	err = target.Storage().AddFileBytes([]byte(expectedData), filePath, "0:0")
 	s.Require().NoError(err)
 
 	s.Require().NoError(target.Build().Commit(ctx))

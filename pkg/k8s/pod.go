@@ -36,6 +36,7 @@ const (
 type ContainerConfig struct {
 	Name            string              // Name to assign to the Container
 	Image           string              // Name of the container image to use for the container
+	InitImageName   string              // InitImageName to use for the Pod
 	ImagePullPolicy v1.PullPolicy       // Image pull policy for the container
 	Command         []string            // Command to run in the container
 	Args            []string            // Arguments to pass to the command in the container
@@ -64,19 +65,6 @@ type PodConfig struct {
 	Annotations        map[string]string // Annotations to apply to the Pod
 }
 
-type Volume struct {
-	Path  string
-	Size  resource.Quantity
-	Owner int64
-}
-
-type File struct {
-	Source     string
-	Dest       string
-	Chown      string
-	Permission string
-}
-
 // DeployPod creates a new pod in the namespace that k8s client is initiate with if it doesn't already exist.
 func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) (*v1.Pod, error) {
 	if c.terminated {
@@ -93,23 +81,6 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	}
 
 	return createdPod, nil
-}
-
-func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {
-	return &Volume{
-		Path:  path,
-		Size:  size,
-		Owner: owner,
-	}
-}
-
-func (c *Client) NewFile(source, dest, chown, permission string) *File {
-	return &File{
-		Source:     source,
-		Dest:       dest,
-		Chown:      chown,
-		Permission: permission,
-	}
 }
 
 func (c *Client) ReplacePodWithGracePeriod(ctx context.Context, podConfig PodConfig, gracePeriod *int64) (*v1.Pod, error) {
@@ -595,14 +566,16 @@ func prepareContainer(config ContainerConfig) v1.Container {
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
 func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
-	if !init || (len(config.Volumes) == 0 && len(config.Files) == 0) {
+	if !init ||
+		(len(config.Volumes) == 0 && len(config.Files) == 0) ||
+		config.InitImageName == "" {
 		return nil
 	}
 
 	return []v1.Container{
 		{
 			Name:  config.Name + initContainerNameSuffix,
-			Image: initContainerImage,
+			Image: config.InitImageName,
 			SecurityContext: &v1.SecurityContext{
 				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
