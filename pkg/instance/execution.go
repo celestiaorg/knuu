@@ -419,6 +419,7 @@ func (e *execution) prepareReplicaSetConfig() k8s.ReplicaSetConfig {
 		ContainerConfig:    containerConfig,
 		SidecarConfigs:     sidecarConfigs,
 		ImagePullSecrets:   []v1.LocalObjectReference{{Name: "registry-cert-secret"}},
+		NodeSelector:       e.instance.build.nodeSelector,
 	}
 
 	return k8s.ReplicaSetConfig{

@@ -109,6 +109,8 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 			k.Logger.Errorf("Error cleaning up resources with timeout handler: %v", err)
 		}
 		k.K8sClient.Terminate()
+		// Allow other signal handlers to run
+		signal.Reset(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		os.Exit(ExitCodeSIGINT)
 	}()
 }

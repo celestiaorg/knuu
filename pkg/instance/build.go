@@ -25,6 +25,7 @@ type build struct {
 	env             map[string]string
 	imageCache      *sync.Map
 	buildDir        string
+	nodeSelector    map[string]string
 }
 
 func (i *Instance) Build() *build {
@@ -157,6 +158,15 @@ func (b *build) SetUser(user string) error {
 		"instance": b.instance.name,
 		"user":     user,
 	}).Debugf("Set user for instance")
+	return nil
+}
+
+func (b *build) SetNodeSelector(nodeSelector map[string]string) error {
+	if !b.instance.IsInState(StatePreparing, StateCommitted) {
+		return ErrSettingNodeSelectorNotAllowed.WithParams(b.instance.state.String())
+	}
+
+	b.nodeSelector = nodeSelector
 	return nil
 }
 
