@@ -112,9 +112,8 @@ func (f *BuilderFactory) PushBuilderImage(ctx context.Context, imageName string)
 		return ErrImageBuilderNotSet
 	}
 
-	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
+	logs, err := f.imageBuilder.Build(ctx, builder.BuilderOptions{
 		ImageName:    f.imageNameTo,
-		Destination:  f.imageNameTo, // in docker the image name and destination are the same
 		BuildContext: builder.DirContext{Path: f.buildContext}.BuildContext(),
 		Args:         f.args,
 	})
@@ -133,23 +132,16 @@ func (f *BuilderFactory) BuildImageFromGitRepo(ctx context.Context, gitCtx build
 
 	f.imageNameTo = imageName
 
-	cOpts := &builder.CacheOptions{}
-	cOpts, err = cOpts.Default(buildCtx)
-	if err != nil {
-		return ErrFailedToGetDefaultCacheOptions.Wrap(err)
-	}
-
 	f.logger.Debugf("Building image %s from git repo %s", imageName, gitCtx.Repo)
 
 	if f.imageBuilder == nil {
 		return ErrImageBuilderNotSet
 	}
 
-	logs, err := f.imageBuilder.Build(ctx, &builder.BuilderOptions{
+	logs, err := f.imageBuilder.Build(ctx, builder.BuilderOptions{
 		ImageName:    imageName,
-		Destination:  imageName,
 		BuildContext: buildCtx,
-		Cache:        cOpts,
+		Cache:        f.imageBuilder.CacheOptions(),
 		Args:         f.args,
 	})
 
