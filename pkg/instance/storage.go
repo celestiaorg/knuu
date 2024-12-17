@@ -382,9 +382,10 @@ func (s *storage) destroyVolume(ctx context.Context) error {
 
 // deployFiles deploys the files for the instance
 func (s *storage) deployFiles(ctx context.Context) error {
-	data := map[string]string{}
+	// key: dirPath, value: (configmap data) map[string]string{key: fileName, value: fileContent}
+	dirs := map[string]map[string]string{}
 
-	for i, file := range s.files {
+	for _, file := range s.files {
 		// read out file content and assign to variable
 		srcFile, err := os.Open(file.Source)
 		if err != nil {
@@ -399,20 +400,26 @@ func (s *storage) deployFiles(ctx context.Context) error {
 
 		var (
 			fileContent = string(fileContentBytes)
-			keyName     = fmt.Sprintf("%d", i)
+			keyName     = filepath.Base(file.Dest)
 		)
 
-		data[keyName] = fileContent
+		if _, ok := dirs[filepath.Dir(file.Dest)]; !ok {
+			dirs[filepath.Dir(file.Dest)] = make(map[string]string)
+		}
+		dirs[filepath.Dir(file.Dest)][keyName] = fileContent
 	}
 
-	// If the configmap already exists, we update it
-	// This ensures long-running tests and image upgrade tests function correctly.
-	_, err := s.instance.K8sClient.CreateOrUpdateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
-	if err != nil {
-		return ErrFailedToCreateConfigMap.Wrap(err)
-	}
+	for dirPath, data := range dirs {
+		// If the configmap already exists, we update it
+		// This ensures long-running tests and image upgrade tests function correctly.
+		cmName := k8s.PrepareConfigMapName(s.instance.name, dirPath)
+		_, err := s.instance.K8sClient.CreateOrUpdateConfigMap(ctx, cmName, s.instance.execution.Labels(), data)
+		if err != nil {
+			return ErrFailedToCreateConfigMap.Wrap(err)
+		}
 
-	s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
+		s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
+	}
 	return nil
 }
 

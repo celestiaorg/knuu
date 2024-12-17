@@ -1,6 +1,8 @@
 package names
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -13,4 +15,9 @@ func NewRandomK8(prefix string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s-%s", prefix, uuid.String()[:8]), nil
+}
+
+func HashWithLength(input string, length int) string {
+	hash := sha1.Sum([]byte(input))
+	return hex.EncodeToString(hash[:])[:length]
 }

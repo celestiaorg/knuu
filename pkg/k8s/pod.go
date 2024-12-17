@@ -341,10 +341,10 @@ func buildEnv(envMap map[string]string) []v1.EnvVar {
 
 // buildPodVolumes generates a volume configuration for a pod based on the given name.
 // If the volumes amount is zero, returns an empty slice.
-func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
+func buildPodVolumes(name string, volumes []*Volume, files []*File) []v1.Volume {
 	var podVolumes []v1.Volume
 
-	if volumesAmount != 0 {
+	if len(volumes) != 0 {
 		podVolume := v1.Volume{
 			Name: name,
 			VolumeSource: v1.VolumeSource{
@@ -357,29 +357,24 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 		podVolumes = append(podVolumes, podVolume)
 	}
 
-	if volumesAmount == 0 && filesAmount != 0 {
-		podVolume := v1.Volume{
-			Name: name,
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
-			},
-		}
-		podVolumes = append(podVolumes, podVolume)
+	if len(files) == 0 {
+		return podVolumes
 	}
 
-	if filesAmount != 0 {
+	uniqueDirs := uniqueDirs(files)
+	for dir := range uniqueDirs {
+		cmName := PrepareConfigMapName(name, dir)
 		podFiles := v1.Volume{
-			Name: name + podFilesConfigmapNameSuffix,
+			Name: cmName,
 			VolumeSource: v1.VolumeSource{
 				ConfigMap: &v1.ConfigMapVolumeSource{
 					LocalObjectReference: v1.LocalObjectReference{
-						Name: name,
+						Name: cmName,
 					},
-					DefaultMode: ptr.To[int32](0600),
+					DefaultMode: ptr.To[int32](0644),
 				},
 			},
 		}
-
 		podVolumes = append(podVolumes, podFiles)
 	}
 
@@ -390,33 +385,45 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
 	var containerVolumes []v1.VolumeMount
 	for _, volume := range volumes {
-		containerVolumes = append(
-			containerVolumes,
-			v1.VolumeMount{
-				Name:      name,
-				MountPath: volume.Path,
-				SubPath:   strings.TrimLeft(volume.Path, "/"),
-			},
-		)
+		containerVolumes = append(containerVolumes, v1.VolumeMount{
+			Name:      name,
+			MountPath: volume.Path,
+		})
 	}
 
-	if len(volumes) == 0 && len(files) != 0 {
-		uniquePaths := make(map[string]bool)
-		for _, file := range files {
-			uniquePaths[filepath.Dir(file.Dest)] = true
-		}
-		for path := range uniquePaths {
+	if len(files) == 0 {
+		return containerVolumes
+	}
+
+	mountedDirs := make(map[string]bool)
+	for _, file := range files {
+		dir := filepath.Dir(file.Dest)
+		cmName := PrepareConfigMapName(name, dir)
+
+		// Since k8s is not allowed to mount a configmap to a critical dir (throws readonly file system error),
+		// we need to mount the configmap to the file
+		if isCriticalDir(dir) {
 			containerVolumes = append(containerVolumes, v1.VolumeMount{
-				Name:      name,
-				MountPath: path,
-				SubPath:   strings.TrimPrefix(path, "/"),
+				Name:      cmName,
+				MountPath: file.Dest,
+				SubPath:   filepath.Base(file.Dest),
 			})
+			continue
 		}
+
+		// if the dir is not in a critical dir, we need to mount the configmap to the dir
+		if _, processed := mountedDirs[dir]; processed {
+			continue
+		}
+
+		containerVolumes = append(containerVolumes, v1.VolumeMount{
+			Name:      cmName,
+			MountPath: dir,
+		})
+		mountedDirs[dir] = true
 	}
 
-	var containerFiles []v1.VolumeMount
-
-	return append(containerVolumes, containerFiles...)
+	return containerVolumes
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
@@ -442,18 +449,18 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 		for path := range uniquePaths {
 			containerVolumes = append(containerVolumes, v1.VolumeMount{
 				Name:      name,
-				MountPath: knuuPath + path,
-				SubPath:   strings.TrimPrefix(path, "/"),
+				MountPath: filepath.Join(knuuPath, path),
+				SubPath:   filepath.Base(path),
 			})
 		}
 	}
 
 	var containerFiles []v1.VolumeMount
-	for n, file := range files {
+	for _, file := range files {
 		containerFiles = append(containerFiles, v1.VolumeMount{
 			Name:      name + podFilesConfigmapNameSuffix,
 			MountPath: file.Dest,
-			SubPath:   fmt.Sprintf("%d", n),
+			SubPath:   filepath.Base(file.Dest),
 		})
 	}
 
@@ -476,7 +483,7 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 		folder := filepath.Dir(file.Dest)
 		if _, processed := dirsProcessed[folder]; !processed {
 			var (
-				knuuFolder   = fmt.Sprintf("%s%s", knuuPath, folder)
+				knuuFolder   = filepath.Join(knuuPath, folder)
 				parentDirCmd = fmt.Sprintf("mkdir -p %s && ", knuuFolder)
 			)
 			cmds = append(cmds, parentDirCmd)
@@ -495,8 +502,9 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 	}
 
 	// for each volume, copy the contents of the volume to the knuu volume
+	// TODO: this code works only for one volume, need to fix it
 	for _, volume := range volumes {
-		knuuVolumePath := fmt.Sprintf("%s%s", knuuPath, volume.Path)
+		knuuVolumePath := knuuPath // volume is mounted to the same path so no need to join the path here
 		cmd := fmt.Sprintf("if [ -d %s ] && [ \"$(ls -A %s)\" ]; then mkdir -p %s && cp -r %s/* %s && chown -R %d:%d %s",
 			volume.Path, volume.Path, knuuVolumePath, volume.Path,
 			knuuVolumePath, volume.Owner, volume.Owner, knuuVolumePath)
@@ -588,7 +596,7 @@ func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.C
 
 // preparePodVolumes prepares pod volumes
 func preparePodVolumes(config ContainerConfig) []v1.Volume {
-	return buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
+	return buildPodVolumes(config.Name, config.Volumes, config.Files)
 }
 
 func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
@@ -630,4 +638,31 @@ func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
 		"namespace": spec.Namespace,
 	}).Debug("prepared pod")
 	return pod
+}
+
+func uniqueDirs(files []*File) map[string]bool {
+	uniqueDirs := make(map[string]bool)
+	for _, file := range files {
+		uniqueDirs[filepath.Dir(file.Dest)] = true
+	}
+	return uniqueDirs
+}
+
+func isCriticalDir(dir string) bool {
+	criticalDirs := map[string]bool{
+		"/etc":   true,
+		"/bin":   true,
+		"/sbin":  true,
+		"/lib":   true,
+		"/lib64": true,
+		"/dev":   true,
+		"/proc":  true,
+		"/sys":   true,
+		"/run":   true,
+		"/boot":  true,
+		"/usr":   true,
+		"/var":   true,
+		"/root":  true,
+	}
+	return criticalDirs[dir]
 }

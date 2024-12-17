@@ -18,11 +18,12 @@ const (
 	prometheusConfig = "/etc/prometheus/prometheus.yml"
 	prometheusArgs   = "--config.file=" + prometheusConfig
 
-	curlImage = "curlimages/curl:latest"
-	otlpPort  = observability.DefaultOtelOtlpPort
+	curlImage     = "curlimages/curl:latest"
+	telemetryPort = observability.DefaultTelemetryPort
+	otlpPort      = observability.DefaultOtelOtlpPort
 
-	retryInterval = 1 * time.Second
-	retryTimeout  = 10 * time.Second
+	retryInterval = 3 * time.Second
+	retryTimeout  = 5 * time.Minute
 )
 
 // TestObservabilityCollector is a test function that verifies the functionality of the otel collector setup
@@ -58,7 +59,7 @@ global:
 scrape_configs:
   - job_name: 'otel-collector'
     static_configs:
-      - targets: ['otel-collector:%d']`, scrapeInterval, otlpPort)
+      - targets: ['localhost:%d']`, scrapeInterval, telemetryPort)
 	s.Require().NoError(prometheus.Storage().AddFileBytes([]byte(prometheusConfigContent), prometheusConfig, "0:0"))
 
 	s.Require().NoError(prometheus.Build().SetArgs(prometheusArgs))
@@ -68,9 +69,9 @@ scrape_configs:
 	observabilitySidecar := observability.New()
 
 	s.Require().NoError(observabilitySidecar.SetOtelEndpoint(4318))
-	s.Require().NoError(observabilitySidecar.SetPrometheusEndpoint(otlpPort, fmt.Sprintf("knuu-%s", s.Knuu.Scope), scrapeInterval))
+	s.Require().NoError(observabilitySidecar.SetPrometheusEndpoint(telemetryPort, fmt.Sprintf("knuu-%s", s.Knuu.Scope), scrapeInterval))
 	s.Require().NoError(observabilitySidecar.SetJaegerEndpoint(14250, 6831, 14268))
-	s.Require().NoError(observabilitySidecar.SetOtlpExporter("prometheus:9090", "", ""))
+	s.Require().NoError(observabilitySidecar.SetOtlpExporter("http://prometheus:9090", "", ""))
 
 	// Create and start a target pod and configure it to use the obsySidecar to push metrics
 	target, err := s.Knuu.NewInstance(namePrefix + "-target")
@@ -104,7 +105,11 @@ scrape_configs:
 			return false
 		}
 		if resp.StatusCode != http.StatusOK {
-			s.T().Logf("Prometheus API returned status code: %d\tRetrying...", resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				s.T().Logf("Failed to read response body: %v", err)
+			}
+			s.T().Logf("Prometheus API returned status code: %d\tRetrying...\nResponse: %s", resp.StatusCode, string(body))
 			return false
 		}
 
@@ -117,13 +122,14 @@ scrape_configs:
 		return strings.Contains(string(body), "otel-collector")
 
 	}, retryTimeout, retryInterval, "otel-collector data source not found in Prometheus")
+
 }
 
 func (s *Suite) TestObservabilityCollectorWithLogging() {
 	const (
-		namePrefix         = "observability"
-		targetStartCommand = "while true; do curl -X POST http://localhost:8888/v1/traces; sleep 2; done"
+		namePrefix = "observability"
 	)
+	targetStartCommand := fmt.Sprintf("while true; do curl -X POST http://localhost:%d/v1/traces; sleep 2; done", otlpPort)
 	ctx := context.Background()
 
 	// Setup obsySidecar collector

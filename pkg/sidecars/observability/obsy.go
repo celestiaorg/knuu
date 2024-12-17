@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	DefaultOtelOtlpPort         = 8888
+	DefaultOtelOtlpPort         = 4318
+	DefaultTelemetryPort        = 8888
 	DefaultOtelMetricsPort      = 9090
 	DefaultImage                = "otel/opentelemetry-collector-contrib:%s"
 	DefaultOtelCollectorVersion = "0.83.0"
@@ -101,7 +102,7 @@ func (o *Obsy) Initialize(ctx context.Context, namePrefix string, sysDeps *syste
 	if err != nil {
 		return ErrSettingOtelAgentImage.Wrap(err)
 	}
-	if err := o.instance.Network().AddPortTCP(DefaultOtelOtlpPort); err != nil {
+	if err := o.instance.Network().AddPortTCP(DefaultTelemetryPort); err != nil {
 		return ErrAddingOtelAgentPort.Wrap(err)
 	}
 	if err := o.instance.Network().AddPortTCP(DefaultOtelMetricsPort); err != nil {
