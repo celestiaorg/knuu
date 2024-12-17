@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,19 +30,30 @@ func (c *Client) CreateCustomResource(
 	if err := validateCustomResourceObject(obj); err != nil {
 		return err
 	}
+	// if onj.metadata.namespace exists, use it, otherwise use the client's namespace
+	namespace := c.namespace
+	if obj != nil && (*obj)["metadata"] != nil && (*obj)["metadata"].(map[string]interface{})["namespace"] != nil {
+		namespace = (*obj)["metadata"].(map[string]interface{})["namespace"].(string)
+	}
 	res := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.GroupVersion().String(),
 			"kind":       gvr.Resource,
 			"metadata": map[string]interface{}{
 				"name":      name,
-				"namespace": c.namespace,
+				"namespace": namespace,
 			},
 			"spec": (*obj)["spec"],
 		},
 	}
 
-	_, err := c.dynamicClient.Resource(*gvr).Namespace(c.namespace).Create(ctx, res, metav1.CreateOptions{})
+	c.logger.WithFields(logrus.Fields{
+		"res":       res,
+		"name":      name,
+		"namespace": namespace,
+	}).Info("creating custom resource")
+
+	_, err := c.dynamicClient.Resource(*gvr).Namespace(namespace).Create(ctx, res, metav1.CreateOptions{})
 	if err != nil {
 		return ErrCreatingCustomResource.WithParams(gvr.Resource).Wrap(err)
 	}
