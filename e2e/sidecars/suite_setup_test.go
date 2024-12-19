@@ -34,8 +34,8 @@ func (s *Suite) SetupSuite() {
 	)
 
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		Timeout: testTimeout,
-		Logger:  logger,
+		Deadline: time.Now().Add(testTimeout),
+		Logger:   logger,
 	})
 	s.Require().NoError(err)
 
