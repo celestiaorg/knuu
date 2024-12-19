@@ -25,14 +25,13 @@ import (
 )
 
 const (
-	defaultTimeout     = 60 * time.Minute
-	timeoutHandlerName = "timeout-handler"
+	defaultTimeout      = 60 * time.Minute
+	deadlineHandlerName = "deadline-handler"
 	// FIXME: use supported kubernetes version images (use of latest could break) (https://github.com/celestiaorg/knuu/issues/116)
-	timeoutHandlerImage = "docker.io/bitnami/kubectl:latest"
+	deadlineHandlerImage = "docker.io/bitnami/kubectl:latest"
 
-	timeoutHandlerNameStop = timeoutHandlerName + "-stop"
-	timeoutHandlerTimeout  = 1 * time.Second
-	ExitCodeSIGINT         = 130
+	deadlineHandlerNameStop = deadlineHandlerName + "-stop"
+	ExitCodeSIGINT          = 130
 
 	TimeFormat = "20060102T150405Z"
 )
@@ -49,7 +48,8 @@ type Options struct {
 	ImageBuilder  builder.Builder
 	Scope         string
 	ProxyEnabled  bool
-	Timeout       time.Duration
+	Timeout       time.Duration // deprecated, use Deadline instead
+	Deadline      time.Time
 	Logger        *logrus.Logger
 	ClusterDomain string // optional, if not set, "cluster.local" will be used
 }
@@ -75,10 +75,17 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 		return nil, err
 	}
 
-	if opts.Timeout == 0 {
-		opts.Timeout = defaultTimeout
+	if opts.Deadline.IsZero() {
+		if opts.Timeout != 0 {
+			k.Logger.Warn("Timeout is deprecated, use deadline instead")
+			opts.Deadline = time.Now().Add(opts.Timeout)
+
+		} else {
+			opts.Deadline = time.Now().Add(defaultTimeout)
+		}
 	}
-	if err := k.handleTimeout(ctx, opts.Timeout, timeoutHandlerName); err != nil {
+
+	if err := k.handleDeadline(ctx, opts.Deadline, deadlineHandlerName); err != nil {
 		return nil, ErrHandleTimeout.Wrap(err)
 	}
 
@@ -104,9 +111,9 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 		// Lock the stop mutex to prevent multiple stop signals from being processed concurrently
 		k.stopMu.Lock()
 		defer k.stopMu.Unlock()
-		err := k.handleTimeout(ctx, timeoutHandlerTimeout, timeoutHandlerNameStop)
+		err := k.handleDeadline(ctx, time.Now(), deadlineHandlerNameStop)
 		if err != nil {
-			k.Logger.Errorf("Error cleaning up resources with timeout handler: %v", err)
+			k.Logger.Errorf("Error cleaning up resources with deadline handler: %v", err)
 		}
 		k.K8sClient.Terminate()
 		// Allow other signal handlers to run
@@ -115,15 +122,15 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 	}()
 }
 
-// handleTimeout creates a timeout handler that will delete all resources with the scope after the timeout
-func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeoutHandlerName string) error {
-	inst, err := k.NewInstance(timeoutHandlerName)
+// handleDeadline creates a deadline handler that will delete all resources with the scope after the deadline
+func (k *Knuu) handleDeadline(ctx context.Context, deadline time.Time, deadlineHandlerName string) error {
+	inst, err := k.NewInstance(deadlineHandlerName)
 	if err != nil {
 		return ErrCannotCreateInstance.Wrap(err)
 	}
 	inst.SetInstanceType(instance.TimeoutHandlerInstance)
 
-	if err := inst.Build().SetImage(ctx, timeoutHandlerImage); err != nil {
+	if err := inst.Build().SetImage(ctx, deadlineHandlerImage); err != nil {
 		return ErrCannotSetImage.Wrap(err)
 	}
 	if err := inst.Build().Commit(ctx); err != nil {
@@ -134,7 +141,8 @@ func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeout
 
 	// Wait for a specific period before executing the next operation.
 	// This is useful to ensure that any previous operation has time to complete.
-	commands = append(commands, fmt.Sprintf("sleep %d", int64(timeout.Seconds())))
+	commands = append(commands, fmt.Sprintf(`t=$(( %d - $(date +%%s) )); if [ "$t" -gt 0 ]; then sleep "$t"; fi`, deadline.Unix()))
+
 	// Collects all resources (pods, services, etc.) within the specified namespace that match a specific label, excluding certain types,
 	// and then deletes them. This is useful for cleaning up specific test resources before proceeding to delete the namespace.
 	commands = append(commands,
