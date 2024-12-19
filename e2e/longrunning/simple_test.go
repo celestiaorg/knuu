@@ -13,7 +13,7 @@ import (
 
 const (
 	alpineImage = "alpine:3.20.3"
-	testTimeout = time.Minute * 15
+	testTimeout = time.Minute * 5
 )
 
 func TestSimple(t *testing.T) {
@@ -33,7 +33,8 @@ func TestSimple(t *testing.T) {
 	_, err = ins1.Execution().ExecuteCommand(ctx, "echo", fileContent, ">", "/tmp/test-id")
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
+	t.Logf("Waiting for 5 seconds to simulate a long running process")
+	time.Sleep(5 * time.Second)
 
 	ins2, err := createInstance(ctx, instanceName, testScope)
 	require.NoError(t, err)
@@ -44,7 +45,7 @@ func TestSimple(t *testing.T) {
 }
 
 func createInstance(ctx context.Context, name, testScope string) (*instance.Instance, error) {
-	knOpts := knuu.Options{Timeout: testTimeout}
+	knOpts := knuu.Options{Timeout: testTimeout, SkipCleanup: true}
 	if testScope != "" {
 		knOpts.Scope = testScope
 	}
