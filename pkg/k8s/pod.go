@@ -29,7 +29,6 @@ const (
 	podFilesConfigmapNameSuffix = "-config"
 
 	initContainerNameSuffix = "-init"
-	initContainerImage      = "nicolaka/netshoot"
 	defaultContainerUser    = 0
 )
 

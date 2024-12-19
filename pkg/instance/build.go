@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	baseInitImageName = "nicolaka/netshoot"
+	baseInitImageName = "alpine:latest"
 )
 
 type build struct {
