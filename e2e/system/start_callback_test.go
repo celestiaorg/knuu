@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/celestiaorg/knuu/e2e"
 )
@@ -23,14 +23,13 @@ func (s *Suite) TestStartWithCallback() {
 
 	// This probe is used to make sure the instance will not be ready for a second so the
 	// second execute command must fail and the first one with callback must succeed
-	err := target.Monitoring().SetReadinessProbe(&corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: "/",
-				Port: intstr.FromInt(e2e.NginxPort),
-			},
-		},
-	})
+	err := target.Monitoring().SetReadinessProbe(
+		corev1.Probe().
+			WithHTTPGet(corev1.HTTPGetAction().
+				WithPath("/").
+				WithPort(intstr.FromInt(e2e.NginxPort)),
+			),
+	)
 	s.Require().NoError(err)
 
 	err = target.Build().SetStartCommand([]string{"sleep", sleepTimeBeforeReady, "&&", e2e.NginxCommand}...)

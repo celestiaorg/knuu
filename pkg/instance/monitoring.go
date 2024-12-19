@@ -5,14 +5,16 @@ import (
 	"io"
 
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 type monitoring struct {
 	instance       *Instance
-	livenessProbe  *v1.Probe
-	readinessProbe *v1.Probe
-	startupProbe   *v1.Probe
+	livenessProbe  *corev1.ProbeApplyConfiguration
+	readinessProbe *corev1.ProbeApplyConfiguration
+	startupProbe   *corev1.ProbeApplyConfiguration
 }
 
 func (i *Instance) Monitoring() *monitoring {
@@ -30,7 +32,7 @@ func (m *monitoring) Logs(ctx context.Context) (io.ReadCloser, error) {
 // A live probe is a probe that is used to determine if the instance is still alive, and should be restarted if not
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (m *monitoring) SetLivenessProbe(livenessProbe *v1.Probe) error {
+func (m *monitoring) SetLivenessProbe(livenessProbe *corev1.ProbeApplyConfiguration) error {
 	if err := m.checkStateForProbe(); err != nil {
 		return err
 	}
@@ -46,7 +48,7 @@ func (m *monitoring) SetLivenessProbe(livenessProbe *v1.Probe) error {
 // A readiness probe is a probe that is used to determine if the instance is ready to receive traffic
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (m *monitoring) SetReadinessProbe(readinessProbe *v1.Probe) error {
+func (m *monitoring) SetReadinessProbe(readinessProbe *corev1.ProbeApplyConfiguration) error {
 	if err := m.checkStateForProbe(); err != nil {
 		return err
 	}
@@ -62,7 +64,7 @@ func (m *monitoring) SetReadinessProbe(readinessProbe *v1.Probe) error {
 // A startup probe is a probe that is used to determine if the instance is ready to receive traffic after a startup
 // See usage documentation: https://pkg.go.dev/i.K8sCli.io/api/core/v1@v0.27.3#Probe
 // This function can only be called in the states 'Preparing' and 'Committed'
-func (m *monitoring) SetStartupProbe(startupProbe *v1.Probe) error {
+func (m *monitoring) SetStartupProbe(startupProbe *corev1.ProbeApplyConfiguration) error {
 	if err := m.checkStateForProbe(); err != nil {
 		return err
 	}
@@ -87,19 +89,19 @@ func (m *monitoring) clone() *monitoring {
 		return nil
 	}
 
-	var livenessProbeCopy *v1.Probe
+	var livenessProbeCopy *corev1.ProbeApplyConfiguration
 	if m.livenessProbe != nil {
-		livenessProbeCopy = m.livenessProbe.DeepCopy()
+		livenessProbeCopy = k8s.DeepCopyProbe(m.livenessProbe)
 	}
 
-	var readinessProbeCopy *v1.Probe
+	var readinessProbeCopy *corev1.ProbeApplyConfiguration
 	if m.readinessProbe != nil {
-		readinessProbeCopy = m.readinessProbe.DeepCopy()
+		readinessProbeCopy = k8s.DeepCopyProbe(m.readinessProbe)
 	}
 
-	var startupProbeCopy *v1.Probe
+	var startupProbeCopy *corev1.ProbeApplyConfiguration
 	if m.startupProbe != nil {
-		startupProbeCopy = m.startupProbe.DeepCopy()
+		startupProbeCopy = k8s.DeepCopyProbe(m.startupProbe)
 	}
 
 	return &monitoring{

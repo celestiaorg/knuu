@@ -2,13 +2,13 @@ package longrunning
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/celestiaorg/knuu/pkg/instance"
 	"github.com/celestiaorg/knuu/pkg/knuu"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -40,7 +40,6 @@ func TestSimple(t *testing.T) {
 
 	out, err := ins2.Execution().ExecuteCommand(ctx, "cat", "/tmp/test-id")
 	require.NoError(t, err)
-	fmt.Printf("\nout: `%s`\n", out)
 	require.Contains(t, out, fileContent)
 }
 

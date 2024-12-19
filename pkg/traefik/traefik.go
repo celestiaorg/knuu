@@ -2,6 +2,7 @@ package traefik
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -52,7 +53,9 @@ func (t *Traefik) Deploy(ctx context.Context) error {
 	}
 
 	if err := t.K8sClient.CreateServiceAccount(ctx, serviceAccountName, nil); err != nil {
-		return ErrFailedToCreateServiceAccount.Wrap(err)
+		if !errors.Is(err, k8s.ErrServiceAccountAlreadyExists) {
+			return ErrFailedToCreateServiceAccount.Wrap(err)
+		}
 	}
 
 	clusterRoleName := k8s.SanitizeName(t.K8sClient.Namespace() + "-" + roleName)

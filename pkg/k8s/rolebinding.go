@@ -4,7 +4,7 @@ import (
 	"context"
 
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -50,6 +50,9 @@ func (c *Client) CreateRoleBinding(
 	}
 
 	_, err := c.clientset.RbacV1().RoleBindings(c.namespace).Create(ctx, rb, metav1.CreateOptions{})
+	if apierrs.IsAlreadyExists(err) {
+		return ErrRoleBindingAlreadyExists.WithParams(name).Wrap(err)
+	}
 	return err
 }
 
@@ -80,7 +83,7 @@ func (c *Client) CreateClusterRoleBinding(
 	}
 
 	_, err := c.clientset.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-	if err == nil || !errors.IsNotFound(err) {
+	if err != nil && apierrs.IsAlreadyExists(err) {
 		return ErrClusterRoleBindingAlreadyExists.WithParams(name).Wrap(err)
 	}
 

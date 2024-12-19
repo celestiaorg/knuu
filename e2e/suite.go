@@ -56,8 +56,6 @@ func (s *Suite) TearDownTest() {
 }
 
 func (s *Suite) cleanupSuite() {
-	// TODO: remove this
-	return
 	s.T().Logf("Cleaning up knuu...")
 	if err := s.Knuu.CleanUp(context.Background()); err != nil {
 		s.T().Logf("Error cleaning up test suite: %v", err)

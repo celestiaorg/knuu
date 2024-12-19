@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
 // represents the security settings for a container
@@ -80,8 +81,8 @@ func (s *security) AddKubernetesCapabilities(capabilities []string) error {
 }
 
 // prepareSecurityContext creates a v1.SecurityContext from the security configs
-func (s *security) prepareSecurityContext() *v1.SecurityContext {
-	sc := &v1.SecurityContext{}
+func (s *security) prepareSecurityContext() *corev1.SecurityContextApplyConfiguration {
+	sc := &corev1.SecurityContextApplyConfiguration{}
 
 	if s.privileged {
 		sc.Privileged = &s.privileged
@@ -91,7 +92,7 @@ func (s *security) prepareSecurityContext() *v1.SecurityContext {
 	for i, cap := range s.capabilitiesAdd {
 		capabilities[i] = v1.Capability(cap)
 	}
-	sc.Capabilities = &v1.Capabilities{
+	sc.Capabilities = &corev1.CapabilitiesApplyConfiguration{
 		Add: capabilities,
 	}
 
