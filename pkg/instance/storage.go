@@ -49,32 +49,27 @@ func (s *storage) AddFile(src string, dest string, chown string) error {
 		return err
 	}
 
-	switch s.instance.state {
-	case StatePreparing:
+	if s.instance.IsState(StatePreparing) {
+		volume, err := s.findMatchingVolume(dest)
+		if err != nil {
+			return err
+		}
+		if volume != nil {
+			return volume.AddFile(s.instance.K8sClient.NewFile(src, dest, chown, ""))
+		}
+
 		s.instance.build.addFileToBuilder(src, dest, chown)
 		return nil
-	case StateCommitted, StateStopped:
-		srcInfo, err := os.Stat(src)
-		if err != nil {
-			return ErrFailedToGetFileSize.Wrap(err)
-		}
-		if srcInfo.Size() > maxTotalFilesBytes {
-			return ErrFileTooLargeCommitted.WithParams(src)
-		}
-		return s.addFileToInstance(buildDirPath, dest, chown)
 	}
 
-	buildDir, err := s.instance.build.getBuildDir()
+	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return ErrGettingBuildDir.Wrap(err)
+		return ErrFailedToGetFileSize.Wrap(err)
 	}
-	s.instance.Logger.WithFields(logrus.Fields{
-		"file":      dest,
-		"instance":  s.instance.name,
-		"state":     s.instance.state,
-		"build_dir": buildDir,
-	}).Debug("added file")
-	return nil
+	if srcInfo.Size() > maxTotalFilesBytes {
+		return ErrFileTooLargeCommitted.WithParams(src)
+	}
+	return s.addFileToInstance(buildDirPath, dest, chown)
 }
 
 // AddFolder adds a folder to the instance
@@ -168,14 +163,6 @@ func (s *storage) AddFileBytes(bytes []byte, dest string, chown string) error {
 // The owner of the volume is set to 0, if you want to set a custom owner use AddVolumeWithOwner
 // This function can only be called in the states 'Preparing', 'Committed' and 'Stopped'
 func (s *storage) AddVolume(path string, size resource.Quantity) error {
-	// temporary feat, we will remove it once we can add multiple volumes
-	if len(s.volumes) > 0 {
-		s.instance.Logger.WithFields(logrus.Fields{
-			"instance": s.instance.name,
-			"volumes":  len(s.volumes),
-		}).Debug("maximum volumes exceeded")
-		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
-	}
 	return s.AddVolumeWithOwner(path, size, 0)
 }
 
@@ -193,6 +180,17 @@ func (s *storage) AddVolumeWithOwner(path string, size resource.Quantity, owner 
 		}).Debug("maximum volumes exceeded")
 		return ErrMaximumVolumesExceeded.WithParams(s.instance.name)
 	}
+
+	// When already a file exists in the volume path, then we cannot add a volume
+	// b/c the volume must be added first to avoid user error
+	file, err := s.findMatchingFile(path)
+	if err != nil {
+		return err
+	}
+	if file != nil {
+		return ErrFileAlreadyExistsInTheVolumePath.WithParams(file.Dest, path)
+	}
+
 	volume := s.instance.K8sClient.NewVolume(path, size, owner)
 	s.volumes = append(s.volumes, volume)
 	s.instance.Logger.WithFields(logrus.Fields{
@@ -384,9 +382,10 @@ func (s *storage) destroyVolume(ctx context.Context) error {
 
 // deployFiles deploys the files for the instance
 func (s *storage) deployFiles(ctx context.Context) error {
-	data := map[string]string{}
+	// key: dirPath, value: (configmap data) map[string]string{key: fileName, value: fileContent}
+	dirs := map[string]map[string]string{}
 
-	for i, file := range s.files {
+	for _, file := range s.files {
 		// read out file content and assign to variable
 		srcFile, err := os.Open(file.Source)
 		if err != nil {
@@ -401,20 +400,26 @@ func (s *storage) deployFiles(ctx context.Context) error {
 
 		var (
 			fileContent = string(fileContentBytes)
-			keyName     = fmt.Sprintf("%d", i)
+			keyName     = filepath.Base(file.Dest)
 		)
 
-		data[keyName] = fileContent
+		if _, ok := dirs[filepath.Dir(file.Dest)]; !ok {
+			dirs[filepath.Dir(file.Dest)] = make(map[string]string)
+		}
+		dirs[filepath.Dir(file.Dest)][keyName] = fileContent
 	}
 
-	// If the configmap already exists, we update it
-	// This ensures long-running tests and image upgrade tests function correctly.
-	_, err := s.instance.K8sClient.CreateOrUpdateConfigMap(ctx, s.instance.name, s.instance.execution.Labels(), data)
-	if err != nil {
-		return ErrFailedToCreateConfigMap.Wrap(err)
-	}
+	for dirPath, data := range dirs {
+		// If the configmap already exists, we update it
+		// This ensures long-running tests and image upgrade tests function correctly.
+		cmName := k8s.PrepareConfigMapName(s.instance.name, dirPath)
+		_, err := s.instance.K8sClient.CreateOrUpdateConfigMap(ctx, cmName, s.instance.execution.Labels(), data)
+		if err != nil {
+			return ErrFailedToCreateConfigMap.Wrap(err)
+		}
 
-	s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
+		s.instance.Logger.WithField("configmap", s.instance.name).Debug("deployed configmap")
+	}
 	return nil
 }
 
@@ -496,4 +501,42 @@ func (s *storage) clone() *storage {
 		volumes:  volumesCopy,
 		files:    filesCopy,
 	}
+}
+
+func (s *storage) findMatchingVolume(filePath string) (*k8s.Volume, error) {
+	for _, v := range s.volumes {
+		ok, err := isSubpath(v.Path, filePath)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return v, nil
+		}
+	}
+	return nil, nil // no matching volume found
+}
+
+func (s *storage) findMatchingFile(volumePath string) (*k8s.File, error) {
+	for _, f := range s.files {
+		ok, err := isSubpath(volumePath, f.Dest)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return f, nil
+		}
+	}
+	return nil, nil // no matching file found
+}
+
+func isSubpath(base, target string) (bool, error) {
+	base = filepath.Clean(base)
+	target = filepath.Clean(target)
+
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false, err
+	}
+
+	return !strings.HasPrefix(rel, ".."), nil
 }

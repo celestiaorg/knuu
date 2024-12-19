@@ -31,6 +31,8 @@ type Suite struct {
 	cleanupMu     sync.Mutex
 	totalTests    atomic.Int32
 	finishedTests int32
+
+	skipCleanup atomic.Bool // just for debugging
 }
 
 var (
@@ -57,10 +59,18 @@ func (s *Suite) TearDownTest() {
 
 func (s *Suite) cleanupSuite() {
 	s.T().Logf("Cleaning up knuu...")
+	if s.skipCleanup.Load() {
+		s.T().Logf("* Cleanup skipped. Note: this is just for debugging purposes. Make sure to remove the SkipCleanup() call in the test before merging.")
+		return
+	}
 	if err := s.Knuu.CleanUp(context.Background()); err != nil {
 		s.T().Logf("Error cleaning up test suite: %v", err)
 	}
 	s.T().Logf("Knuu is cleaned up")
+}
+
+func (s *Suite) SkipCleanup() {
+	s.skipCleanup.Store(true)
 }
 
 func (s *Suite) CreateNginxInstance(ctx context.Context, name string) *instance.Instance {

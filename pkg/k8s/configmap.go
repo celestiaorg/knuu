@@ -3,10 +3,18 @@ package k8s
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
+
+	"github.com/celestiaorg/knuu/pkg/names"
+)
+
+const (
+	configMapNameHashSuffixLength = 8
 )
 
 func (c *Client) GetConfigMap(ctx context.Context, name string) (*v1.ConfigMap, error) {
@@ -123,4 +131,13 @@ func prepareConfigMap(
 		},
 		Data: data,
 	}
+}
+
+func PrepareConfigMapName(instanceName, dirPath string) string {
+	maxInstanceNameLength := validation.DNS1123SubdomainMaxLength - configMapNameHashSuffixLength - 1
+	if len(instanceName) > maxInstanceNameLength {
+		instanceName = instanceName[:maxInstanceNameLength]
+	}
+	hash := names.HashWithLength(dirPath, configMapNameHashSuffixLength)
+	return fmt.Sprintf("%s-%s", instanceName, hash)
 }

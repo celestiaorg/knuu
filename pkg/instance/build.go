@@ -15,11 +15,16 @@ import (
 	"github.com/celestiaorg/knuu/pkg/container"
 )
 
+const (
+	baseInitImageName = "alpine:latest"
+)
+
 type build struct {
 	instance        *Instance
 	imageName       string
-	imagePullPolicy v1.PullPolicy
+	initImageName   string
 	builderFactory  *container.BuilderFactory
+	imagePullPolicy v1.PullPolicy
 	command         []string
 	args            []string
 	env             map[string]string
@@ -160,6 +165,56 @@ func (b *build) SetUser(user string) error {
 	return nil
 }
 
+// buildInitImage builds the init image for the instance
+// This function can only be called in the state 'Preparing'
+func (b *build) buildInitImage(ctx context.Context) error {
+	if !b.instance.IsState(StatePreparing) {
+		return ErrBuildingInitImageNotAllowed.WithParams(b.instance.state.String())
+	}
+
+	buildDir, err := b.getBuildDir()
+	if err != nil {
+		return ErrGettingBuildDir.Wrap(err)
+	}
+
+	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
+		ImageName:    baseInitImageName,
+		BuildContext: buildDir,
+		ImageBuilder: b.instance.ImageBuilder,
+		Logger:       b.instance.Logger,
+	})
+	if err != nil {
+		return ErrCreatingBuilder.Wrap(err)
+	}
+
+	mustBuild := false
+	for _, vol := range b.instance.storage.volumes {
+		for _, f := range vol.Files() {
+			// the files are copied to the build dir with the subfolder structure of dest
+			factory.AddToBuilder(f.Dest, f.Dest, f.Chown)
+			mustBuild = true
+		}
+	}
+
+	if !mustBuild {
+		return nil
+	}
+
+	imageHash, err := factory.GenerateImageHash()
+	if err != nil {
+		return ErrGeneratingImageHash.Wrap(err)
+	}
+
+	// TODO: update this when the custom registry PR is merged (#593)
+	imageName, err := getImageRegistry(imageHash)
+	if err != nil {
+		return ErrGettingImageRegistry.Wrap(err)
+	}
+
+	b.initImageName = imageName
+	return factory.PushBuilderImage(ctx, imageName)
+}
+
 func (b *build) SetNodeSelector(nodeSelector map[string]string) error {
 	if !b.instance.IsInState(StatePreparing, StateCommitted) {
 		return ErrSettingNodeSelectorNotAllowed.WithParams(b.instance.state.String())
@@ -174,6 +229,12 @@ func (b *build) SetNodeSelector(nodeSelector map[string]string) error {
 func (b *build) Commit(ctx context.Context) error {
 	if !b.instance.IsState(StatePreparing) {
 		return ErrCommittingNotAllowed.WithParams(b.instance.state.String())
+	}
+
+	if len(b.instance.storage.volumes) > 0 {
+		if err := b.buildInitImage(ctx); err != nil {
+			return err
+		}
 	}
 
 	if !b.builderFactory.Changed() {
@@ -254,7 +315,8 @@ func (b *build) getBuildDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(tmpDir, b.instance.name), nil
+	b.buildDir = filepath.Join(tmpDir, b.instance.name)
+	return b.buildDir, nil
 }
 
 // addFileToBuilder adds a file to the builder
