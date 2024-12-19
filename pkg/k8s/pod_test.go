@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"context"
+	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +29,22 @@ func (s *TestSuite) TestDeployPod() {
 				Labels:          map[string]string{"app": "test"},
 				ContainerConfig: testContainerConfig,
 			},
-			setupMock:   func() {},
+			setupMock: func() {
+				s.client.Clientset().(*fake.Clientset).
+					PrependReactor("patch", "pods",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							patchAction, ok := action.(k8stesting.PatchAction)
+							if !ok {
+								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
+							}
+							return true, &v1.Pod{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      patchAction.GetName(),
+									Namespace: patchAction.GetNamespace(),
+								},
+							}, nil
+						})
+			},
 			init:        false,
 			expectedErr: nil,
 		},
@@ -43,12 +59,12 @@ func (s *TestSuite) TestDeployPod() {
 			init: false,
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("create", "pods",
+					PrependReactor("patch", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingPod.Wrap(errInternalServerError),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -86,9 +102,18 @@ func (s *TestSuite) TestReplacePod() {
 			},
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("delete", "pods",
+					PrependReactor("patch", "pods",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, nil
+							patchAction, ok := action.(k8stesting.PatchAction)
+							if !ok {
+								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
+							}
+							return true, &v1.Pod{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      patchAction.GetName(),
+									Namespace: patchAction.GetNamespace(),
+								},
+							}, nil
 						})
 			},
 			expectedErr: nil,

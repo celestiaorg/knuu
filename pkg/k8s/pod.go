@@ -88,17 +88,11 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	}
 
 	pod := c.preparePod(podConfig, init)
-	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).
+	return c.clientset.CoreV1().Pods(c.namespace).
 		Apply(ctx, pod, metav1.ApplyOptions{
-			FieldManager: "knuu",
+			FieldManager: fieldManager,
 		})
-	if err != nil {
-		return nil, ErrCreatingPod.Wrap(err)
-	}
-
-	return createdPod, nil
 }
-
 func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {
 	return &Volume{
 		Path:  path,

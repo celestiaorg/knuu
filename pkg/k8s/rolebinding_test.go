@@ -3,7 +3,6 @@ package k8s_test
 import (
 	"context"
 
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -138,11 +137,7 @@ func (s *TestSuite) TestCreateClusterRoleBinding() {
 			clusterRole:    "existing-clusterrole",
 			serviceAccount: "existing-sa",
 			setupMock: func() {
-				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("get", "clusterrolebindings",
-						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, &rbacv1.ClusterRoleBinding{}, nil
-						})
+				s.createClusterRoleBinding("existing-clusterrolebinding", map[string]string{"app": "existing"}, "existing-clusterrole", "existing-sa")
 			},
 			expectedErr: k8s.ErrClusterRoleBindingAlreadyExists.WithParams("existing-clusterrolebinding"),
 		},
@@ -154,12 +149,12 @@ func (s *TestSuite) TestCreateClusterRoleBinding() {
 			serviceAccount: "error-sa",
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("get", "clusterrolebindings",
+					PrependReactor("create", "clusterrolebindings",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrClusterRoleBindingAlreadyExists.WithParams("error-clusterrolebinding").Wrap(errInternalServerError),
+			expectedErr: errInternalServerError,
 		},
 	}
 

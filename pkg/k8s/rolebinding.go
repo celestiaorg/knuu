@@ -82,11 +82,6 @@ func (c *Client) CreateClusterRoleBinding(
 		return err
 	}
 
-	_, err := c.clientset.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-	if err != nil && apierrs.IsAlreadyExists(err) {
-		return ErrClusterRoleBindingAlreadyExists.WithParams(name).Wrap(err)
-	}
-
 	role := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -106,7 +101,10 @@ func (c *Client) CreateClusterRoleBinding(
 		},
 	}
 
-	_, err = c.clientset.RbacV1().ClusterRoleBindings().Create(ctx, role, metav1.CreateOptions{})
+	_, err := c.clientset.RbacV1().ClusterRoleBindings().Create(ctx, role, metav1.CreateOptions{})
+	if apierrs.IsAlreadyExists(err) {
+		return ErrClusterRoleBindingAlreadyExists.WithParams(name).Wrap(err)
+	}
 	return err
 }
 

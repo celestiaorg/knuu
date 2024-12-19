@@ -66,11 +66,6 @@ func (c *Client) CreateClusterRole(
 		return err
 	}
 
-	_, err := c.clientset.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
-	if apierrs.IsAlreadyExists(err) {
-		return ErrClusterRoleAlreadyExists.WithParams(name).Wrap(err)
-	}
-
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -78,7 +73,10 @@ func (c *Client) CreateClusterRole(
 		},
 		Rules: policyRules,
 	}
-	_, err = c.clientset.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
+	_, err := c.clientset.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
+	if apierrs.IsAlreadyExists(err) {
+		return ErrClusterRoleAlreadyExists.WithParams(name).Wrap(err)
+	}
 	return err
 }
 

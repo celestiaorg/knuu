@@ -39,13 +39,13 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 		newRs.Spec.Selector = applymetav1.LabelSelector().WithMatchLabels(existingRS.Spec.Selector.MatchLabels)
 		newRs.Spec.Template.Labels = existingRS.Spec.Template.Labels
 		newRs.Spec.Template.Annotations = existingRS.Spec.Template.Annotations
+
 	} else if !errors.IsNotFound(err) {
-		return nil, ErrGettingReplicaSet.WithParams(rsConfig.Name).Wrap(err)
+		return nil, err
 	}
 
-	return c.clientset.AppsV1().ReplicaSets(c.namespace).Apply(ctx, newRs, metav1.ApplyOptions{
-		FieldManager: "knuu",
-	})
+	return c.clientset.AppsV1().ReplicaSets(c.namespace).
+		Apply(ctx, newRs, metav1.ApplyOptions{FieldManager: fieldManager})
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
