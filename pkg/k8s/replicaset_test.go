@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,7 +45,7 @@ func (s *TestSuite) TestCreateReplicaSet() {
 							if !ok {
 								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
 							}
-							return true, &appsv1.ReplicaSet{
+							return true, &appv1.ReplicaSet{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      patchAction.GetName(),
 									Namespace: patchAction.GetNamespace(),
@@ -136,7 +135,7 @@ func (s *TestSuite) TestReplaceReplicaSetWithGracePeriod() {
 							if !ok {
 								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
 							}
-							return true, &appsv1.ReplicaSet{
+							return true, &appv1.ReplicaSet{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      patchAction.GetName(),
 									Namespace: patchAction.GetNamespace(),
@@ -226,7 +225,7 @@ func (s *TestSuite) TestReplaceReplicaSet() {
 							if !ok {
 								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
 							}
-							return true, &appsv1.ReplicaSet{
+							return true, &appv1.ReplicaSet{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      patchAction.GetName(),
 									Namespace: patchAction.GetNamespace(),
