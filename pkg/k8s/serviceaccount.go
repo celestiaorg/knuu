@@ -4,6 +4,7 @@ import (
 	"context"
 
 	v1 "k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,6 +28,9 @@ func (c *Client) CreateServiceAccount(ctx context.Context, name string, labels m
 	}
 
 	_, err := c.clientset.CoreV1().ServiceAccounts(c.namespace).Create(ctx, sa, metav1.CreateOptions{})
+	if apierrs.IsAlreadyExists(err) {
+		return ErrServiceAccountAlreadyExists.WithParams(name).Wrap(err)
+	}
 	return err
 }
 

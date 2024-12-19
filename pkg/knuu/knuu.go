@@ -41,6 +41,7 @@ type Knuu struct {
 	*system.SystemDependencies
 	stopMu        sync.Mutex
 	clusterDomain string
+	skipCleanup   bool
 }
 
 type Options struct {
@@ -52,6 +53,7 @@ type Options struct {
 	Timeout       time.Duration
 	Logger        *logrus.Logger
 	ClusterDomain string // optional, if not set, "cluster.local" will be used
+	SkipCleanup   bool
 }
 
 func New(ctx context.Context, opts Options) (*Knuu, error) {
@@ -69,6 +71,7 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 			StartTime:    time.Now().UTC().Format(TimeFormat),
 		},
 		clusterDomain: opts.ClusterDomain,
+		skipCleanup:   opts.SkipCleanup,
 	}
 
 	if err := setDefaults(ctx, k); err != nil {
@@ -92,6 +95,10 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 }
 
 func (k *Knuu) CleanUp(ctx context.Context) error {
+	if k.skipCleanup {
+		k.Logger.Info("skipping cleanup")
+		return nil
+	}
 	return k.K8sClient.DeleteNamespace(ctx, k.Scope)
 }
 

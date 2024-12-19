@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/system"
@@ -60,7 +61,7 @@ func New(name string, sysDeps *system.SystemDependencies) (*Instance, error) {
 		args:            make([]string, 0),
 		env:             make(map[string]string),
 		imageCache:      &sync.Map{},
-		imagePullPolicy: v1.PullAlways,
+		imagePullPolicy: ptr.To[v1.PullPolicy](v1.PullAlways),
 	}
 
 	i.execution = &execution{instance: i}

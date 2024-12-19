@@ -18,7 +18,7 @@ import (
 type build struct {
 	instance        *Instance
 	imageName       string
-	imagePullPolicy v1.PullPolicy
+	imagePullPolicy *v1.PullPolicy
 	builderFactory  *container.BuilderFactory
 	command         []string
 	args            []string
@@ -36,12 +36,12 @@ func (b *build) ImageName() string {
 	return b.imageName
 }
 
-func (b *build) ImagePullPolicy() v1.PullPolicy {
+func (b *build) ImagePullPolicy() *v1.PullPolicy {
 	return b.imagePullPolicy
 }
 
 func (b *build) SetImagePullPolicy(pullPolicy v1.PullPolicy) {
-	b.imagePullPolicy = pullPolicy
+	b.imagePullPolicy = &pullPolicy
 }
 
 // SetImage sets the image of the instance.
@@ -254,7 +254,8 @@ func (b *build) getBuildDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(tmpDir, b.instance.name), nil
+	b.buildDir = filepath.Join(tmpDir, b.instance.name)
+	return b.buildDir, nil
 }
 
 // addFileToBuilder adds a file to the builder

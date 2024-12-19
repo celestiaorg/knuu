@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -310,16 +311,19 @@ func (e *execution) deployPod(ctx context.Context) error {
 	labels := e.Labels()
 
 	// create a service account for the pod
-	if err := e.instance.K8sClient.CreateServiceAccount(ctx, e.instance.name, labels); err != nil {
+	err := e.instance.K8sClient.CreateServiceAccount(ctx, e.instance.name, labels)
+	if err != nil && !errors.Is(err, k8s.ErrServiceAccountAlreadyExists) {
 		return ErrFailedToCreateServiceAccount.Wrap(err)
 	}
 
 	// create a role and role binding for the pod if there are policy rules
 	if len(e.instance.security.policyRules) > 0 {
-		if err := e.instance.K8sClient.CreateRole(ctx, e.instance.name, labels, e.instance.security.policyRules); err != nil {
+		err := e.instance.K8sClient.CreateRole(ctx, e.instance.name, labels, e.instance.security.policyRules)
+		if err != nil && !errors.Is(err, k8s.ErrRoleAlreadyExists) {
 			return ErrFailedToCreateRole.Wrap(err)
 		}
-		if err := e.instance.K8sClient.CreateRoleBinding(ctx, e.instance.name, labels, e.instance.name, e.instance.name); err != nil {
+		err = e.instance.K8sClient.CreateRoleBinding(ctx, e.instance.name, labels, e.instance.name, e.instance.name)
+		if err != nil && !errors.Is(err, k8s.ErrRoleBindingAlreadyExists) {
 			return ErrFailedToCreateRoleBinding.Wrap(err)
 		}
 	}

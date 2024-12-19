@@ -7,8 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
-
-	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 func (s *TestSuite) TestCreateRole() {
@@ -157,17 +155,12 @@ func (s *TestSuite) TestCreateClusterRole() {
 			},
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("get", "clusterroles",
-						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-							return true, nil, nil
-						})
-				s.client.Clientset().(*fake.Clientset).
 					PrependReactor("create", "clusterroles",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrClusterRoleAlreadyExists.WithParams("error-cluster-role").Wrap(errInternalServerError),
+			expectedErr: errInternalServerError,
 		},
 	}
 

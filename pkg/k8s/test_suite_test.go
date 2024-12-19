@@ -10,6 +10,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	discfake "k8s.io/client-go/discovery/fake"
@@ -91,6 +92,25 @@ func (s *TestSuite) createNetworkPolicy(name string) error {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: s.namespace,
+			},
+		}, metav1.CreateOptions{})
+	return err
+}
+
+func (s *TestSuite) createClusterRoleBinding(name string, labels map[string]string, clusterRole string, serviceAccount string) error {
+	_, err := s.client.Clientset().RbacV1().ClusterRoleBindings().
+		Create(context.Background(), &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   name,
+				Labels: labels,
+			},
+			RoleRef: rbacv1.RoleRef{
+				Kind:     "ClusterRole",
+				Name:     clusterRole,
+				APIGroup: rbacv1.GroupName,
+			},
+			Subjects: []rbacv1.Subject{
+				{Kind: "ServiceAccount", Name: serviceAccount},
 			},
 		}, metav1.CreateOptions{})
 	return err
