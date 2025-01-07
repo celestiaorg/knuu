@@ -23,6 +23,10 @@ const (
 
 	nginxImage       = "docker.io/nginx:latest"
 	nginxVolumeOwner = 0
+
+	envK8sHost      = "K8S_HOST"
+	envK8sCACert    = "K8S_CA_CERT"
+	envK8sAuthToken = "K8S_AUTH_TOKEN"
 )
 
 type Suite struct {
@@ -97,16 +101,16 @@ func (s *Suite) RetryOperation(operation func() error, maxRetries int) error {
 }
 
 func (s *Suite) K8sDefaultOptions() []k8s.Option {
-	if os.Getenv("K8S_AUTH_TOKEN") == "" {
-		s.T().Log("K8S_AUTH_TOKEN is not set, using default cluster config from ~/.kube/config")
+	if os.Getenv(envK8sAuthToken) == "" || os.Getenv(envK8sCACert) == "" || os.Getenv(envK8sHost) == "" {
+		s.T().Logf("%s, %s and/or %s are not set, using default cluster config from ~/.kube/config", envK8sAuthToken, envK8sCACert, envK8sHost)
 		return nil
 	}
 
 	return []k8s.Option{
 		k8s.WithAuthToken(
-			os.Getenv("K8S_HOST"),
-			os.Getenv("K8S_CA_CERT"),
-			os.Getenv("K8S_AUTH_TOKEN"),
+			os.Getenv(envK8sHost),
+			os.Getenv(envK8sCACert),
+			os.Getenv(envK8sAuthToken),
 		),
 	}
 }
