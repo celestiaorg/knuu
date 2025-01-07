@@ -24,11 +24,33 @@ func fileExists(path string) bool {
 }
 
 // getClusterConfig returns the appropriate Kubernetes cluster configuration.
-func getClusterConfig() (*rest.Config, error) {
+func getClusterConfig(opts *ClientOptions) (*rest.Config, error) {
+	if opts.clusterConfig != nil {
+		return opts.clusterConfig, nil
+	}
+
 	if isClusterEnvironment() {
 		return rest.InClusterConfig()
 	}
+
+	if opts.authToken != "" {
+		return getClusterConfigWithToken(opts)
+	}
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
+}
+
+func getClusterConfigWithToken(opts *ClientOptions) (*rest.Config, error) {
+	if opts.clusterHost == "" || opts.authToken == "" || opts.cert == "" {
+		return nil, ErrEmptyClusterHostOrAuthTokenOrCert
+	}
+
+	return &rest.Config{
+		Host:        opts.clusterHost,
+		BearerToken: opts.authToken,
+		TLSClientConfig: rest.TLSClientConfig{
+			CAData: []byte(opts.cert),
+		},
+	}, nil
 }
 
 // precompile the regular expression to avoid recompiling it on every function call

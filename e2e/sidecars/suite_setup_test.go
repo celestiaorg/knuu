@@ -10,6 +10,7 @@ import (
 
 	"github.com/celestiaorg/knuu/e2e"
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -33,9 +34,13 @@ func (s *Suite) SetupSuite() {
 		err    error
 	)
 
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger, s.K8sDefaultOptions()...)
+	s.Require().NoError(err)
+
 	s.Knuu, err = knuu.New(ctx, knuu.Options{
-		Timeout: testTimeout,
-		Logger:  logger,
+		K8sClient: k8sClient,
+		Timeout:   testTimeout,
+		Logger:    logger,
 	})
 	s.Require().NoError(err)
 

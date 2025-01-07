@@ -36,7 +36,7 @@ func (s *Suite) SetupSuite() {
 		logger = logrus.New()
 	)
 
-	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger)
+	k8sClient, err := k8s.NewClient(ctx, knuu.DefaultScope(), logger, s.K8sDefaultOptions()...)
 	s.Require().NoError(err, "Error creating k8s client")
 
 	minioClient, err := minio.New(ctx, k8sClient, logger)
@@ -47,6 +47,7 @@ func (s *Suite) SetupSuite() {
 		K8sClient:    k8sClient,
 		MinioClient:  minioClient, // needed for build from git tests
 		Timeout:      testTimeout,
+		Logger:       logger,
 	})
 	s.Require().NoError(err)
 
