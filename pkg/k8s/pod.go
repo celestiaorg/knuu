@@ -63,6 +63,7 @@ type PodConfig struct {
 	ContainerConfig    ContainerConfig   // ContainerConfig for the Pod
 	SidecarConfigs     []ContainerConfig // SideCarConfigs for the Pod
 	Annotations        map[string]string // Annotations to apply to the Pod
+	NodeSelector       map[string]string // NodeSelector to apply to the Pod
 }
 
 type Volume struct {
@@ -621,6 +622,7 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) *corev1.PodSpecApplyC
 		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
 		Containers:         []corev1.ContainerApplyConfiguration{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
+		NodeSelector:       spec.NodeSelector,
 	}
 
 	// Prepare sidecar containers and append to the pod spec
