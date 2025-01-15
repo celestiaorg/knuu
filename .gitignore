@@ -5,3 +5,6 @@ coverage.txt
 .devcontainer
 Taskfile.yaml
 
+bin/*
+docker-compose.yml
+.env

@@ -2,6 +2,16 @@ pkgs := $(shell go list ./...)
 run := .
 count := 1
 timeout := 120m
+BINARY_NAME := knuu
+
+build:
+	go build -o bin/$(BINARY_NAME) -v ./cmd
+
+# docker:
+# 	docker build -t $(BINARY_NAME) .
+
+run: build
+	./bin/$(BINARY_NAME) api -l test
 
 ## help: Show this help message
 help: Makefile
