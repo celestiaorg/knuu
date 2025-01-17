@@ -2,11 +2,20 @@ package instance
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/celestiaorg/knuu/pkg/k8s"
+	"github.com/celestiaorg/knuu/pkg/machine"
+	"github.com/containers/podman/v5/libpod/define"
+	"github.com/containers/podman/v5/pkg/bindings"
+	"github.com/containers/podman/v5/pkg/bindings/containers"
+	"github.com/containers/podman/v5/pkg/bindings/images"
+	"github.com/containers/podman/v5/pkg/specgen"
+	"github.com/inlets/cloud-provision/provision"
 
 	"github.com/sirupsen/logrus"
 )
@@ -88,38 +97,222 @@ func (e *execution) StartAsync(ctx context.Context) error {
 		return ErrStartingNotAllowed.WithParams(e.instance.name, e.instance.state.String())
 	}
 
-	if err := e.instance.sidecars.verifySidecarsStates(); err != nil {
-		return err
+	accessKey := os.Getenv("SCALEWAY_ACCESS_KEY")
+	if accessKey == "" {
+		return fmt.Errorf("SCALEWAY_ACCESS_KEY environment variable is not set")
 	}
-	err := e.instance.sidecars.applyFunctionToSidecars(
-		func(sc SidecarManager) error {
-			if !sc.Instance().IsInState(StateCommitted, StateStopped) {
-				return ErrStartingNotAllowedForSidecar.
-					WithParams(sc.Instance().Name(), sc.Instance().state.String())
-			}
-			return nil
-		})
+	secretKey := os.Getenv("SCALEWAY_SECRET_KEY")
+	if secretKey == "" {
+		return fmt.Errorf("SCALEWAY_SECRET_KEY environment variable is not set")
+	}
+	projectID := os.Getenv("SCALEWAY_PROJECT_ID")
+	if projectID == "" {
+		return fmt.Errorf("SCALEWAY_PROJECT_ID environment variable is not set")
+	}
+	region := os.Getenv("SCALEWAY_REGION")
+	if region == "" {
+		return fmt.Errorf("SCALEWAY_REGION environment variable is not set")
+	}
+
+	provisioner, err := provision.NewScalewayProvisioner(accessKey, secretKey, projectID, region)
 	if err != nil {
 		return err
 	}
 
-	if e.instance.sidecars.isSidecar {
-		return ErrStartingSidecarNotAllowed
+	// doToken := os.Getenv("DIGITALOCEAN_TOKEN")
+	// if doToken == "" {
+	// 	return fmt.Errorf("DIGITALOCEAN_TOKEN environment variable is not set")
+	// }
+
+	// provisioner, err := provision.NewDigitalOceanProvisioner(doToken)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// Read public and private keys from file paths
+	publicKeyPath := "/Users/peter/.ssh/test-knuu-vm.pub"
+	privateKeyPath := "/Users/peter/.ssh/test-knuu-vm"
+
+	publicKey, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read public key: %v", err)
 	}
 
-	if e.instance.state == StateCommitted {
-		if err := e.deployResourcesForCommittedState(ctx); err != nil {
-			return ErrDeployingResourcesForInstance.WithParams(e.instance.name).Wrap(err)
+	// privateKey, err := os.ReadFile(privateKeyPath)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to read private key: %v", err)
+	// }
+
+	logger := log.New(os.Stdout, "test", log.LstdFlags)
+
+	machine, err := machine.NewMachine(
+		logger,
+		provisioner,
+		machine.Regions.Scaleway.FR_PAR_1,
+		machine.Sizes.Scaleway.DEV1S,
+		e.instance.Scope+"-"+e.instance.name,
+		machine.OS.Scaleway.Ubuntu2404,
+		[]string{
+			"#!/bin/bash",
+			// // Grant Polkit permissions for the default ubuntu user (NEEDED?)
+			// "echo 'polkit.addRule(function(action, subject) { if (subject.isInGroup(\"sudo\")) { return polkit.Result.YES; } });' | sudo tee /etc/polkit-1/rules.d/10-nopasswd.rules",
+			// // Reload Polkit to apply changes (NEEDED?)
+			// "sudo systemctl restart polkit",
+			// Setup SSH access for the default ubuntu user
+			"mkdir -p /home/ubuntu/.ssh",
+			fmt.Sprintf("echo '%s' >> /home/ubuntu/.ssh/authorized_keys", string(publicKey)),
+			// Disable password authentication for SSH
+			"sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config",
+			"sudo systemctl restart sshd",
+			// Update package list and install Podman (including needed dependencies)
+			"sudo apt-get update",
+			"sudo apt-get -y install podman uidmap slirp4netns --no-install-recommends",
+			// Set the runtime directory and DBUS session address
+			"export XDG_RUNTIME_DIR=/run/user/$(id -u ubuntu)",
+			"export DBUS_SESSION_BUS_ADDRESS=unix:path=${XDG_RUNTIME_DIR}/bus",
+
+			// Enable and start podman.socket for the user
+			"runuser -l ubuntu -c \"systemctl --user enable podman.socket\"",
+			"runuser -l ubuntu -c \"systemctl --user start podman.socket\"",
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = machine.WaitForCreation()
+	if err != nil {
+		return err
+	}
+
+	ip := machine.GetIP()
+	logger.Printf("IP: %s\n", ip)
+
+	// Wait until the Podman socket is available with a timeout
+	uri := "ssh://ubuntu@" + ip + ":22/run/user/1000/podman/podman.sock"
+	timeout := time.After(5 * time.Minute)
+	tick := time.NewTicker(10 * time.Second)
+
+	var connText context.Context
+	socketAvailable := false
+	for !socketAvailable {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout reached while waiting for Podman socket to become available")
+		case <-tick.C:
+			e.instance.Logger.WithField("instance", e.instance.name).Infof("attempting to connect to Podman socket")
+			connText, err = bindings.NewConnectionWithIdentity(ctx, uri, privateKeyPath, true)
+			if err == nil {
+				e.instance.Logger.WithField("instance", e.instance.name).Infof("connected to Podman socket")
+				socketAvailable = true
+			} else {
+				e.instance.Logger.WithField("instance", e.instance.name).Infof("podman socket not available yet, retrying...")
+			}
 		}
 	}
 
-	if err := e.deployPod(ctx); err != nil {
-		return ErrDeployingPodForInstance.WithParams(e.instance.name).Wrap(err)
+	// Image pull
+	pullOptions := &images.PullOptions{}
+	_, err = images.Pull(connText, e.instance.build.imageName, pullOptions)
+	if err != nil {
+		return fmt.Errorf("failed to pull image: %v", err)
 	}
 
-	e.instance.SetState(StateStarted)
-	e.instance.sidecars.setStateForSidecars(StateStarted)
+	// Image list
+	imageListOptions := &images.ListOptions{}
+	imageList, err := images.List(connText, imageListOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list images: %v", err)
+	}
+	e.instance.Logger.WithField("instance", e.instance.name).Infof("image list: %v", imageList)
+
+	// Container create
+	s := specgen.NewSpecGenerator(e.instance.build.imageName, false)
+	s.Name = e.instance.name
+	if e.instance.build.command != nil {
+		s.Entrypoint = e.instance.build.command
+	}
+	if e.instance.build.args != nil {
+		s.Command = e.instance.build.args
+	}
+	if e.instance.build.env != nil {
+		s.Env = e.instance.build.env
+	}
+	// TODO: add port mappings
+	// if e.instance.network.portsTCP != nil {
+	// 	s.PortMappings = e.instance.network.portsTCP
+	// }
+	// if e.instance.network.portsUDP != nil {
+	// 	s.PortMappings = e.instance.network.portsUDP
+	// }
+	createOptions := &containers.CreateOptions{}
+	r, err := containers.CreateWithSpec(connText, s, createOptions)
+	if err != nil {
+		return fmt.Errorf("failed to create container: %v", err)
+	}
+
+	// Container start
+	startOptions := &containers.StartOptions{}
+	err = containers.Start(connText, r.ID, startOptions)
+	if err != nil {
+		return fmt.Errorf("failed to start container: %v", err)
+	}
+
+	// Wait for container to be running
+	waitOptions := &containers.WaitOptions{
+		Condition: []define.ContainerStatus{define.ContainerStateRunning},
+	}
+	_, err = containers.Wait(connText, r.ID, waitOptions)
+	if err != nil {
+		return fmt.Errorf("failed to wait for container: %v", err)
+	}
+
+	// Container list
+	listOptions := &containers.ListOptions{}
+	containerLatestList, err := containers.List(connText, listOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %v", err)
+	}
+	e.instance.Logger.WithField("instance", e.instance.name).Infof("latest container is %s", containerLatestList[0].Names[0])
+
+	time.Sleep(1 * time.Hour)
+
+	machine.Remove(ctx)
+
 	return nil
+
+	// if err := e.instance.sidecars.verifySidecarsStates(); err != nil {
+	// 	return err
+	// }
+	// err := e.instance.sidecars.applyFunctionToSidecars(
+	// 	func(sc SidecarManager) error {
+	// 		if !sc.Instance().IsInState(StateCommitted, StateStopped) {
+	// 			return ErrStartingNotAllowedForSidecar.
+	// 				WithParams(sc.Instance().Name(), sc.Instance().state.String())
+	// 		}
+	// 		return nil
+	// 	})
+	// if err != nil {
+	// 	return err
+	// }
+
+	// if e.instance.sidecars.isSidecar {
+	// 	return ErrStartingSidecarNotAllowed
+	// }
+
+	// if e.instance.state == StateCommitted {
+	// 	if err := e.deployResourcesForCommittedState(ctx); err != nil {
+	// 		return ErrDeployingResourcesForInstance.WithParams(e.instance.name).Wrap(err)
+	// 	}
+	// }
+
+	// if err := e.deployPod(ctx); err != nil {
+	// 	return ErrDeployingPodForInstance.WithParams(e.instance.name).Wrap(err)
+	// }
+
+	// e.instance.SetState(StateStarted)
+	// e.instance.sidecars.setStateForSidecars(StateStarted)
+	// return nil
 }
 
 // Start starts the instance and waits for it to be ready

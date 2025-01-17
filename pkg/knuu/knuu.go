@@ -75,18 +75,18 @@ func New(ctx context.Context, opts Options) (*Knuu, error) {
 		return nil, err
 	}
 
-	if opts.Timeout == 0 {
-		opts.Timeout = defaultTimeout
-	}
-	if err := k.handleTimeout(ctx, opts.Timeout, timeoutHandlerName); err != nil {
-		return nil, ErrHandleTimeout.Wrap(err)
-	}
+	// if opts.Timeout == 0 {
+	// 	opts.Timeout = defaultTimeout
+	// }
+	// if err := k.handleTimeout(ctx, opts.Timeout, timeoutHandlerName); err != nil {
+	// 	return nil, ErrHandleTimeout.Wrap(err)
+	// }
 
-	if opts.ProxyEnabled {
-		if err := setupProxy(ctx, k); err != nil {
-			return nil, err
-		}
-	}
+	// if opts.ProxyEnabled {
+	// 	if err := setupProxy(ctx, k); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	return k, nil
 }
@@ -104,10 +104,10 @@ func (k *Knuu) HandleStopSignal(ctx context.Context) {
 		// Lock the stop mutex to prevent multiple stop signals from being processed concurrently
 		k.stopMu.Lock()
 		defer k.stopMu.Unlock()
-		err := k.handleTimeout(ctx, timeoutHandlerTimeout, timeoutHandlerNameStop)
-		if err != nil {
-			k.Logger.Errorf("Error cleaning up resources with timeout handler: %v", err)
-		}
+		// err := k.handleTimeout(ctx, timeoutHandlerTimeout, timeoutHandlerNameStop)
+		// if err != nil {
+		// 	k.Logger.Errorf("Error cleaning up resources with timeout handler: %v", err)
+		// }
 		k.K8sClient.Terminate()
 		// Allow other signal handlers to run
 		signal.Reset(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
