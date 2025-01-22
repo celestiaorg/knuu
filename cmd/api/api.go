@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/celestiaorg/knuu/internal/api/v1"
@@ -66,16 +67,6 @@ func NewAPICmd() *cobra.Command {
 }
 
 func runAPIServer(cmd *cobra.Command, args []string) error {
-	port, err := cmd.Flags().GetInt(flagPort)
-	if err != nil {
-		return fmt.Errorf("failed to get port: %v", err)
-	}
-
-	logLevel, err := cmd.Flags().GetString(flagLogLevel)
-	if err != nil {
-		return fmt.Errorf("failed to get log level: %v", err)
-	}
-
 	dbOpts, err := getDBOptions(cmd.Flags())
 	if err != nil {
 		return fmt.Errorf("failed to get database options: %v", err)
@@ -86,28 +77,15 @@ func runAPIServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	secretKey, err := cmd.Flags().GetString(flagSecretKey)
+	apiOpts, err := getAPIOptions(cmd.Flags())
 	if err != nil {
-		return fmt.Errorf("failed to get secret key: %v", err)
+		return fmt.Errorf("failed to get API options: %v", err)
 	}
 
-	adminUser, err := cmd.Flags().GetString(flagAdminUser)
+	apiServer, err := api.New(context.Background(), db, apiOpts)
 	if err != nil {
-		return fmt.Errorf("failed to get admin user: %v", err)
+		return fmt.Errorf("failed to create API server: %v", err)
 	}
-
-	adminPass, err := cmd.Flags().GetString(flagAdminPass)
-	if err != nil {
-		return fmt.Errorf("failed to get admin password: %v", err)
-	}
-
-	apiServer := api.New(db, api.Options{
-		Port:      port,
-		LogMode:   logLevel,
-		SecretKey: secretKey,
-		AdminUser: adminUser,
-		AdminPass: adminPass,
-	})
 
 	return apiServer.Start()
 }
@@ -144,5 +122,40 @@ func getDBOptions(flags *pflag.FlagSet) (database.Options, error) {
 		Password: dbPassword,
 		DBName:   dbName,
 		Port:     dbPort,
+	}, nil
+}
+
+func getAPIOptions(flags *pflag.FlagSet) (api.Options, error) {
+	port, err := flags.GetInt(flagPort)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get port: %v", err)
+	}
+
+	logLevel, err := flags.GetString(flagLogLevel)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get log level: %v", err)
+	}
+
+	secretKey, err := flags.GetString(flagSecretKey)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get secret key: %v", err)
+	}
+
+	adminUser, err := flags.GetString(flagAdminUser)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get admin user: %v", err)
+	}
+
+	adminPass, err := flags.GetString(flagAdminPass)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get admin password: %v", err)
+	}
+
+	return api.Options{
+		Port:      port,
+		LogMode:   logLevel,
+		SecretKey: secretKey,
+		AdminUser: adminUser,
+		AdminPass: adminPass,
 	}, nil
 }

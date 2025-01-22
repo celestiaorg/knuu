@@ -9,25 +9,31 @@ import (
 )
 
 const (
-	DefaultHost     = "localhost"
-	DefaultUser     = "postgres"
-	DefaultPassword = "postgres"
-	DefaultDBName   = "postgres"
-	DefaultPort     = 5432
+	DefaultHost       = "localhost"
+	DefaultUser       = "postgres"
+	DefaultPassword   = "postgres"
+	DefaultDBName     = "postgres"
+	DefaultPort       = 5432
+	DefaultSSLEnabled = false
 )
 
 type Options struct {
-	Host     string
-	User     string
-	Password string
-	DBName   string
-	Port     int
+	Host       string
+	User       string
+	Password   string
+	DBName     string
+	Port       int
+	SSLEnabled *bool
 }
 
 func New(opts Options) (*gorm.DB, error) {
 	opts = setDefaults(opts)
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
-		opts.Host, opts.User, opts.Password, opts.DBName, opts.Port)
+	sslMode := "disable"
+	if opts.SSLEnabled != nil && *opts.SSLEnabled {
+		sslMode = "enable"
+	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s",
+		opts.Host, opts.User, opts.Password, opts.DBName, opts.Port, sslMode)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
@@ -54,6 +60,10 @@ func setDefaults(opts Options) Options {
 	if opts.Port == 0 {
 		opts.Port = DefaultPort
 	}
+	if opts.SSLEnabled == nil {
+		sslMode := DefaultSSLEnabled
+		opts.SSLEnabled = &sslMode
+	}
 	return opts
 }
 
@@ -62,5 +72,6 @@ func migrate(db *gorm.DB) error {
 		&models.User{},
 		&models.Token{},
 		&models.Permission{},
+		&models.Test{},
 	)
 }

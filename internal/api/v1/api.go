@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
 	"github.com/celestiaorg/knuu/internal/api/v1/handlers"
 	"github.com/celestiaorg/knuu/internal/api/v1/middleware"
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
+	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
 
 	"github.com/gin-gonic/gin"
@@ -29,21 +31,44 @@ type Options struct {
 	LogMode       string // gin.DebugMode, gin.ReleaseMode(default), gin.TestMode
 	OriginAllowed string
 	SecretKey     string
+
+	AdminUser string // default admin username
+	AdminPass string // default admin password
 }
 
-func New(db *gorm.DB, opts Options) *API {
+func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 	opts = setDefaults(opts)
 	gin.SetMode(opts.LogMode)
 
 	rt := gin.Default()
 
+	auth := middleware.NewAuth(opts.SecretKey)
+	uh, err := getUserHandler(ctx, opts, db, auth)
+	if err != nil {
+		return nil, err
+	}
+
 	public := rt.Group("/")
 	{
-		uh := handlers.NewUserHandler(services.NewUserService(opts.SecretKey, repos.NewUserRepository(db)))
-		public.POST(pathsUserRegister, uh.Register)
 		public.POST(pathsUserLogin, uh.Login)
 	}
-	protected := rt.Group("/", middleware.AuthMiddleware())
+
+	protected := rt.Group("/", auth.AuthMiddleware())
+	{
+		protected.POST(pathsUserRegister, auth.RequireRole(models.RoleAdmin), uh.Register)
+
+		th, err := getTestHandler(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+
+		protected.POST(pathsTests, th.CreateTest)
+		// protected.GET(pathsTestDetails, th.GetTestDetails)
+		// protected.GET(pathsTestInstances, th.GetInstances)
+		protected.GET(pathsTestInstanceDetails, th.GetInstance)
+		protected.POST(pathsTestInstanceDetails, th.CreateInstance) // Need to do something about updating an instance
+		// protected.POST(pathsTestInstanceExecute, th.ExecuteInstance)
+	}
 
 	_ = protected
 
@@ -59,7 +84,7 @@ func New(db *gorm.DB, opts Options) *API {
 		public.GET("/", a.IndexPage)
 	}
 
-	return a
+	return a, nil
 }
 
 func (a *API) Start() error {
@@ -102,4 +127,22 @@ func handleOrigin(router *gin.Engine, originAllowed string) http.Handler {
 		AllowedOrigins: originsOk,
 		AllowedMethods: methodsOk,
 	}).Handler(router)
+}
+
+func getUserHandler(ctx context.Context, opts Options, db *gorm.DB, auth *middleware.Auth) (*handlers.UserHandler, error) {
+	us, err := services.NewUserService(ctx, opts.AdminUser, opts.AdminPass, repos.NewUserRepository(db))
+	if err != nil {
+		return nil, err
+	}
+
+	return handlers.NewUserHandler(us, auth), nil
+}
+
+func getTestHandler(ctx context.Context, db *gorm.DB) (*handlers.TestHandler, error) {
+	ts, err := services.NewTestService(ctx, repos.NewTestRepository(db))
+	if err != nil {
+		return nil, err
+	}
+
+	return handlers.NewTestHandler(ts), nil
 }

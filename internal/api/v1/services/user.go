@@ -1,43 +1,51 @@
 package services
 
 import (
-	"errors"
-	"time"
+	"context"
+	"fmt"
 
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
-	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	UserTokenDuration = 1 * time.Hour
-)
-
 type UserService interface {
-	Register(user *models.User) (*models.User, error)
-	Authenticate(username, password string) (string, error)
+	Register(ctx context.Context, user *models.User) (*models.User, error)
+	Authenticate(ctx context.Context, username, password string) (*models.User, error)
 }
 
 type userServiceImpl struct {
-	secretKey string
-	userRepo  repos.UserRepository
+	repo repos.UserRepository
 }
 
 var _ UserService = &userServiceImpl{}
 
-// TODO: need to add the admin user for the first time
-func NewUserService(secretKey string, userRepo repos.UserRepository) UserService {
-	return &userServiceImpl{
-		secretKey: secretKey,
-		userRepo:  userRepo,
+// This function is used to create the admin user and the user service.
+// It is called when the API is initialized.
+func NewUserService(ctx context.Context, adminUser, adminPass string, userRepo repos.UserRepository) (UserService, error) {
+	us := &userServiceImpl{
+		repo: userRepo,
 	}
+
+	_, err := us.Register(ctx,
+		&models.User{
+			Username: adminUser,
+			Password: adminPass,
+			Role:     models.RoleAdmin,
+		})
+	if err != nil && err != ErrUsernameAlreadyTaken {
+		return nil, ErrCreatingAdminUser.Wrap(err)
+	}
+
+	return us, nil
 }
 
-func (s *userServiceImpl) Register(user *models.User) (*models.User, error) {
-	if _, err := s.userRepo.FindUserByUsername(user.Username); err == nil {
-		return nil, errors.New("username already taken")
+func (s *userServiceImpl) Register(ctx context.Context, user *models.User) (*models.User, error) {
+	if _, err := s.repo.FindUserByUsername(ctx, user.Username); err == nil {
+		return nil, ErrUsernameAlreadyTaken
 	}
+
+	fmt.Printf("user: %#v\n", user)
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -45,32 +53,24 @@ func (s *userServiceImpl) Register(user *models.User) (*models.User, error) {
 	}
 
 	user.Password = string(hashedPassword)
-	if err := s.userRepo.CreateUser(user); err != nil {
+	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return nil, err
 	}
 
 	return user, nil
 }
 
-func (s *userServiceImpl) Authenticate(username, password string) (string, error) {
-	user, err := s.userRepo.FindUserByUsername(username)
+func (s *userServiceImpl) Authenticate(ctx context.Context, username, password string) (*models.User, error) {
+	user, err := s.repo.FindUserByUsername(ctx, username)
 	if err != nil {
-		return "", err
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return "", errors.New("invalid credentials")
+		return nil, err
 	}
 
-	// Generate JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":  user.ID,
-		"username": user.Username,
-		"role":     user.Role,
-		"exp":      time.Now().Add(UserTokenDuration).Unix(),
-	})
-	tokenString, err := token.SignedString([]byte(s.secretKey))
-	if err != nil {
-		return "", err
+	fmt.Printf("user.Password: `%s`\n", user.Password)
+	fmt.Printf("password: `%s`\n", password)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials.Wrap(err)
 	}
-	return tokenString, nil
+
+	return user, nil
 }

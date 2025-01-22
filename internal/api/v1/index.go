@@ -46,7 +46,7 @@ func (a *API) IndexPage(c *gin.Context) {
 	for _, a := range allAPIs {
 
 		href := strings.TrimPrefix(a.Path, "/") // it fixes the links if the service is running under a path
-		html += fmt.Sprintf(`<a href="%s">%s</a><br />`, href, a.Path)
+		html += fmt.Sprintf(`<a href="%s">%s [ %s ]</a><br />`, href, a.Path, a.Method)
 	}
 	html += buildInfo
 

@@ -5,14 +5,14 @@ import "time"
 type UserRole int
 
 const (
-	RoleAdmin UserRole = iota + 1
-	RoleUser
+	RoleUser UserRole = iota
+	RoleAdmin
 )
 
 type User struct {
 	ID        uint      `json:"-" gorm:"primaryKey"`
 	Username  string    `json:"username" gorm:"unique;not null"`
-	Password  string    `json:"-" gorm:"not null"`
+	Password  string    `json:"password" gorm:"not null"`
 	Role      UserRole  `json:"role" gorm:"not null"`
 	CreatedAt time.Time `json:"created_at"`
 }
