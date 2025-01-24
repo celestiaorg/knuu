@@ -10,6 +10,9 @@ const (
 	pathsTests               = pathsPrefix + "/tests"
 	pathsTestDetails         = pathsTests + "/{scope}"
 	pathsTestInstances       = pathsTestDetails + "/instances"
-	pathsTestInstanceDetails = pathsTestInstances + "/{instance_id}"
+	pathsTestInstanceDetails = pathsTestInstances + "/{name}"
+	pathsTestInstanceStatus  = pathsTestInstanceDetails + "/status"
+	pathsTestInstanceLogs    = pathsTestInstanceDetails + "/logs"
+	pathsTestInstanceStop    = pathsTestInstanceDetails + "/stop"
 	pathsTestInstanceExecute = pathsTestInstanceDetails + "/execute"
 )

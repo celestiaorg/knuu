@@ -35,10 +35,25 @@ func (h *TestHandler) GetInstance(c *gin.Context) {
 		return
 	}
 
-	instance, err := h.testService.GetInstance(c.Request.Context(), user.ID, c.Param("scope"), c.Param("instance_name"))
+	instance, err := h.testService.GetInstance(c.Request.Context(), user.ID, c.Param("scope"), c.Param("name"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, instance)
+}
+
+func (h *TestHandler) GetInstanceStatus(c *gin.Context) {
+	user, err := getUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	status, err := h.testService.GetInstanceStatus(c.Request.Context(), user.ID, c.Param("scope"), c.Param("name"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": status})
 }

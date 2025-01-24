@@ -21,9 +21,14 @@ const (
 	defaultLogMode = gin.ReleaseMode
 )
 
+type apiCleanup struct {
+	testService *services.TestService
+}
+
 type API struct {
-	router *gin.Engine
-	server *http.Server
+	router  *gin.Engine
+	server  *http.Server
+	cleanup apiCleanup
 }
 
 type Options struct {
@@ -34,6 +39,8 @@ type Options struct {
 
 	AdminUser string // default admin username
 	AdminPass string // default admin password
+
+	TestServiceOptions services.TestServiceOptions
 }
 
 func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
@@ -53,19 +60,21 @@ func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 		public.POST(pathsUserLogin, uh.Login)
 	}
 
+	testService, err := services.NewTestService(ctx, repos.NewTestRepository(db), opts.TestServiceOptions)
+	if err != nil {
+		return nil, err
+	}
+
 	protected := rt.Group("/", auth.AuthMiddleware())
 	{
 		protected.POST(pathsUserRegister, auth.RequireRole(models.RoleAdmin), uh.Register)
 
-		th, err := getTestHandler(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-
+		th := handlers.NewTestHandler(testService)
 		protected.POST(pathsTests, th.CreateTest)
 		// protected.GET(pathsTestDetails, th.GetTestDetails)
 		// protected.GET(pathsTestInstances, th.GetInstances)
 		protected.GET(pathsTestInstanceDetails, th.GetInstance)
+		protected.GET(pathsTestInstanceStatus, th.GetInstanceStatus)
 		protected.POST(pathsTestInstanceDetails, th.CreateInstance) // Need to do something about updating an instance
 		// protected.POST(pathsTestInstanceExecute, th.ExecuteInstance)
 	}
@@ -77,6 +86,9 @@ func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 		server: &http.Server{
 			Addr:    fmt.Sprintf(":%d", opts.Port),
 			Handler: handleOrigin(rt, opts.OriginAllowed),
+		},
+		cleanup: apiCleanup{
+			testService: testService,
 		},
 	}
 
@@ -92,8 +104,14 @@ func (a *API) Start() error {
 	return a.server.ListenAndServe()
 }
 
-func (a *API) Stop() error {
+func (a *API) Stop(ctx context.Context) error {
 	fmt.Println("Shutting down API server")
+	if a.cleanup.testService != nil {
+		err := a.cleanup.testService.Shutdown(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return a.server.Close()
 }
 
@@ -136,13 +154,4 @@ func getUserHandler(ctx context.Context, opts Options, db *gorm.DB, auth *middle
 	}
 
 	return handlers.NewUserHandler(us, auth), nil
-}
-
-func getTestHandler(ctx context.Context, db *gorm.DB) (*handlers.TestHandler, error) {
-	ts, err := services.NewTestService(ctx, repos.NewTestRepository(db))
-	if err != nil {
-		return nil, err
-	}
-
-	return handlers.NewTestHandler(ts), nil
 }

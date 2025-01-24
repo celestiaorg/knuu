@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/celestiaorg/knuu/internal/api/v1"
+	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database"
 
 	"github.com/gin-gonic/gin"
@@ -28,18 +29,22 @@ const (
 	flagAdminUser = "admin-user"
 	flagAdminPass = "admin-pass"
 
+	flagLogsPath = "logs-path"
+
 	defaultPort     = 8080
 	defaultLogLevel = gin.ReleaseMode
 
-	defaultDBHost     = "localhost"
-	defaultDBUser     = "postgres"
-	defaultDBPassword = "postgres"
-	defaultDBName     = "postgres"
-	defaultDBPort     = 5432
+	defaultDBHost     = database.DefaultHost
+	defaultDBUser     = database.DefaultUser
+	defaultDBPassword = database.DefaultPassword
+	defaultDBName     = database.DefaultDBName
+	defaultDBPort     = database.DefaultPort
 
 	defaultSecretKey = "secret"
 	defaultAdminUser = "admin"
 	defaultAdminPass = "admin"
+
+	defaultLogsPath = services.DefaultLogsPath
 )
 
 func NewAPICmd() *cobra.Command {
@@ -62,6 +67,8 @@ func NewAPICmd() *cobra.Command {
 	apiCmd.Flags().StringP(flagSecretKey, "", defaultSecretKey, "JWT secret key")
 	apiCmd.Flags().StringP(flagAdminUser, "", defaultAdminUser, "Admin username")
 	apiCmd.Flags().StringP(flagAdminPass, "", defaultAdminPass, "Admin password")
+
+	apiCmd.Flags().StringP(flagLogsPath, "", defaultLogsPath, "Path to store logs")
 
 	return apiCmd
 }
@@ -151,11 +158,19 @@ func getAPIOptions(flags *pflag.FlagSet) (api.Options, error) {
 		return api.Options{}, fmt.Errorf("failed to get admin password: %v", err)
 	}
 
+	logsPath, err := flags.GetString(flagLogsPath)
+	if err != nil {
+		return api.Options{}, fmt.Errorf("failed to get logs path: %v", err)
+	}
+
 	return api.Options{
 		Port:      port,
 		LogMode:   logLevel,
 		SecretKey: secretKey,
 		AdminUser: adminUser,
 		AdminPass: adminPass,
+		TestServiceOptions: services.TestServiceOptions{
+			LogsPath: logsPath,
+		},
 	}, nil
 }

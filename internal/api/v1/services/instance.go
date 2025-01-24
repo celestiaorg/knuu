@@ -15,7 +15,6 @@ type Instance struct {
 	BuildArgs    []string           `json:"build_args"`
 	StartCommand []string           `json:"start_command"`
 	Args         []string           `json:"args"`
-	Status       string             `json:"status"` // Readonly
 	StartNow     bool               `json:"start_now"`
 	Env          map[string]string  `json:"env"`
 	TCPPorts     []int              `json:"tcp_ports"`
@@ -87,10 +86,14 @@ func (s *TestService) CreateInstance(ctx context.Context, userID uint, instance 
 		}
 	}
 
-	if instance.StartNow {
-		return ins.Execution().StartAsync(ctx)
+	if !instance.StartNow {
+		return nil
 	}
-	return nil
+
+	if err := ins.Build().Commit(ctx); err != nil {
+		return err
+	}
+	return ins.Execution().StartAsync(ctx)
 }
 
 func (s *TestService) GetInstance(ctx context.Context, userID uint, scope, instanceName string) (*Instance, error) {
@@ -102,4 +105,18 @@ func (s *TestService) GetInstance(ctx context.Context, userID uint, scope, insta
 	_ = kn
 
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (s *TestService) GetInstanceStatus(ctx context.Context, userID uint, scope, instanceName string) (string, error) {
+	kn, err := s.Knuu(userID, scope)
+	if err != nil {
+		return "", err
+	}
+
+	ps, err := kn.K8sClient.PodStatus(ctx, instanceName)
+	if err != nil {
+		return "", err
+	}
+
+	return string(ps.Status), nil
 }

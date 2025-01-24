@@ -32,7 +32,7 @@ func (r *TestRepository) Delete(ctx context.Context, scope string) error {
 }
 
 func (r *TestRepository) Update(ctx context.Context, test *models.Test) error {
-	return r.db.WithContext(ctx).Model(&models.Test{}).Where(&models.Test{Scope: test.Scope}).Updates(test).Error
+	return r.db.WithContext(ctx).Model(&models.Test{}).Where(&models.Test{Scope: test.Scope, UserID: test.UserID}).Updates(test).Error
 }
 
 func (r *TestRepository) List(ctx context.Context, userID uint, limit int, offset int) ([]models.Test, error) {
