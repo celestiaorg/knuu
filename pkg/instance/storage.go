@@ -342,10 +342,12 @@ func (s *storage) addFileToInstance(srcPath, dest, chown string) error {
 
 	file := s.instance.K8sClient.NewFile(srcPath, dest, chown, permission)
 
-	// TODO: remove this
-	fmt.Printf("\nfile: %#v\n", file)
-
 	s.files = append(s.files, file)
+	s.instance.Logger.WithFields(logrus.Fields{
+		"file":     file,
+		"instance": s.instance.name,
+	}).Debug("added file to instance")
+
 	return nil
 }
 

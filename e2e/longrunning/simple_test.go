@@ -6,14 +6,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/celestiaorg/knuu/pkg/instance"
-	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
 const (
 	alpineImage = "alpine:3.20.3"
-	testTimeout = time.Minute * 5
 )
 
 func TestSimple(t *testing.T) {
@@ -24,7 +20,7 @@ func TestSimple(t *testing.T) {
 
 	ctx := context.Background()
 
-	ins1, err := createInstance(ctx, instanceName, "")
+	ins1, err := createInstanceAndStart(ctx, instanceName, "", alpineImage)
 	require.NoError(t, err)
 	testScope := ins1.Scope
 
@@ -36,47 +32,10 @@ func TestSimple(t *testing.T) {
 	t.Logf("Waiting for 5 seconds to simulate a long running process")
 	time.Sleep(5 * time.Second)
 
-	ins2, err := createInstance(ctx, instanceName, testScope)
+	ins2, err := createInstanceAndStart(ctx, instanceName, testScope, alpineImage)
 	require.NoError(t, err)
 
 	out, err := ins2.Execution().ExecuteCommand(ctx, "cat", "/tmp/test-id")
 	require.NoError(t, err)
 	require.Contains(t, out, fileContent)
-}
-
-func createInstance(ctx context.Context, name, testScope string) (*instance.Instance, error) {
-	knOpts := knuu.Options{Timeout: testTimeout, SkipCleanup: true}
-	if testScope != "" {
-		knOpts.Scope = testScope
-	}
-
-	kn, err := knuu.New(ctx, knOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	kn.HandleStopSignal(ctx)
-
-	ins, err := kn.NewInstance(name)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := ins.Build().SetImage(ctx, alpineImage); err != nil {
-		return nil, err
-	}
-
-	if err := ins.Build().Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	if err := ins.Build().SetStartCommand("sleep", "infinity"); err != nil {
-		return nil, err
-	}
-
-	if err := ins.Execution().Start(ctx); err != nil {
-		return nil, err
-	}
-
-	return ins, nil
 }

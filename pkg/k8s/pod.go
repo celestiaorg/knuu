@@ -91,7 +91,7 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	pod := c.preparePod(podConfig, init)
 	return c.clientset.CoreV1().Pods(c.namespace).
 		Apply(ctx, pod, metav1.ApplyOptions{
-			FieldManager: fieldManager,
+			FieldManager: FieldManager,
 		})
 }
 func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {

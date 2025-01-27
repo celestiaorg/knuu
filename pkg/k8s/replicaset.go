@@ -45,7 +45,7 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 	}
 
 	return c.clientset.AppsV1().ReplicaSets(c.namespace).
-		Apply(ctx, newRs, metav1.ApplyOptions{FieldManager: fieldManager})
+		Apply(ctx, newRs, metav1.ApplyOptions{FieldManager: FieldManager})
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
