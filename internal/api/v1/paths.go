@@ -8,9 +8,10 @@ const (
 	pathsUserLogin    = pathsUser + "/login"
 
 	pathsTests               = pathsPrefix + "/tests"
-	pathsTestDetails         = pathsTests + "/{scope}"
+	pathsTestDetails         = pathsTests + "/:scope"
+	pathsTestLogs            = pathsTestDetails + "/logs"
 	pathsTestInstances       = pathsTestDetails + "/instances"
-	pathsTestInstanceDetails = pathsTestInstances + "/{name}"
+	pathsTestInstanceDetails = pathsTestInstances + "/:name"
 	pathsTestInstanceStatus  = pathsTestInstanceDetails + "/status"
 	pathsTestInstanceLogs    = pathsTestInstanceDetails + "/logs"
 	pathsTestInstanceStop    = pathsTestInstanceDetails + "/stop"

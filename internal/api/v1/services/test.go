@@ -2,12 +2,16 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
+
+	"github.com/celestiaorg/knuu/internal/database"
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
 	"github.com/celestiaorg/knuu/pkg/k8s"
@@ -19,7 +23,7 @@ import (
 const (
 	DefaultTestTimeout      = time.Hour * 1
 	DefaultNamespace        = "default"
-	DefaultLogsPath         = "/tmp/knuu-logs"
+	DefaultTestLogsPath     = "/tmp/knuu-logs" // directory to store logs of each test
 	LogsDirPermission       = 0755
 	LogsFilePermission      = 0644
 	PeriodicCleanupInterval = time.Minute * 10
@@ -34,32 +38,30 @@ type TestService struct {
 	knuuList         map[uint]map[string]*knuu.Knuu // key is the user ID, second key is the scope
 	knuuListMu       sync.RWMutex
 	defaultK8sClient *k8s.Client
-	logsPath         string
+	testsLogsPath    string
 	cleanup          *testServiceCleanup
 	logger           *logrus.Logger
 	stopCleanupChan  chan struct{}
 }
 
 type TestServiceOptions struct {
-	LogsPath string
-	Logger   *logrus.Logger
+	TestsLogsPath string // optional directory where the logs of all tests will be stored each test has one log file
+	Logger        *logrus.Logger
 }
 
 func NewTestService(ctx context.Context, repo *repos.TestRepository, opts TestServiceOptions) (*TestService, error) {
-	if opts.Logger == nil {
-		opts.Logger = logrus.New()
-	}
+	opts = setServiceOptsDefaults(opts)
 
 	s := &TestService{
 		repo:            repo,
 		knuuList:        make(map[uint]map[string]*knuu.Knuu),
-		logsPath:        opts.LogsPath,
+		testsLogsPath:   opts.TestsLogsPath,
 		logger:          opts.Logger,
 		stopCleanupChan: make(chan struct{}),
 	}
 
-	if _, err := os.Stat(s.logsPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(s.logsPath, LogsDirPermission); err != nil {
+	if _, err := os.Stat(s.testsLogsPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(s.testsLogsPath, LogsDirPermission); err != nil {
 			return nil, err
 		}
 	}
@@ -70,7 +72,7 @@ func NewTestService(ctx context.Context, repo *repos.TestRepository, opts TestSe
 	}
 	s.defaultK8sClient = k8sClient
 
-	if err := s.loadKnuuFromDB(ctx); err != nil {
+	if err := s.loadRunningTestsFromDB(ctx); err != nil {
 		return nil, err
 	}
 
@@ -78,16 +80,38 @@ func NewTestService(ctx context.Context, repo *repos.TestRepository, opts TestSe
 	return s, nil
 }
 
+func setServiceOptsDefaults(opts TestServiceOptions) TestServiceOptions {
+	if opts.Logger == nil {
+		opts.Logger = logrus.New()
+	}
+
+	if opts.TestsLogsPath == "" {
+		opts.TestsLogsPath = DefaultTestLogsPath
+	}
+
+	return opts
+}
+
 func (s *TestService) Create(ctx context.Context, test *models.Test) error {
 	if test.UserID == 0 {
 		return ErrUserIDRequired
 	}
 
-	if err := s.prepareKnuu(ctx, test); err != nil {
+	err := s.repo.Create(ctx, test)
+	if database.IsDuplicateKeyError(err) {
+		return ErrTestAlreadyExists
+	} else if err != nil {
 		return err
 	}
 
-	return s.repo.Create(ctx, test)
+	// TODO: currently this process is blocking the request until the knuu is ready
+	// we need to make it non-blocking
+	err = s.prepareKnuu(ctx, test)
+	if err == nil {
+		return nil
+	}
+
+	return errors.Join(err, s.repo.Delete(ctx, test.Scope))
 }
 
 func (s *TestService) Knuu(userID uint, scope string) (*knuu.Knuu, error) {
@@ -163,6 +187,25 @@ func (s *TestService) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (s *TestService) TestLogsPath(ctx context.Context, userID uint, scope string) (string, error) {
+	// TODO: we need to apply roles here so Admins can access all tests logs
+	// Check if the test exists and beongs to the user
+	_, err := s.repo.Get(ctx, userID, scope)
+	if err != nil {
+		return "", err
+	}
+
+	logFilePath := filepath.Join(s.testsLogsPath, fmt.Sprintf("%s.log", scope))
+
+	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+		return "", ErrLogFileNotFound
+	} else if err != nil {
+		return "", err
+	}
+
+	return logFilePath, nil
+}
+
 func (s *TestService) cleanupIfFinishedTest(ctx context.Context, userID uint, scope string) error {
 	running, err := s.isTestRunning(ctx, scope)
 	if err != nil {
@@ -200,14 +243,14 @@ func (s *TestService) forceCleanupTest(ctx context.Context, userID uint, scope s
 }
 
 func (s *TestService) isTestRunning(ctx context.Context, scope string) (bool, error) {
-	ns, err := s.defaultK8sClient.GetNamespace(ctx, scope)
-	if err != nil {
-		return false, err
+	_, err := s.defaultK8sClient.GetNamespace(ctx, scope)
+	if apierrs.IsNotFound(err) {
+		return false, nil
 	}
-	return ns != nil, nil
+	return err == nil, err
 }
 
-func (s *TestService) loadKnuuFromDB(ctx context.Context) error {
+func (s *TestService) loadRunningTestsFromDB(ctx context.Context) error {
 	tests, err := s.repo.ListAllAlive(ctx)
 	if err != nil {
 		return err
@@ -248,27 +291,34 @@ func (s *TestService) prepareKnuu(ctx context.Context, test *models.Test) error 
 	}
 
 	logFile, err := os.OpenFile(
-		filepath.Join(s.logsPath, fmt.Sprintf("%s.log", test.Scope)),
+		filepath.Join(s.testsLogsPath, fmt.Sprintf("%s.log", test.Scope)),
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
 		LogsFilePermission,
 	)
 	if err != nil {
+		s.logger.Errorf("opening log file for test %s: %v", test.Scope, err)
 		return err
 	}
 
-	var (
-		logger      = logrus.New()
-		minioClient *minio.Minio
-	)
-	logger.SetOutput(logFile)
+	testLogger := logrus.New()
+	testLogger.SetOutput(logFile)
 
-	k8sClient, err := k8s.NewClient(ctx, test.Scope, logger)
+	if test.LogLevel != "" {
+		level, err := logrus.ParseLevel(test.LogLevel)
+		if err != nil {
+			return err
+		}
+		testLogger.SetLevel(level)
+	}
+
+	k8sClient, err := k8s.NewClient(ctx, test.Scope, testLogger)
 	if err != nil {
 		return err
 	}
 
+	var minioClient *minio.Minio
 	if test.MinioEnabled {
-		minioClient, err = minio.New(ctx, k8sClient, logger)
+		minioClient, err = minio.New(ctx, k8sClient, testLogger)
 		if err != nil {
 			return err
 		}

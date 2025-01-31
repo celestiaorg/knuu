@@ -7,6 +7,8 @@ import (
 	"github.com/celestiaorg/knuu/internal/api/v1"
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -16,8 +18,8 @@ import (
 const (
 	apiCmdName = "api"
 
-	flagPort     = "port"
-	flagLogLevel = "log-level"
+	flagPort        = "port"
+	flagAPILogLevel = "log-level"
 
 	flagDBHost     = "db.host"
 	flagDBUser     = "db.user"
@@ -29,7 +31,7 @@ const (
 	flagAdminUser = "admin-user"
 	flagAdminPass = "admin-pass"
 
-	flagLogsPath = "logs-path"
+	flagTestsLogsPath = "tests-logs-path"
 
 	defaultPort     = 8080
 	defaultLogLevel = gin.ReleaseMode
@@ -44,7 +46,7 @@ const (
 	defaultAdminUser = "admin"
 	defaultAdminPass = "admin"
 
-	defaultLogsPath = services.DefaultLogsPath
+	defaultLogsPath = services.DefaultTestLogsPath
 )
 
 func NewAPICmd() *cobra.Command {
@@ -56,7 +58,7 @@ func NewAPICmd() *cobra.Command {
 	}
 
 	apiCmd.Flags().IntP(flagPort, "p", defaultPort, "Port to run the API server on")
-	apiCmd.Flags().StringP(flagLogLevel, "l", defaultLogLevel, "Log level: debug | release | test")
+	apiCmd.Flags().StringP(flagAPILogLevel, "l", defaultLogLevel, "Log level: debug | release | test")
 
 	apiCmd.Flags().StringP(flagDBHost, "d", defaultDBHost, "Postgres database host")
 	apiCmd.Flags().StringP(flagDBUser, "", defaultDBUser, "Postgres database user")
@@ -68,7 +70,7 @@ func NewAPICmd() *cobra.Command {
 	apiCmd.Flags().StringP(flagAdminUser, "", defaultAdminUser, "Admin username")
 	apiCmd.Flags().StringP(flagAdminPass, "", defaultAdminPass, "Admin password")
 
-	apiCmd.Flags().StringP(flagLogsPath, "", defaultLogsPath, "Path to store logs")
+	apiCmd.Flags().StringP(flagTestsLogsPath, "", defaultLogsPath, "Directory to store logs of the tests")
 
 	return apiCmd
 }
@@ -123,12 +125,28 @@ func getDBOptions(flags *pflag.FlagSet) (database.Options, error) {
 		return database.Options{}, fmt.Errorf("failed to get database port: %v", err)
 	}
 
+	apiLogLevel, err := flags.GetString(flagAPILogLevel)
+	if err != nil {
+		return database.Options{}, fmt.Errorf("failed to get API log level: %v", err)
+	}
+
+	var dbLogLevel logger.LogLevel
+	switch apiLogLevel {
+	case gin.DebugMode:
+		dbLogLevel = logger.Info
+	case gin.ReleaseMode:
+		dbLogLevel = logger.Error
+	case gin.TestMode:
+		dbLogLevel = logger.Info
+	}
+
 	return database.Options{
 		Host:     dbHost,
 		User:     dbUser,
 		Password: dbPassword,
 		DBName:   dbName,
 		Port:     dbPort,
+		LogLevel: dbLogLevel,
 	}, nil
 }
 
@@ -138,7 +156,7 @@ func getAPIOptions(flags *pflag.FlagSet) (api.Options, error) {
 		return api.Options{}, fmt.Errorf("failed to get port: %v", err)
 	}
 
-	logLevel, err := flags.GetString(flagLogLevel)
+	apiLogLevel, err := flags.GetString(flagAPILogLevel)
 	if err != nil {
 		return api.Options{}, fmt.Errorf("failed to get log level: %v", err)
 	}
@@ -158,19 +176,33 @@ func getAPIOptions(flags *pflag.FlagSet) (api.Options, error) {
 		return api.Options{}, fmt.Errorf("failed to get admin password: %v", err)
 	}
 
-	logsPath, err := flags.GetString(flagLogsPath)
+	testsLogsPath, err := flags.GetString(flagTestsLogsPath)
 	if err != nil {
-		return api.Options{}, fmt.Errorf("failed to get logs path: %v", err)
+		return api.Options{}, fmt.Errorf("failed to get tests logs path: %v", err)
+	}
+
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	switch apiLogLevel {
+	case gin.DebugMode:
+		logger.SetLevel(logrus.DebugLevel)
+	case gin.ReleaseMode:
+		logger.SetLevel(logrus.ErrorLevel)
+	case gin.TestMode:
+		logger.SetLevel(logrus.InfoLevel)
 	}
 
 	return api.Options{
-		Port:      port,
-		LogMode:   logLevel,
-		SecretKey: secretKey,
-		AdminUser: adminUser,
-		AdminPass: adminPass,
+		Port:       port,
+		APILogMode: apiLogLevel, // gin logger (HTTP request level)
+		SecretKey:  secretKey,
+		AdminUser:  adminUser,
+		AdminPass:  adminPass,
+		Logger:     logger, // handler (application level logger)
 		TestServiceOptions: services.TestServiceOptions{
-			LogsPath: logsPath,
+			TestsLogsPath: testsLogsPath, // directory to store logs of each test
+			Logger:        logger,
 		},
 	}, nil
 }

@@ -1,11 +1,13 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
@@ -24,6 +26,7 @@ type Options struct {
 	DBName     string
 	Port       int
 	SSLEnabled *bool
+	LogLevel   logger.LogLevel
 }
 
 func New(opts Options) (*gorm.DB, error) {
@@ -41,7 +44,15 @@ func New(opts Options) (*gorm.DB, error) {
 	if err := migrate(db); err != nil {
 		return nil, err
 	}
+
+	db.Logger = db.Logger.LogMode(opts.LogLevel)
 	return db, nil
+}
+
+// Please note that this function works only with postgres.
+// For other databases, you need to implement your own function.
+func IsDuplicateKeyError(err error) bool {
+	return errors.Is(postgres.Dialector{}.Translate(err), gorm.ErrDuplicatedKey)
 }
 
 func setDefaults(opts Options) Options {
@@ -63,6 +74,9 @@ func setDefaults(opts Options) Options {
 	if opts.SSLEnabled == nil {
 		sslMode := DefaultSSLEnabled
 		opts.SSLEnabled = &sslMode
+	}
+	if opts.LogLevel == 0 {
+		opts.LogLevel = logger.Warn
 	}
 	return opts
 }

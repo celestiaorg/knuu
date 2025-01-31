@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
@@ -45,8 +44,6 @@ func (s *userServiceImpl) Register(ctx context.Context, user *models.User) (*mod
 		return nil, ErrUsernameAlreadyTaken
 	}
 
-	fmt.Printf("user: %#v\n", user)
-
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -66,10 +63,8 @@ func (s *userServiceImpl) Authenticate(ctx context.Context, username, password s
 		return nil, err
 	}
 
-	fmt.Printf("user.Password: `%s`\n", user.Password)
-	fmt.Printf("password: `%s`\n", password)
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials.Wrap(err)
+		return nil, err
 	}
 
 	return user, nil

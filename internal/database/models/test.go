@@ -10,7 +10,7 @@ const (
 )
 
 type Test struct {
-	Scope        string    `json:"scope" gorm:"primaryKey"`
+	Scope        string    `json:"scope" gorm:"primaryKey; varchar(255)"`
 	UserID       uint      `json:"-" gorm:"index"` // the owner of the test
 	Title        string    `json:"title" gorm:""`
 	MinioEnabled bool      `json:"minio_enabled" gorm:""`
@@ -19,4 +19,5 @@ type Test struct {
 	CreatedAt    time.Time `json:"created_at" gorm:"index"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Finished     bool      `json:"finished" gorm:"index"`
+	LogLevel     string    `json:"log_level" gorm:""` // logrus level as string (e.g. "debug", "info", "warn", "error", "fatal", "panic")
 }

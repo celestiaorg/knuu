@@ -9,7 +9,7 @@ import (
 
 type Instance struct {
 	Name         string             `json:"name" binding:"required"`
-	Scope        string             `json:"scope" binding:"required"`
+	Scope        string             `json:"scope"`
 	Image        string             `json:"image"`
 	GitContext   builder.GitContext `json:"git_context"`
 	BuildArgs    []string           `json:"build_args"`
@@ -104,7 +104,11 @@ func (s *TestService) GetInstance(ctx context.Context, userID uint, scope, insta
 
 	_ = kn
 
-	return nil, fmt.Errorf("not implemented")
+	var instance Instance
+	instance.Name = instanceName
+	instance.Scope = scope
+
+	return &instance, nil
 }
 
 func (s *TestService) GetInstanceStatus(ctx context.Context, userID uint, scope, instanceName string) (string, error) {
@@ -119,4 +123,17 @@ func (s *TestService) GetInstanceStatus(ctx context.Context, userID uint, scope,
 	}
 
 	return string(ps.Status), nil
+}
+
+func (s *TestService) ExecuteInstance(ctx context.Context, userID uint, scope, instanceName string) (string, error) {
+	kn, err := s.Knuu(userID, scope)
+	if err != nil {
+		return "", err
+	}
+
+	_ = kn
+	// TODO: we need to implement something in knuu where we can access the instance while it is being running in k8s
+	// and knuu object itself is created afterwards something like search it by name and get the instance onject
+
+	return "", fmt.Errorf("not implemented")
 }

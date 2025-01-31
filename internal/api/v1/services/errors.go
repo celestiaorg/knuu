@@ -11,6 +11,6 @@ var (
 	ErrUserIDRequired       = errors.New("UserIDRequired", "user ID is required")
 	ErrTestAlreadyExists    = errors.New("TestAlreadyExists", "test already exists")
 	ErrTestNotFound         = errors.New("TestNotFound", "test not found")
-	ErrInvalidCredentials   = errors.New("InvalidCredentials", "invalid credentials")
 	ErrScopeRequired        = errors.New("ScopeRequired", "scope is required")
+	ErrLogFileNotFound      = errors.New("LogFileNotFound", "log file not found")
 )

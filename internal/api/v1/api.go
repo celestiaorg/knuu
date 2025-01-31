@@ -10,6 +10,7 @@ import (
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
+	"github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/cors"
@@ -33,24 +34,25 @@ type API struct {
 
 type Options struct {
 	Port          int
-	LogMode       string // gin.DebugMode, gin.ReleaseMode(default), gin.TestMode
 	OriginAllowed string
+	APILogMode    string // gin.DebugMode, gin.ReleaseMode(default), gin.TestMode
 	SecretKey     string
 
 	AdminUser string // default admin username
 	AdminPass string // default admin password
 
+	Logger             *logrus.Logger
 	TestServiceOptions services.TestServiceOptions
 }
 
 func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 	opts = setDefaults(opts)
-	gin.SetMode(opts.LogMode)
+	gin.SetMode(opts.APILogMode)
 
 	rt := gin.Default()
 
 	auth := middleware.NewAuth(opts.SecretKey)
-	uh, err := getUserHandler(ctx, opts, db, auth)
+	uh, err := getUserHandler(ctx, opts, db, auth, opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +62,10 @@ func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 		public.POST(pathsUserLogin, uh.Login)
 	}
 
-	testService, err := services.NewTestService(ctx, repos.NewTestRepository(db), opts.TestServiceOptions)
+	testService, err := services.NewTestService(ctx,
+		repos.NewTestRepository(db),
+		opts.TestServiceOptions,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +74,15 @@ func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 	{
 		protected.POST(pathsUserRegister, auth.RequireRole(models.RoleAdmin), uh.Register)
 
-		th := handlers.NewTestHandler(testService)
+		th := handlers.NewTestHandler(testService, opts.Logger)
 		protected.POST(pathsTests, th.CreateTest)
-		// protected.GET(pathsTestDetails, th.GetTestDetails)
+		protected.GET(pathsTestDetails, th.GetTestDetails)
+		protected.GET(pathsTestLogs, th.GetTestLogs)
 		// protected.GET(pathsTestInstances, th.GetInstances)
+		protected.POST(pathsTestInstances, th.CreateInstance) // Need to do something about updating an instance
 		protected.GET(pathsTestInstanceDetails, th.GetInstance)
 		protected.GET(pathsTestInstanceStatus, th.GetInstanceStatus)
-		protected.POST(pathsTestInstanceDetails, th.CreateInstance) // Need to do something about updating an instance
-		// protected.POST(pathsTestInstanceExecute, th.ExecuteInstance)
+		protected.POST(pathsTestInstanceExecute, th.ExecuteInstance)
 	}
 
 	_ = protected
@@ -92,7 +98,7 @@ func New(ctx context.Context, db *gorm.DB, opts Options) (*API, error) {
 		},
 	}
 
-	if opts.LogMode != gin.ReleaseMode {
+	if opts.APILogMode != gin.ReleaseMode {
 		public.GET("/", a.IndexPage)
 	}
 
@@ -120,12 +126,17 @@ func setDefaults(opts Options) Options {
 		opts.Port = defaultPort
 	}
 
-	if opts.LogMode == "" {
-		opts.LogMode = defaultLogMode
+	if opts.APILogMode == "" {
+		opts.APILogMode = defaultLogMode
 	}
 
 	if opts.SecretKey == "" {
 		opts.SecretKey = "secret"
+	}
+
+	if opts.Logger == nil {
+		opts.Logger = logrus.New()
+		opts.Logger.SetFormatter(&logrus.JSONFormatter{})
 	}
 
 	return opts
@@ -147,11 +158,11 @@ func handleOrigin(router *gin.Engine, originAllowed string) http.Handler {
 	}).Handler(router)
 }
 
-func getUserHandler(ctx context.Context, opts Options, db *gorm.DB, auth *middleware.Auth) (*handlers.UserHandler, error) {
+func getUserHandler(ctx context.Context, opts Options, db *gorm.DB, auth *middleware.Auth, logger *logrus.Logger) (*handlers.UserHandler, error) {
 	us, err := services.NewUserService(ctx, opts.AdminUser, opts.AdminPass, repos.NewUserRepository(db))
 	if err != nil {
 		return nil, err
 	}
 
-	return handlers.NewUserHandler(us, auth), nil
+	return handlers.NewUserHandler(us, auth, logger), nil
 }

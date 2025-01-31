@@ -11,7 +11,7 @@ build:
 # 	docker build -t $(BINARY_NAME) .
 
 run: build
-	./bin/$(BINARY_NAME) api -l test
+	./bin/$(BINARY_NAME) api -l debug
 
 ## help: Show this help message
 help: Makefile
