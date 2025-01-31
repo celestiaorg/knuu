@@ -3,11 +3,15 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"github.com/celestiaorg/knuu/internal/api/v1"
@@ -95,6 +99,8 @@ func runAPIServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create API server: %v", err)
 	}
+
+	handleShutdown(apiServer, db, apiOpts.Logger)
 
 	return apiServer.Start()
 }
@@ -205,4 +211,28 @@ func getAPIOptions(flags *pflag.FlagSet) (api.Options, error) {
 			Logger:        logger,
 		},
 	}, nil
+}
+
+func handleShutdown(apiServer *api.API, db *gorm.DB, logger *logrus.Logger) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Errorf("failed to get sql db: %v", err)
+	}
+
+	go func() {
+		sig := <-quit
+		logger.Infof("Received signal: %v. Shutting down gracefully...", sig)
+		if err := sqlDB.Close(); err != nil {
+			logger.Errorf("failed to close sql db: %v", err)
+		}
+		logger.Info("DB connection closed")
+		if err := apiServer.Stop(context.Background()); err != nil {
+			logger.Errorf("failed to stop api server: %v", err)
+		}
+		logger.Info("API server stopped")
+		os.Exit(0)
+	}()
 }

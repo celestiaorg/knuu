@@ -1,6 +1,11 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
 
 type UserRole int
 
@@ -37,4 +42,17 @@ type Permission struct {
 	UserID      uint        `json:"-" gorm:"index;not null"`
 	Resource    string      `json:"resource" gorm:"not null"`
 	AccessLevel AccessLevel `json:"access_level" gorm:"not null"`
+}
+
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	u.Password = string(hashedPassword)
+	return nil
+}
+
+func (u *User) ValidatePassword(password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) == nil
 }

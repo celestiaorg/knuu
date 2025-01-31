@@ -8,3 +8,4 @@ Taskfile.yaml
 bin/*
 docker-compose.yml
 .env
+tmp.sh

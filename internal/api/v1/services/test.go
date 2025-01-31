@@ -165,6 +165,18 @@ func (s *TestService) SetFinished(ctx context.Context, userID uint, scope string
 
 func (s *TestService) Shutdown(ctx context.Context) error {
 	close(s.stopCleanupChan)
+	for userID, users := range s.knuuList {
+		for scope := range users {
+			if err := s.cleanupIfFinishedTest(ctx, userID, scope); err != nil {
+				return err
+			}
+		}
+	}
+
+	if s.cleanup == nil {
+		return nil
+	}
+
 	for _, logFile := range s.cleanup.logFiles {
 		if logFile == nil {
 			continue
@@ -175,14 +187,6 @@ func (s *TestService) Shutdown(ctx context.Context) error {
 		}
 	}
 	s.cleanup.logFiles = nil
-
-	for userID, users := range s.knuuList {
-		for scope := range users {
-			if err := s.cleanupIfFinishedTest(ctx, userID, scope); err != nil {
-				return err
-			}
-		}
-	}
 
 	return nil
 }
@@ -303,6 +307,7 @@ func (s *TestService) prepareKnuu(ctx context.Context, test *models.Test) error 
 		s.logger.Errorf("opening log file for test %s: %v", test.Scope, err)
 		return err
 	}
+	s.cleanup.logFiles = append(s.cleanup.logFiles, logFile)
 
 	testLogger := logrus.New()
 	testLogger.SetOutput(logFile)
