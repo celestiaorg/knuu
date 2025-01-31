@@ -3,8 +3,9 @@ package repos
 import (
 	"context"
 
-	"github.com/celestiaorg/knuu/internal/database/models"
 	"gorm.io/gorm"
+
+	"github.com/celestiaorg/knuu/internal/database/models"
 )
 
 type TestRepository struct {

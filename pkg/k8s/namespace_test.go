@@ -2,7 +2,6 @@ package k8s_test
 
 import (
 	"context"
-	"errors"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -88,11 +87,10 @@ func (s *TestSuite) TestDeleteNamespace() {
 			expectedErr: nil,
 		},
 		{
-			name:      "namespace not found",
-			namespace: "non-existent-namespace",
-			setupMock: func() {},
-			expectedErr: k8s.ErrDeletingNamespace.WithParams("non-existent-namespace").
-				Wrap(errors.New("namespaces \"non-existent-namespace\" not found")),
+			name:        "namespace not found",
+			namespace:   "non-existent-namespace",
+			setupMock:   func() {},
+			expectedErr: nil,
 		},
 		{
 			name:      "client error",

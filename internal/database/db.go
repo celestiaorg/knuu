@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/celestiaorg/knuu/internal/database/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/celestiaorg/knuu/internal/database/models"
 )
 
 const (

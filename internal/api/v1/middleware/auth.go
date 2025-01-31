@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+
+	"github.com/celestiaorg/knuu/internal/database/models"
 )
 
 const (
