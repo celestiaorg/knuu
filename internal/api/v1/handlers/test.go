@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/celestiaorg/knuu/internal/api/v1/services"
-	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/internal/api/v1/services"
+	"github.com/celestiaorg/knuu/internal/database/models"
 )
 
 type TestHandler struct {

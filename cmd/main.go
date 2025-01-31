@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/celestiaorg/knuu/cmd/root"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/cmd/root"
 )
 
 func main() {

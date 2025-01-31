@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+
 	"github.com/celestiaorg/knuu/internal/api/v1/handlers"
 	"github.com/celestiaorg/knuu/internal/api/v1/middleware"
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
-	"github.com/sirupsen/logrus"
-
-	"github.com/gin-gonic/gin"
-	"github.com/rs/cors"
-	"gorm.io/gorm"
 )
 
 const (

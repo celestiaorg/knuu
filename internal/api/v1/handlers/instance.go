@@ -3,9 +3,10 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/internal/api/v1/services"
 )
 
 func (h *TestHandler) CreateInstance(c *gin.Context) {

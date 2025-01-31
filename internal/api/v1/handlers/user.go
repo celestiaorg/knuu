@@ -7,9 +7,9 @@ import (
 	"github.com/celestiaorg/knuu/internal/api/v1/middleware"
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database/models"
-	"github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type UserHandler struct {

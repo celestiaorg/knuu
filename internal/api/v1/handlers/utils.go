@@ -3,9 +3,10 @@ package handlers
 import (
 	"errors"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/celestiaorg/knuu/internal/api/v1/middleware"
 	"github.com/celestiaorg/knuu/internal/database/models"
-	"github.com/gin-gonic/gin"
 )
 
 func getUserFromContext(c *gin.Context) (*models.User, error) {

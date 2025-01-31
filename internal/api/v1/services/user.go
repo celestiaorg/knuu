@@ -3,9 +3,10 @@ package services
 import (
 	"context"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/celestiaorg/knuu/internal/database/models"
 	"github.com/celestiaorg/knuu/internal/database/repos"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService interface {

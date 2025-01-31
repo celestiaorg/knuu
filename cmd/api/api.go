@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"gorm.io/gorm/logger"
+
 	"github.com/celestiaorg/knuu/internal/api/v1"
 	"github.com/celestiaorg/knuu/internal/api/v1/services"
 	"github.com/celestiaorg/knuu/internal/database"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm/logger"
-
-	"github.com/gin-gonic/gin"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 const (
