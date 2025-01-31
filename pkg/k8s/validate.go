@@ -24,7 +24,7 @@ func validateDNS1123Subdomain(name string, returnErr *errors.Error) error {
 	return nil
 }
 
-func validateNamespace(name string) error {
+func ValidateNamespace(name string) error {
 	return validateDNS1123Label(name, ErrInvalidNamespaceName)
 }
 
@@ -169,7 +169,7 @@ func validatePodConfig(podConfig PodConfig) error {
 		return err
 	}
 
-	if err := validateNamespace(podConfig.Namespace); err != nil {
+	if err := ValidateNamespace(podConfig.Namespace); err != nil {
 		return err
 	}
 
@@ -212,7 +212,7 @@ func validateReplicaSetConfig(rsConfig ReplicaSetConfig) error {
 	if err := validateReplicaSetName(rsConfig.Name); err != nil {
 		return err
 	}
-	if err := validateNamespace(rsConfig.Namespace); err != nil {
+	if err := ValidateNamespace(rsConfig.Namespace); err != nil {
 		return err
 	}
 	if err := validateLabels(rsConfig.Labels); err != nil {

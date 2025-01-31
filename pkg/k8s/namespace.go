@@ -12,7 +12,7 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 	if c.terminated {
 		return ErrClientTerminated
 	}
-	if err := validateNamespace(name); err != nil {
+	if err := ValidateNamespace(name); err != nil {
 		return err
 	}
 

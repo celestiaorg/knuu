@@ -275,6 +275,10 @@ func (s *TestService) loadRunningTestsFromDB(ctx context.Context) error {
 }
 
 func (s *TestService) prepareKnuu(ctx context.Context, test *models.Test) error {
+	if err := k8s.ValidateNamespace(test.Scope); err != nil {
+		return err
+	}
+
 	s.knuuListMu.Lock()
 	if _, ok := s.knuuList[test.UserID]; !ok {
 		s.knuuList[test.UserID] = make(map[string]*knuu.Knuu)
