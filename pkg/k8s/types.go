@@ -25,6 +25,7 @@ type KubeManager interface {
 	CreateDaemonSet(ctx context.Context, name string, labels map[string]string, initContainers []corev1.Container, containers []corev1.Container) (*appv1.DaemonSet, error)
 	CreateNamespace(ctx context.Context, name string) error
 	CreateNetworkPolicy(ctx context.Context, name string, selectorMap, ingressSelectorMap, egressSelectorMap map[string]string) error
+	PersistentVolumeClaimExists(ctx context.Context, name string) (bool, error)
 	CreatePersistentVolumeClaim(ctx context.Context, name string, labels map[string]string, size resource.Quantity) error
 	CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig, init bool) (*appv1.ReplicaSet, error)
 	CreateRole(ctx context.Context, name string, labels map[string]string, policyRules []rbacv1.PolicyRule) error
