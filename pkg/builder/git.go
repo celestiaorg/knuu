@@ -12,11 +12,11 @@ const (
 )
 
 type GitContext struct {
-	Repo     string
-	Branch   string
-	Commit   string
-	Username string
-	Password string
+	Repo     string `json:"repo"`
+	Branch   string `json:"branch"`
+	Commit   string `json:"commit"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // This build context follows Kaniko build context pattern

@@ -12,7 +12,7 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 	if c.terminated {
 		return ErrClientTerminated
 	}
-	if err := validateNamespace(name); err != nil {
+	if err := ValidateNamespace(name); err != nil {
 		return err
 	}
 
@@ -37,7 +37,7 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 
 func (c *Client) DeleteNamespace(ctx context.Context, name string) error {
 	err := c.clientset.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrs.IsNotFound(err) {
 		return ErrDeletingNamespace.WithParams(name).Wrap(err)
 	}
 	return nil

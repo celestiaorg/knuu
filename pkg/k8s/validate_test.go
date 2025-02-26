@@ -57,7 +57,7 @@ func TestValidateNamespace(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateNamespace(test.input)
+			err := ValidateNamespace(test.input)
 			assert.Equal(t, test.expected, err)
 		})
 	}

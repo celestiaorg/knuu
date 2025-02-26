@@ -66,9 +66,9 @@ type PodConfig struct {
 }
 
 type Volume struct {
-	Path  string
-	Size  resource.Quantity
-	Owner int64
+	Path  string            `json:"path"`
+	Size  resource.Quantity `json:"size"`
+	Owner int64             `json:"owner"`
 }
 
 type File struct {
