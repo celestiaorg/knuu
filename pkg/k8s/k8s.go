@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -40,6 +41,7 @@ const (
 type Client struct {
 	clientset       kubernetes.Interface
 	discoveryClient discovery.DiscoveryInterface
+	clusterConfig   *rest.Config
 	dynamicClient   dynamic.Interface
 	namespace       string
 	clusterDomain   string
@@ -49,22 +51,10 @@ type Client struct {
 	maxPendingDuration time.Duration
 }
 
-type ClientOptions struct {
-	clusterDomain string
-}
-
-type Option func(*ClientOptions)
-
-func WithClusterDomain(clusterDomain string) Option {
-	return func(o *ClientOptions) {
-		o.clusterDomain = clusterDomain
-	}
-}
-
 var _ KubeManager = &Client{}
 
 func NewClient(ctx context.Context, namespace string, logger *logrus.Logger, options ...Option) (*Client, error) {
-	config, err := getClusterConfig()
+	config, err := getClusterConfig(getAppliedOptions(options...))
 	if err != nil {
 		return nil, ErrRetrievingKubernetesConfig.Wrap(err)
 	}
@@ -88,7 +78,8 @@ func NewClient(ctx context.Context, namespace string, logger *logrus.Logger, opt
 		return nil, ErrCreatingDynamicClient.Wrap(err)
 	}
 
-	return NewClientCustom(ctx, cs, dc, dC, namespace, logger, options...)
+	return NewClientCustom(ctx, cs, dc, dC, namespace, logger,
+		append(options, WithClusterConfig(config))...)
 }
 
 func NewClientCustom(
@@ -100,13 +91,7 @@ func NewClientCustom(
 	logger *logrus.Logger,
 	options ...Option,
 ) (*Client, error) {
-	opts := &ClientOptions{
-		clusterDomain: defaultClusterDomain,
-	}
-	for _, opt := range options {
-		opt(opts)
-	}
-
+	opts := getAppliedOptions(options...)
 	if err := validateDNS1123Subdomain(
 		opts.clusterDomain,
 		ErrInvalidClusterDomain.WithParams(opts.clusterDomain),
@@ -122,6 +107,7 @@ func NewClientCustom(
 		logger:             logger,
 		terminated:         false,
 		maxPendingDuration: defaultMaxPendingDuration,
+		clusterConfig:      opts.clusterConfig,
 	}
 	kc.namespace = SanitizeName(namespace)
 	if err := kc.CreateNamespace(ctx, kc.namespace); err != nil {

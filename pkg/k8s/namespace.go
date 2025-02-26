@@ -25,7 +25,7 @@ func (c *Client) CreateNamespace(ctx context.Context, name string) error {
 	_, err := c.clientset.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
 		if !apierrs.IsAlreadyExists(err) {
-			return ErrCreatingNamespace.WithParams(name).Wrap(err)
+			return err
 		}
 		c.logger.WithField("name", name).Debug("namespace already exists, continuing")
 		return nil

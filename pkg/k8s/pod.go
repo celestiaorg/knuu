@@ -210,11 +210,10 @@ func (c *Client) RunCommandInPod(
 		}, scheme.ParameterCodec)
 
 	// Create an executor for the command execution
-	k8sConfig, err := getClusterConfig()
-	if err != nil {
-		return "", ErrGettingK8sConfig.Wrap(err)
+	if c.clusterConfig == nil {
+		return "", ErrClusterConfigNotSet
 	}
-	exec, err := remotecommand.NewSPDYExecutor(k8sConfig, http.MethodPost, req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(c.clusterConfig, http.MethodPost, req.URL())
 	if err != nil {
 		return "", ErrCreatingExecutor.Wrap(err)
 	}
@@ -283,9 +282,8 @@ func (c *Client) PortForwardPod(
 		return ErrGettingPod.WithParams(podName).Wrap(err)
 	}
 
-	restConfig, err := getClusterConfig()
-	if err != nil {
-		return ErrGettingClusterConfig.Wrap(err)
+	if c.clusterConfig == nil {
+		return ErrClusterConfigNotSet
 	}
 
 	url := c.clientset.CoreV1().RESTClient().Post().
@@ -295,7 +293,7 @@ func (c *Client) PortForwardPod(
 		SubResource("portforward").
 		URL()
 
-	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
+	transport, upgrader, err := spdy.RoundTripperFor(c.clusterConfig)
 	if err != nil {
 		return ErrCreatingRoundTripper.Wrap(err)
 	}

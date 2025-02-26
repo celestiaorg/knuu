@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/celestiaorg/knuu/pkg/instance"
+	"github.com/celestiaorg/knuu/pkg/k8s"
 	"github.com/celestiaorg/knuu/pkg/knuu"
 )
 
@@ -21,6 +23,10 @@ const (
 
 	nginxImage       = "docker.io/nginx:latest"
 	nginxVolumeOwner = 0
+
+	envK8sHost      = "K8S_HOST"
+	envK8sCACert    = "K8S_CA_CERT"
+	envK8sAuthToken = "K8S_AUTH_TOKEN"
 )
 
 type Suite struct {
@@ -92,4 +98,19 @@ func (s *Suite) RetryOperation(operation func() error, maxRetries int) error {
 		time.Sleep(time.Second * time.Duration(i+1))
 	}
 	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, err)
+}
+
+func (s *Suite) K8sDefaultOptions() []k8s.Option {
+	if os.Getenv(envK8sAuthToken) == "" || os.Getenv(envK8sCACert) == "" || os.Getenv(envK8sHost) == "" {
+		s.T().Logf("%s, %s and/or %s are not set, using default cluster config from ~/.kube/config", envK8sAuthToken, envK8sCACert, envK8sHost)
+		return nil
+	}
+
+	return []k8s.Option{
+		k8s.WithAuthToken(
+			os.Getenv(envK8sHost),
+			os.Getenv(envK8sCACert),
+			os.Getenv(envK8sAuthToken),
+		),
+	}
 }
