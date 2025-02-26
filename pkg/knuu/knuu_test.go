@@ -74,7 +74,7 @@ func TestNew(t *testing.T) {
 				assert.NotNil(t, k.K8sClient)
 				assert.NotNil(t, k.ImageBuilder)
 				assert.NotEmpty(t, k.Scope)
-				assert.Equal(t, defaultTimeout, defaultTimeout, timeoutHandlerName)
+				assert.Equal(t, defaultTimeout, defaultTimeout, deadlineHandlerName)
 			},
 		},
 		{
