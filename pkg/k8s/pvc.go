@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
 // PersistentVolumeClaimExists checks if a PersistentVolumeClaim exists.
@@ -35,29 +36,25 @@ func (c *Client) CreatePersistentVolumeClaim(
 		return err
 	}
 
-	pvc := &v1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: c.namespace,
-			Name:      name,
-			Labels:    labels,
-		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes: []v1.PersistentVolumeAccessMode{
-				v1.ReadWriteOnce,
-			},
-			Resources: v1.VolumeResourceRequirements{
-				Requests: v1.ResourceList{
+	pvc := corev1.PersistentVolumeClaim(name, c.namespace).
+		WithLabels(labels).
+		WithSpec(corev1.PersistentVolumeClaimSpec().
+			WithAccessModes(v1.ReadWriteOnce).
+			WithResources(corev1.VolumeResourceRequirements().
+				WithRequests(v1.ResourceList{
 					v1.ResourceStorage: size,
-				},
-			},
-		},
-	}
+				}),
+			),
+		)
 
-	if _, err := c.clientset.CoreV1().PersistentVolumeClaims(c.namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+	_, err := c.clientset.CoreV1().PersistentVolumeClaims(c.namespace).Apply(ctx, pvc, metav1.ApplyOptions{
+		FieldManager: FieldManager,
+	})
+	if err != nil {
 		return ErrCreatingPersistentVolumeClaim.WithParams(name).Wrap(err)
 	}
 
-	c.logger.WithField("name", name).Debug("PersistentVolumeClaim created")
+	c.logger.WithField("name", name).Debug("PersistentVolumeClaim applied")
 	return nil
 }
 

@@ -23,11 +23,17 @@ func (s *TestSuite) TestCreatePersistentVolumeClaim() {
 		expectedErr error
 	}{
 		{
-			name:        "successful creation",
-			pvcName:     "test-pvc",
-			labels:      map[string]string{"app": "test"},
-			size:        resource.MustParse("1Gi"),
-			setupMock:   func() {},
+			name:    "successful creation",
+			pvcName: "test-pvc",
+			labels:  map[string]string{"app": "test"},
+			size:    resource.MustParse("1Gi"),
+			setupMock: func() {
+				s.client.Clientset().(*fake.Clientset).
+					PrependReactor("patch", "persistentvolumeclaims",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, nil
+						})
+			},
 			expectedErr: nil,
 		},
 		{
@@ -37,7 +43,7 @@ func (s *TestSuite) TestCreatePersistentVolumeClaim() {
 			size:    resource.MustParse("1Gi"),
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("create", "persistentvolumeclaims",
+					PrependReactor("patch", "persistentvolumeclaims",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errInternalServerError
 						})

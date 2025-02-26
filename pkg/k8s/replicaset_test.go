@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"context"
+	"fmt"
 
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,8 +36,23 @@ func (s *TestSuite) TestCreateReplicaSet() {
 					ContainerConfig: testContainerConfig,
 				},
 			},
-			init:        false,
-			setupMock:   func() {},
+			init: false,
+			setupMock: func() {
+				s.client.Clientset().(*fake.Clientset).
+					PrependReactor("patch", "replicasets",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							patchAction, ok := action.(k8stesting.PatchAction)
+							if !ok {
+								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
+							}
+							return true, &appv1.ReplicaSet{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      patchAction.GetName(),
+									Namespace: patchAction.GetNamespace(),
+								},
+							}, nil
+						})
+			},
 			expectedErr: nil,
 		},
 		{
@@ -56,12 +72,14 @@ func (s *TestSuite) TestCreateReplicaSet() {
 			init: false,
 			setupMock: func() {
 				s.client.Clientset().(*fake.Clientset).
-					PrependReactor("create", "replicasets",
+					// we need to `patch` the replica set because the `apply` does not exist
+					// and `apply` calls `patch` under the hood
+					PrependReactor("patch", "replicasets",
 						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errInternalServerError
 						})
 			},
-			expectedErr: k8s.ErrCreatingReplicaSet.Wrap(errInternalServerError),
+			expectedErr: errInternalServerError,
 		},
 	}
 
@@ -109,6 +127,21 @@ func (s *TestSuite) TestReplaceReplicaSetWithGracePeriod() {
 			setupMock: func() {
 				err := s.createReplicaSet("test-rs")
 				s.Require().NoError(err)
+
+				s.client.Clientset().(*fake.Clientset).
+					PrependReactor("patch", "replicasets",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							patchAction, ok := action.(k8stesting.PatchAction)
+							if !ok {
+								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
+							}
+							return true, &appv1.ReplicaSet{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      patchAction.GetName(),
+									Namespace: patchAction.GetNamespace(),
+								},
+							}, nil
+						})
 			},
 			expectedErr: nil,
 		},
@@ -184,6 +217,21 @@ func (s *TestSuite) TestReplaceReplicaSet() {
 			setupMock: func() {
 				err := s.createReplicaSet("test-rs")
 				s.Require().NoError(err)
+
+				s.client.Clientset().(*fake.Clientset).
+					PrependReactor("patch", "replicasets",
+						func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+							patchAction, ok := action.(k8stesting.PatchAction)
+							if !ok {
+								return false, nil, fmt.Errorf("expected PatchAction, got %T", action)
+							}
+							return true, &appv1.ReplicaSet{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      patchAction.GetName(),
+									Namespace: patchAction.GetNamespace(),
+								},
+							}, nil
+						})
 			},
 			expectedErr: nil,
 		},

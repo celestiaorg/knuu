@@ -35,6 +35,9 @@ const (
 
 	// defaultClusterDomain is the default cluster domain
 	defaultClusterDomain = "cluster.local"
+
+	// FieldManager is the field manager to use for the Kubernetes client
+	FieldManager = "knuu"
 )
 
 type Client struct {

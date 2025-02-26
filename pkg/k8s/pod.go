@@ -14,6 +14,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
@@ -34,23 +35,23 @@ const (
 )
 
 type ContainerConfig struct {
-	Name            string              // Name to assign to the Container
-	Image           string              // Name of the container image to use for the container
-	ImagePullPolicy v1.PullPolicy       // Image pull policy for the container
-	Command         []string            // Command to run in the container
-	Args            []string            // Arguments to pass to the command in the container
-	Env             map[string]string   // Environment variables to set in the container
-	Volumes         []*Volume           // Volumes to mount in the Pod
-	MemoryRequest   resource.Quantity   // Memory request for the container
-	MemoryLimit     resource.Quantity   // Memory limit for the container
-	CPURequest      resource.Quantity   // CPU request for the container
-	LivenessProbe   *v1.Probe           // Liveness probe for the container
-	ReadinessProbe  *v1.Probe           // Readiness probe for the container
-	StartupProbe    *v1.Probe           // Startup probe for the container
-	Files           []*File             // Files to add to the Pod
-	SecurityContext *v1.SecurityContext // Security context for the container
-	TCPPorts        []int               // TCP ports to expose on the Pod
-	UDPPorts        []int               // UDP ports to expose on the Pod
+	Name            string                                    // Name to assign to the Container
+	Image           string                                    // Name of the container image to use for the container
+	ImagePullPolicy *v1.PullPolicy                            // Image pull policy for the container
+	Command         []string                                  // Command to run in the container
+	Args            []string                                  // Arguments to pass to the command in the container
+	Env             map[string]string                         // Environment variables to set in the container
+	Volumes         []*Volume                                 // Volumes to mount in the Pod
+	MemoryRequest   resource.Quantity                         // Memory request for the container
+	MemoryLimit     resource.Quantity                         // Memory limit for the container
+	CPURequest      resource.Quantity                         // CPU request for the container
+	LivenessProbe   *corev1.ProbeApplyConfiguration           // Liveness probe for the container
+	ReadinessProbe  *corev1.ProbeApplyConfiguration           // Readiness probe for the container
+	StartupProbe    *corev1.ProbeApplyConfiguration           // Startup probe for the container
+	Files           []*File                                   // Files to add to the Pod
+	SecurityContext *corev1.SecurityContextApplyConfiguration // Security context for the container
+	TCPPorts        []int                                     // TCP ports to expose on the Pod
+	UDPPorts        []int                                     // UDP ports to expose on the Pod
 }
 
 type PodConfig struct {
@@ -88,14 +89,11 @@ func (c *Client) DeployPod(ctx context.Context, podConfig PodConfig, init bool) 
 	}
 
 	pod := c.preparePod(podConfig, init)
-	createdPod, err := c.clientset.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
-	if err != nil {
-		return nil, ErrCreatingPod.Wrap(err)
-	}
-
-	return createdPod, nil
+	return c.clientset.CoreV1().Pods(c.namespace).
+		Apply(ctx, pod, metav1.ApplyOptions{
+			FieldManager: FieldManager,
+		})
 }
-
 func (c *Client) NewVolume(path string, size resource.Quantity, owner int64) *Volume {
 	return &Volume{
 		Path:  path,
@@ -359,10 +357,10 @@ func (c *Client) getPod(ctx context.Context, name string) (*v1.Pod, error) {
 }
 
 // buildEnv builds an environment variable configuration for a Pod based on the given map of key-value pairs.
-func buildEnv(envMap map[string]string) []v1.EnvVar {
-	envVars := make([]v1.EnvVar, 0, len(envMap))
+func buildEnv(envMap map[string]string) []corev1.EnvVarApplyConfiguration {
+	envVars := make([]corev1.EnvVarApplyConfiguration, 0, len(envMap))
 	for key, val := range envMap {
-		envVar := v1.EnvVar{Name: key, Value: val}
+		envVar := corev1.EnvVarApplyConfiguration{Name: ptr.To[string](key), Value: ptr.To[string](val)}
 		envVars = append(envVars, envVar)
 	}
 	return envVars
@@ -370,15 +368,15 @@ func buildEnv(envMap map[string]string) []v1.EnvVar {
 
 // buildPodVolumes generates a volume configuration for a pod based on the given name.
 // If the volumes amount is zero, returns an empty slice.
-func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
-	var podVolumes []v1.Volume
+func buildPodVolumes(name string, volumesAmount, filesAmount int) []corev1.VolumeApplyConfiguration {
+	var podVolumes []corev1.VolumeApplyConfiguration
 
 	if volumesAmount != 0 {
-		podVolume := v1.Volume{
-			Name: name,
-			VolumeSource: v1.VolumeSource{
-				PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-					ClaimName: name,
+		podVolume := corev1.VolumeApplyConfiguration{
+			Name: ptr.To[string](name),
+			VolumeSourceApplyConfiguration: corev1.VolumeSourceApplyConfiguration{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSourceApplyConfiguration{
+					ClaimName: ptr.To[string](name),
 				},
 			},
 		}
@@ -387,22 +385,22 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 	}
 
 	if volumesAmount == 0 && filesAmount != 0 {
-		podVolume := v1.Volume{
-			Name: name,
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
+		podVolume := corev1.VolumeApplyConfiguration{
+			Name: ptr.To[string](name),
+			VolumeSourceApplyConfiguration: corev1.VolumeSourceApplyConfiguration{
+				EmptyDir: &corev1.EmptyDirVolumeSourceApplyConfiguration{},
 			},
 		}
 		podVolumes = append(podVolumes, podVolume)
 	}
 
 	if filesAmount != 0 {
-		podFiles := v1.Volume{
-			Name: name + podFilesConfigmapNameSuffix,
-			VolumeSource: v1.VolumeSource{
-				ConfigMap: &v1.ConfigMapVolumeSource{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: name,
+		podFiles := corev1.VolumeApplyConfiguration{
+			Name: ptr.To[string](name + podFilesConfigmapNameSuffix),
+			VolumeSourceApplyConfiguration: corev1.VolumeSourceApplyConfiguration{
+				ConfigMap: &corev1.ConfigMapVolumeSourceApplyConfiguration{
+					LocalObjectReferenceApplyConfiguration: corev1.LocalObjectReferenceApplyConfiguration{
+						Name: ptr.To[string](name),
 					},
 					DefaultMode: ptr.To[int32](0600),
 				},
@@ -416,15 +414,15 @@ func buildPodVolumes(name string, volumesAmount, filesAmount int) []v1.Volume {
 }
 
 // buildContainerVolumes generates a volume mount configuration for a container based on the given name and volumes.
-func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
-	var containerVolumes []v1.VolumeMount
+func buildContainerVolumes(name string, volumes []*Volume, files []*File) []corev1.VolumeMountApplyConfiguration {
+	var containerVolumes []corev1.VolumeMountApplyConfiguration
 	for _, volume := range volumes {
 		containerVolumes = append(
 			containerVolumes,
-			v1.VolumeMount{
-				Name:      name,
-				MountPath: volume.Path,
-				SubPath:   strings.TrimLeft(volume.Path, "/"),
+			corev1.VolumeMountApplyConfiguration{
+				Name:      ptr.To[string](name),
+				MountPath: ptr.To[string](volume.Path),
+				SubPath:   ptr.To[string](strings.TrimLeft(volume.Path, "/")),
 			},
 		)
 	}
@@ -435,31 +433,31 @@ func buildContainerVolumes(name string, volumes []*Volume, files []*File) []v1.V
 			uniquePaths[filepath.Dir(file.Dest)] = true
 		}
 		for path := range uniquePaths {
-			containerVolumes = append(containerVolumes, v1.VolumeMount{
-				Name:      name,
-				MountPath: path,
-				SubPath:   strings.TrimPrefix(path, "/"),
+			containerVolumes = append(containerVolumes, corev1.VolumeMountApplyConfiguration{
+				Name:      ptr.To[string](name),
+				MountPath: ptr.To[string](path),
+				SubPath:   ptr.To[string](strings.TrimPrefix(path, "/")),
 			})
 		}
 	}
 
-	var containerFiles []v1.VolumeMount
+	var containerFiles []corev1.VolumeMountApplyConfiguration
 
 	return append(containerVolumes, containerFiles...)
 }
 
 // buildInitContainerVolumes generates a volume mount configuration for an init container based on the given name and volumes.
-func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []v1.VolumeMount {
+func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []corev1.VolumeMountApplyConfiguration {
 	if len(volumes) == 0 && len(files) == 0 {
-		return []v1.VolumeMount{} // return empty slice if no volumes are specified
+		return []corev1.VolumeMountApplyConfiguration{} // return empty slice if no volumes are specified
 	}
 
-	var containerVolumes []v1.VolumeMount
+	var containerVolumes []corev1.VolumeMountApplyConfiguration
 	// if the user want do add volumes, we need to mount the knuu path
 	if len(volumes) != 0 {
-		containerVolumes = append(containerVolumes, v1.VolumeMount{
-			Name:      name,
-			MountPath: knuuPath,
+		containerVolumes = append(containerVolumes, corev1.VolumeMountApplyConfiguration{
+			Name:      ptr.To[string](name),
+			MountPath: ptr.To[string](knuuPath),
 		})
 	}
 	// if the user don't want to add volumes, but want to add files, we need to mount the knuu path for the init container
@@ -469,20 +467,20 @@ func buildInitContainerVolumes(name string, volumes []*Volume, files []*File) []
 			uniquePaths[filepath.Dir(file.Dest)] = true
 		}
 		for path := range uniquePaths {
-			containerVolumes = append(containerVolumes, v1.VolumeMount{
-				Name:      name,
-				MountPath: knuuPath + path,
-				SubPath:   strings.TrimPrefix(path, "/"),
+			containerVolumes = append(containerVolumes, corev1.VolumeMountApplyConfiguration{
+				Name:      ptr.To[string](name),
+				MountPath: ptr.To[string](knuuPath + path),
+				SubPath:   ptr.To[string](strings.TrimPrefix(path, "/")),
 			})
 		}
 	}
 
-	var containerFiles []v1.VolumeMount
+	var containerFiles []corev1.VolumeMountApplyConfiguration
 	for n, file := range files {
-		containerFiles = append(containerFiles, v1.VolumeMount{
-			Name:      name + podFilesConfigmapNameSuffix,
-			MountPath: file.Dest,
-			SubPath:   fmt.Sprintf("%d", n),
+		containerFiles = append(containerFiles, corev1.VolumeMountApplyConfiguration{
+			Name:      ptr.To[string](name + podFilesConfigmapNameSuffix),
+			MountPath: ptr.To[string](file.Dest),
+			SubPath:   ptr.To[string](fmt.Sprintf("%d", n)),
 		})
 	}
 
@@ -544,42 +542,42 @@ func (c *Client) buildInitContainerCommand(volumes []*Volume, files []*File) []s
 }
 
 // buildResources generates a resource configuration for a container based on the given CPU and memory requests and limits.
-func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) v1.ResourceRequirements {
-	return v1.ResourceRequirements{
-		Requests: v1.ResourceList{
+func buildResources(memoryRequest, memoryLimit, cpuRequest resource.Quantity) *corev1.ResourceRequirementsApplyConfiguration {
+	return &corev1.ResourceRequirementsApplyConfiguration{
+		Requests: &v1.ResourceList{
 			v1.ResourceMemory: memoryRequest,
 			v1.ResourceCPU:    cpuRequest,
 		},
-		Limits: v1.ResourceList{
+		Limits: &v1.ResourceList{
 			v1.ResourceMemory: memoryLimit,
 		},
 	}
 }
 
-func buildPodPorts(tcpPorts, udpPorts []int) []v1.ContainerPort {
-	ports := make([]v1.ContainerPort, 0, len(tcpPorts)+len(udpPorts))
+func buildPodPorts(tcpPorts, udpPorts []int) []corev1.ContainerPortApplyConfiguration {
+	ports := make([]corev1.ContainerPortApplyConfiguration, 0, len(tcpPorts)+len(udpPorts))
 	for _, port := range tcpPorts {
-		ports = append(ports, v1.ContainerPort{
-			Name:          fmt.Sprintf("tcp-%d", port),
-			Protocol:      v1.ProtocolTCP,
-			ContainerPort: int32(port),
+		ports = append(ports, corev1.ContainerPortApplyConfiguration{
+			Name:          ptr.To[string](fmt.Sprintf("tcp-%d", port)),
+			Protocol:      ptr.To[v1.Protocol](v1.ProtocolTCP),
+			ContainerPort: ptr.To[int32](int32(port)),
 		})
 	}
 	for _, port := range udpPorts {
-		ports = append(ports, v1.ContainerPort{
-			Name:          fmt.Sprintf("udp-%d", port),
-			Protocol:      v1.ProtocolUDP,
-			ContainerPort: int32(port),
+		ports = append(ports, corev1.ContainerPortApplyConfiguration{
+			Name:          ptr.To[string](fmt.Sprintf("udp-%d", port)),
+			Protocol:      ptr.To[v1.Protocol](v1.ProtocolUDP),
+			ContainerPort: ptr.To[int32](int32(port)),
 		})
 	}
 	return ports
 }
 
 // prepareContainer creates a v1.Container from a given ContainerConfig.
-func prepareContainer(config ContainerConfig) v1.Container {
-	return v1.Container{
-		Name:            config.Name,
-		Image:           config.Image,
+func prepareContainer(config ContainerConfig) corev1.ContainerApplyConfiguration {
+	return corev1.ContainerApplyConfiguration{
+		Name:            ptr.To[string](config.Name),
+		Image:           ptr.To[string](config.Image),
 		ImagePullPolicy: config.ImagePullPolicy,
 		Command:         config.Command,
 		Args:            config.Args,
@@ -595,16 +593,16 @@ func prepareContainer(config ContainerConfig) v1.Container {
 }
 
 // prepareInitContainers creates a slice of v1.Container as init containers.
-func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.Container {
+func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []corev1.ContainerApplyConfiguration {
 	if !init || (len(config.Volumes) == 0 && len(config.Files) == 0) {
 		return nil
 	}
 
-	return []v1.Container{
+	return []corev1.ContainerApplyConfiguration{
 		{
-			Name:  config.Name + initContainerNameSuffix,
-			Image: initContainerImage,
-			SecurityContext: &v1.SecurityContext{
+			Name:  ptr.To[string](config.Name + initContainerNameSuffix),
+			Image: ptr.To[string](initContainerImage),
+			SecurityContext: &corev1.SecurityContextApplyConfiguration{
 				RunAsUser: ptr.To[int64](defaultContainerUser),
 			},
 			Command:      c.buildInitContainerCommand(config.Volumes, config.Files),
@@ -614,15 +612,15 @@ func (c *Client) prepareInitContainers(config ContainerConfig, init bool) []v1.C
 }
 
 // preparePodVolumes prepares pod volumes
-func preparePodVolumes(config ContainerConfig) []v1.Volume {
+func preparePodVolumes(config ContainerConfig) []corev1.VolumeApplyConfiguration {
 	return buildPodVolumes(config.Name, len(config.Volumes), len(config.Files))
 }
 
-func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
-	podSpec := v1.PodSpec{
-		ServiceAccountName: spec.ServiceAccountName,
+func (c *Client) preparePodSpec(spec PodConfig, init bool) *corev1.PodSpecApplyConfiguration {
+	podSpec := &corev1.PodSpecApplyConfiguration{
+		ServiceAccountName: ptr.To[string](spec.ServiceAccountName),
 		InitContainers:     c.prepareInitContainers(spec.ContainerConfig, init),
-		Containers:         []v1.Container{prepareContainer(spec.ContainerConfig)},
+		Containers:         []corev1.ContainerApplyConfiguration{prepareContainer(spec.ContainerConfig)},
 		Volumes:            preparePodVolumes(spec.ContainerConfig),
 		NodeSelector:       spec.NodeSelector,
 	}
@@ -641,16 +639,13 @@ func (c *Client) preparePodSpec(spec PodConfig, init bool) v1.PodSpec {
 	return podSpec
 }
 
-func (c *Client) preparePod(spec PodConfig, init bool) *v1.Pod {
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   spec.Namespace,
-			Name:        spec.Name,
-			Labels:      spec.Labels,
-			Annotations: spec.Annotations,
-		},
-		Spec: c.preparePodSpec(spec, init),
-	}
+func (c *Client) preparePod(spec PodConfig, init bool) *corev1.PodApplyConfiguration {
+	pod := corev1.Pod(spec.Name, spec.Namespace).
+		WithLabels(spec.Labels).
+		WithAnnotations(spec.Annotations).
+		WithSpec(c.preparePodSpec(spec, init)).
+		WithAPIVersion("v1").
+		WithKind("Pod")
 
 	c.logger.WithFields(logrus.Fields{
 		"name":      spec.Name,

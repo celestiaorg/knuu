@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/celestiaorg/knuu/e2e"
 )
@@ -23,16 +23,16 @@ func (s *Suite) TestProbe() {
 	err = web.Storage().AddFile(resourcesHTML+"/index.html", e2e.NginxHTMLPath+"/index.html", "0:0")
 	s.Require().NoError(err)
 
-	livenessProbe := v1.Probe{
-		ProbeHandler: v1.ProbeHandler{
-			HTTPGet: &v1.HTTPGetAction{
-				Path: "/",
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: e2e.NginxPort},
-			},
-		},
-		InitialDelaySeconds: 10,
-	}
-	s.Require().NoError(web.Monitoring().SetLivenessProbe(&livenessProbe))
+	err = web.Monitoring().SetLivenessProbe(
+		corev1.Probe().
+			WithHTTPGet(corev1.HTTPGetAction().
+				WithPath("/").
+				WithPort(intstr.FromInt(e2e.NginxPort)),
+			).
+			WithInitialDelaySeconds(10),
+	)
+	s.Require().NoError(err)
+
 	s.Require().NoError(web.Build().Commit(ctx))
 	s.Require().NoError(web.Execution().Start(ctx))
 

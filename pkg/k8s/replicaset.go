@@ -9,6 +9,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	applyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
+	applymetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/utils/ptr"
 )
 
@@ -29,14 +32,20 @@ func (c *Client) CreateReplicaSet(ctx context.Context, rsConfig ReplicaSetConfig
 		return nil, err
 	}
 	rsConfig.Namespace = c.namespace
-	rs := c.prepareReplicaSet(rsConfig, init)
+	newRs := c.prepareReplicaSet(rsConfig, init)
 
-	createdRs, err := c.clientset.AppsV1().ReplicaSets(c.namespace).Create(ctx, rs, metav1.CreateOptions{})
-	if err != nil {
-		return nil, ErrCreatingReplicaSet.Wrap(err)
+	existingRS, err := c.clientset.AppsV1().ReplicaSets(c.namespace).Get(ctx, rsConfig.Name, metav1.GetOptions{})
+	if err == nil {
+		newRs.Spec.Selector = applymetav1.LabelSelector().WithMatchLabels(existingRS.Spec.Selector.MatchLabels)
+		newRs.Spec.Template.Labels = existingRS.Spec.Template.Labels
+		newRs.Spec.Template.Annotations = existingRS.Spec.Template.Annotations
+
+	} else if !errors.IsNotFound(err) {
+		return nil, err
 	}
 
-	return createdRs, nil
+	return c.clientset.AppsV1().ReplicaSets(c.namespace).
+		Apply(ctx, newRs, metav1.ApplyOptions{FieldManager: FieldManager})
 }
 
 func (c *Client) ReplaceReplicaSetWithGracePeriod(ctx context.Context, ReplicaSetConfig ReplicaSetConfig, gracePeriod *int64) (*appv1.ReplicaSet, error) {
@@ -159,27 +168,23 @@ func (c *Client) waitForReplicaSetDeletion(ctx context.Context, name string) err
 }
 
 // preparePod prepares a pod configuration.
-func (c *Client) prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *appv1.ReplicaSet {
-	rs := &appv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: rsConf.Namespace,
-			Name:      rsConf.Name,
-			Labels:    rsConf.Labels,
-		},
-		Spec: appv1.ReplicaSetSpec{
-			Replicas: &rsConf.Replicas,
-			Selector: &metav1.LabelSelector{MatchLabels: rsConf.Labels},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:   rsConf.Namespace,
-					Name:        rsConf.Name,
-					Labels:      rsConf.Labels,
-					Annotations: rsConf.PodConfig.Annotations,
-				},
-				Spec: c.preparePodSpec(rsConf.PodConfig, init),
-			},
-		},
-	}
+func (c *Client) prepareReplicaSet(rsConf ReplicaSetConfig, init bool) *applyv1.ReplicaSetApplyConfiguration {
+	rs := applyv1.ReplicaSet(rsConf.Name, rsConf.Namespace).
+		WithLabels(rsConf.Labels).
+		WithAPIVersion("apps/v1").
+		WithKind("ReplicaSet").
+		WithSpec(applyv1.ReplicaSetSpec().
+			WithReplicas(rsConf.Replicas).
+			WithSelector(applymetav1.LabelSelector().
+				WithMatchLabels(rsConf.Labels),
+			).
+			WithTemplate(
+				corev1.PodTemplateSpec().
+					WithLabels(rsConf.Labels).
+					WithAnnotations(rsConf.PodConfig.Annotations).
+					WithSpec(c.preparePodSpec(rsConf.PodConfig, init)),
+			),
+		)
 
 	c.logger.WithFields(logrus.Fields{
 		"name":      rsConf.Name,
