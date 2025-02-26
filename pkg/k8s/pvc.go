@@ -9,6 +9,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PersistentVolumeClaimExists checks if a PersistentVolumeClaim exists.
+func (c *Client) PersistentVolumeClaimExists(ctx context.Context, name string) (bool, error) {
+	_, err := c.getPersistentVolumeClaim(ctx, name)
+	return err == nil, nil
+}
+
 // CreatePersistentVolumeClaim deploys a PersistentVolumeClaim if it does not exist.
 func (c *Client) CreatePersistentVolumeClaim(
 	ctx context.Context,
