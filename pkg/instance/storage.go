@@ -356,11 +356,22 @@ func (s *storage) checkStateForAddingFile() error {
 
 // deployVolume deploys the volume for the instance
 func (s *storage) deployVolume(ctx context.Context) error {
+	// Check if PVC already exists
+	exists, err := s.instance.K8sClient.PersistentVolumeClaimExists(ctx, s.instance.name)
+	if err != nil {
+		return ErrFailedToCheckPersistentVolumeClaim.Wrap(err)
+	}
+
+	if exists {
+		s.instance.Logger.WithField("instance", s.instance.name).Debug("persistent volume claim already exists, skipping deployment")
+		return nil
+	}
+
 	totalSize := resource.Quantity{}
 	for _, volume := range s.volumes {
 		totalSize.Add(volume.Size)
 	}
-	err := s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
+	err = s.instance.K8sClient.CreatePersistentVolumeClaim(ctx, s.instance.name, s.instance.execution.Labels(), totalSize)
 	if err != nil {
 		return ErrFailedToCreatePersistentVolumeClaim.Wrap(err)
 	}

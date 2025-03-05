@@ -232,4 +232,5 @@ var (
 	ErrFailedToGetFileSize                       = errors.New("FailedToGetFileSize", "failed to get file size")
 	ErrFileTooLargeCommitted                     = errors.New("FileTooLargeCommitted", "file '%s' is too large (max 1MiB) to add after instance is committed")
 	ErrTotalFilesSizeTooLarge                    = errors.New("TotalFilesSizeTooLarge", "total files size is too large (max 1MiB)")
+	ErrFailedToCheckPersistentVolumeClaim        = errors.New("FailedToCheckPersistentVolumeClaim", "failed to check persistent volume claim")
 )
