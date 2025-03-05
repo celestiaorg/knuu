@@ -33,6 +33,7 @@ type KubeManager interface {
 	CreateService(ctx context.Context, name string, opts ServiceOptions) (*corev1.Service, error)
 	CreateServiceAccount(ctx context.Context, name string, labels map[string]string) error
 	CustomResourceDefinitionExists(ctx context.Context, gvr *schema.GroupVersionResource) (bool, error)
+	CreateTLSSecret(ctx context.Context, secretName string, cert, key []byte) error
 	DaemonSetExists(ctx context.Context, name string) (bool, error)
 	DeleteConfigMap(ctx context.Context, name string) error
 	DeleteDaemonSet(ctx context.Context, name string) error

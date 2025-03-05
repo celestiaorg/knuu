@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/celestiaorg/knuu/pkg/k8s"
-
 	"github.com/sirupsen/logrus"
+
+	"github.com/celestiaorg/knuu/pkg/k8s"
 )
 
 const (

@@ -87,10 +87,12 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 	if err != nil {
 		return ErrGettingBuildContext.Wrap(err)
 	}
-	imageName, err := builder.DefaultImageName(bCtx)
+
+	resolvedImage, err := b.instance.ImageBuilder.DefaultImage(bCtx)
 	if err != nil {
-		return ErrGettingImageName.Wrap(err)
+		return err
 	}
+	b.imageName = resolvedImage.ToString()
 
 	buildDir, err := b.getBuildDir()
 	if err != nil {
@@ -98,7 +100,7 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 	}
 
 	factory, err := container.NewBuilderFactory(container.BuilderFactoryOptions{
-		ImageName:    imageName,
+		ImageName:    b.imageName,
 		BuildContext: buildDir,
 		ImageBuilder: b.instance.ImageBuilder,
 		Args:         args,
@@ -108,10 +110,9 @@ func (b *build) SetGitRepo(ctx context.Context, gitContext builder.GitContext, a
 		return ErrCreatingBuilder.Wrap(err)
 	}
 	b.builderFactory = factory
-	b.imageName = imageName
 	b.instance.SetState(StatePreparing)
 
-	return b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, imageName)
+	return b.builderFactory.BuildImageFromGitRepo(ctx, gitContext, b.imageName)
 }
 
 // SetStartCommand sets the command to run in the instance

@@ -4,18 +4,25 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+
+	"github.com/celestiaorg/knuu/pkg/builder/registry"
+)
+
+const (
+	DefaultImageTTL      = "24h"             // used as a tag for the ephemeral images on ttl.sh
+	DefaultCacheRepoName = "cl-kaniko-cache" // only abcdefghijklmnopqrstuvwxyz0123456789_-./ are allowed
 )
 
 type Builder interface {
-	Build(ctx context.Context, b *BuilderOptions) (logs string, err error)
+	Build(ctx context.Context, b BuilderOptions) (logs string, err error)
+	DefaultImage(buildContext string) (*registry.ResolvedImage, error)
+	CacheOptions() *CacheOptions
 }
 
 type BuilderOptions struct {
-	ImageName    string
+	ImageName    string // Custom image name (if provided by the user)
 	BuildContext string
 	Args         []ArgInterface
-	Destination  string
 	Cache        *CacheOptions
 }
 
@@ -25,36 +32,12 @@ type CacheOptions struct {
 	Repo    string
 }
 
-func (c *CacheOptions) Default(buildContext string) (*CacheOptions, error) {
-	if buildContext == "" {
-		return nil, ErrBuildContextEmpty
-	}
-
-	ctxHash, err := hashString(buildContext)
-	if err != nil {
-		return nil, err
-	}
-
-	return &CacheOptions{
-		Enabled: true,
-		Dir:     "",
-		// ttl.sh with the hash of build context is used as the cache repo
-		// Kaniko adds a string tag to the image name, so we don't need to add it here
-		Repo: fmt.Sprintf("ttl.sh/%s:24h", ctxHash),
-	}, nil
-}
-
 func DefaultImageName(buildContext string) (string, error) {
 	if buildContext == "" {
 		return "", ErrBuildContextEmpty
 	}
 
-	ctxHash, err := hashString(buildContext)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("ttl.sh/%s:24h", ctxHash), nil
+	return hashString(buildContext)
 }
 
 func hashString(s string) (string, error) {

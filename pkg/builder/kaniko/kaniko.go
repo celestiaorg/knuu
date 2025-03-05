@@ -6,13 +6,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/celestiaorg/knuu/pkg/builder"
+	"github.com/celestiaorg/knuu/pkg/builder/registry"
 	"github.com/celestiaorg/knuu/pkg/names"
 	"github.com/celestiaorg/knuu/pkg/system"
 )
@@ -27,16 +30,48 @@ const (
 
 	MinioBucketName  = "kaniko"
 	EphemeralStorage = "10Gi"
+
+	MaxLogsLengthOnError = 1000
 )
 
 type Kaniko struct {
 	*system.SystemDependencies
+	registry registry.Registry
 }
 
 var _ builder.Builder = &Kaniko{}
 
-func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs string, err error) {
-	job, err := k.prepareJob(ctx, b)
+// sysDeps.K8sClient is required and sysDeps.MinioClient is required if building from dir
+// if reg is nil, it will use the default registry (ttl.sh)
+func New(sysDeps *system.SystemDependencies, reg registry.Registry) (*Kaniko, error) {
+	if reg == nil {
+		reg = registry.NewDefault()
+	}
+
+	if sysDeps == nil {
+		return nil, ErrSystemDependenciesRequired
+	}
+
+	if sysDeps.K8sClient == nil {
+		return nil, ErrK8sClientRequired
+	}
+
+	return &Kaniko{
+		SystemDependencies: sysDeps,
+		registry:           reg,
+	}, nil
+}
+
+func (k *Kaniko) Build(ctx context.Context, b builder.BuilderOptions) (logs string, err error) {
+	if b.ImageName == "" {
+		ri, err := k.DefaultImage(b.BuildContext)
+		if err != nil {
+			return "", err
+		}
+		b.ImageName = ri.ToString()
+	}
+
+	job, err := k.prepareJob(ctx, &b)
 	if err != nil {
 		return "", ErrPreparingJob.Wrap(err)
 	}
@@ -62,10 +97,26 @@ func (k *Kaniko) Build(ctx context.Context, b *builder.BuilderOptions) (logs str
 	}
 
 	if kJob.Status.Succeeded == 0 {
-		return logs, ErrBuildFailed
+		return logs, ErrBuildFailed.Wrap(fmt.Errorf("logs: ...%s", logs[MaxLogsLengthOnError:]))
 	}
 
 	return logs, nil
+}
+
+func (k *Kaniko) CacheOptions() *builder.CacheOptions {
+	return &builder.CacheOptions{
+		Enabled: true,
+		Repo:    k.registry.ResolvedImage(builder.DefaultCacheRepoName, "").ToString(),
+	}
+}
+
+func (k *Kaniko) DefaultImage(buildContext string) (*registry.ResolvedImage, error) {
+	imageName, err := builder.DefaultImageName(buildContext)
+	if err != nil {
+		return nil, err
+	}
+
+	return k.registry.ResolvedImage(imageName, builder.DefaultImageTTL), nil
 }
 
 func (k *Kaniko) waitForJobCompletion(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
@@ -160,10 +211,16 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 						{
 							Name:  kanikoContainerName,
 							Image: kanikoImage, // debug has a shell
-							Args:  prepareArgs(b),
+							Args:  k.prepareArgs(b),
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
 									v1.ResourceEphemeralStorage: ephemeralStorage,
+								},
+							},
+							Env: []v1.EnvVar{
+								{
+									Name:  "DOCKER_CONFIG",
+									Value: "/kaniko/.docker",
 								},
 							},
 						},
@@ -181,6 +238,10 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 		}
 	}
 
+	if err := k.setupRegistryConfig(job); err != nil {
+		return nil, ErrSettingUpRegistryConfig.Wrap(err)
+	}
+
 	return job, nil
 }
 
@@ -192,6 +253,10 @@ func (k *Kaniko) prepareJob(ctx context.Context, b *builder.BuilderOptions) (*ba
 // As kaniko also supports directly tar.gz archives, no need to extract it,
 // we just need to set the context to tar://<path-to-archive>
 func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*batchv1.Job, error) {
+	if k.MinioClient == nil {
+		return nil, ErrMinioClientRequired
+	}
+
 	// Create the tar.gz archive
 	archiveData, err := createTarGz(builder.GetDirFromBuildContext(bCtx))
 	if err != nil {
@@ -252,18 +317,16 @@ func (k *Kaniko) mountDir(ctx context.Context, bCtx string, job *batchv1.Job) (*
 	return job, nil
 }
 
-func prepareArgs(b *builder.BuilderOptions) []string {
+func (k *Kaniko) prepareArgs(b *builder.BuilderOptions) []string {
 	args := []string{
 		"--context=" + b.BuildContext,
-		// TODO: see if we need it or not
-		// --git gitoptions    Branch to clone if build context is a git repository (default branch=,single-branch=false,recurse-submodules=false)
-
-		// TODO: we might need to add some options to get the auth token for the registry
-		"--destination=" + b.Destination,
-		// "--verbosity=debug", // log level
+		"--destination=" + b.ImageName,
 	}
 
-	// TODO: we need to add some configs to get the auth token for the cache repo
+	if k.Logger != nil && k.Logger.GetLevel() == logrus.DebugLevel {
+		args = append(args, "--verbosity=debug")
+	}
+
 	if b.Cache != nil && b.Cache.Enabled {
 		args = append(args, "--cache=true")
 		if b.Cache.Dir != "" {
@@ -280,4 +343,48 @@ func prepareArgs(b *builder.BuilderOptions) []string {
 	}
 
 	return args
+}
+
+func (k *Kaniko) setupRegistryConfig(job *batchv1.Job) error {
+	configContent, err := k.registry.GenerateConfig()
+	if err != nil {
+		return err
+	}
+	// If no config is needed, return
+	if configContent == nil {
+		return nil
+	}
+
+	const (
+		configDir     = "/kaniko/.docker"
+		configFile    = "config.json"
+		kanikoVolName = "kaniko-config"
+	)
+
+	initContainer := v1.Container{
+		Name:    "setup-registry-config",
+		Image:   "busybox:latest",
+		Command: []string{"/bin/sh", "-c"},
+		Args:    []string{"echo '" + string(configContent) + "' > " + filepath.Join(configDir, configFile)},
+		VolumeMounts: []v1.VolumeMount{
+			{
+				Name:      kanikoVolName,
+				MountPath: configDir,
+			},
+		},
+	}
+	job.Spec.Template.Spec.InitContainers = append(job.Spec.Template.Spec.InitContainers, initContainer)
+
+	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, v1.Volume{
+		Name: kanikoVolName,
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+		},
+	})
+	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts, v1.VolumeMount{
+		Name:      kanikoVolName,
+		MountPath: configDir,
+	})
+
+	return nil
 }

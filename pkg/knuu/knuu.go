@@ -173,6 +173,15 @@ func (k *Knuu) handleTimeout(ctx context.Context, timeout time.Duration, timeout
 	return nil
 }
 
+func (k *Knuu) setupDefaultImageBuilder() (err error) {
+	if k.ImageBuilder != nil {
+		return nil
+	}
+
+	k.ImageBuilder, err = kaniko.New(k.SystemDependencies, nil)
+	return err
+}
+
 func DefaultScope() string {
 	t := time.Now()
 	return fmt.Sprintf("%s-%03d", t.Format("20060102-150405"), t.Nanosecond()/1e6)
@@ -219,10 +228,8 @@ func setDefaults(ctx context.Context, k *Knuu) error {
 		}
 	}
 
-	if k.ImageBuilder == nil {
-		k.ImageBuilder = &kaniko.Kaniko{
-			SystemDependencies: k.SystemDependencies,
-		}
+	if err := k.setupDefaultImageBuilder(); err != nil {
+		return err
 	}
 
 	return nil
